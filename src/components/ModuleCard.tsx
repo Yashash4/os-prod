@@ -14,6 +14,11 @@ import {
   ClipboardList,
   MessageSquare,
   Package,
+  Megaphone,
+  Share2,
+  Layers,
+  ImageIcon,
+  PieChart,
   Folder,
 } from "lucide-react";
 
@@ -30,6 +35,11 @@ const iconComponents: Record<string, React.ComponentType<{ className?: string }>
   ClipboardList,
   MessageSquare,
   Package,
+  Megaphone,
+  Share2,
+  Layers,
+  Image: ImageIcon,
+  PieChart,
 };
 
 interface ModuleCardProps {
