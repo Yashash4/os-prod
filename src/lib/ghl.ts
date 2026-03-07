@@ -124,3 +124,21 @@ export async function getOpportunity(opportunityId: string) {
   const data = await ghlFetch(`/opportunities/${opportunityId}`);
   return data.opportunity || data || null;
 }
+
+export async function updateOpportunity(
+  opportunityId: string,
+  pipelineId: string,
+  updates: Record<string, unknown>
+) {
+  const url = `${GHL_BASE_URL}/opportunities/${opportunityId}`;
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: getHeaders(),
+    body: JSON.stringify({ pipelineId, ...updates }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`GHL API error ${res.status}: ${text}`);
+  }
+  return res.json();
+}
