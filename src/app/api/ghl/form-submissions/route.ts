@@ -1,0 +1,22 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getFormSubmissionsByContact } from "@/lib/ghl";
+
+export async function GET(req: NextRequest) {
+  try {
+    const contactId = req.nextUrl.searchParams.get("contactId");
+
+    if (!contactId) {
+      return NextResponse.json(
+        { error: "contactId is required" },
+        { status: 400 }
+      );
+    }
+
+    const submissions = await getFormSubmissionsByContact(contactId);
+    return NextResponse.json({ submissions });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to fetch submissions";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}

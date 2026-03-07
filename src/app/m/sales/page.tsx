@@ -2,29 +2,23 @@
 
 import Shell from "@/components/Shell";
 import ModuleCard from "@/components/ModuleCard";
-import { MODULE_REGISTRY } from "@/lib/modules";
+import { getChildrenByParentSlug } from "@/lib/modules";
 
-export default function Home() {
-  // For now, show all top-level modules
-  // Once auth is connected to Supabase, this will be role-filtered
-  const topLevelModules = MODULE_REGISTRY.filter(
-    (m) => m.parent_slug === null && m.is_active
-  );
+export default function SalesPage() {
+  const children = getChildrenByParentSlug("sales");
 
   return (
     <Shell userName="Yash" onSignOut={() => {}}>
       <div className="p-6 max-w-5xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-foreground">
-            Welcome back
-          </h1>
+          <h1 className="text-2xl font-semibold text-foreground">Sales</h1>
           <p className="text-muted text-sm mt-1">
-            Select a module to get started
+            Sales pipeline, CRM, and revenue tracking
           </p>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {topLevelModules.map((mod) => (
+          {children.map((mod) => (
             <ModuleCard
               key={mod.slug}
               name={mod.name}
