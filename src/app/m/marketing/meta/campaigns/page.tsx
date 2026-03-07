@@ -104,21 +104,15 @@ export default function CampaignsPage() {
         const camps = data.campaigns || [];
         setCampaigns(camps);
 
-        // Fetch aggregate insights for all campaigns
+        // Fetch all campaign insights in ONE call (avoids rate limits)
+        const bulkRes = await fetch(`/api/meta/campaign-insights-bulk?date_preset=${datePreset}`);
+        const bulkData = await bulkRes.json();
         const insightResults: Record<string, InsightRow[]> = {};
-        await Promise.all(
-          camps.slice(0, 50).map(async (c: Campaign) => {
-            try {
-              const r = await fetch(
-                `/api/meta/campaign-insights?campaignId=${c.id}&date_preset=${datePreset}&time_increment=all_days`
-              );
-              const d = await r.json();
-              insightResults[c.id] = d.insights || [];
-            } catch {
-              insightResults[c.id] = [];
-            }
-          })
-        );
+        (bulkData.insights || []).forEach((row: InsightRow & { campaign_id?: string }) => {
+          if (row.campaign_id) {
+            insightResults[row.campaign_id] = [row];
+          }
+        });
         setCampaignInsights(insightResults);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load");

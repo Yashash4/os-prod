@@ -36,7 +36,7 @@ export default function MetaLayout({ children }: { children: React.ReactNode }) 
                 const isActive =
                   item.href === "/m/marketing/meta"
                     ? pathname === "/m/marketing/meta"
-                    : pathname.startsWith(item.href);
+                    : pathname === item.href || pathname.startsWith(item.href + "/");
                 return (
                   <Link
                     key={item.href}

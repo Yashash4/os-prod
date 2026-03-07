@@ -153,8 +153,7 @@ function WidgetCard({
 export default function MetaDashboard() {
   const [datePreset, setDatePreset] = useState("last_30d");
   const [insights, setInsights] = useState<InsightRow[]>([]);
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [campaignInsights, setCampaignInsights] = useState<Record<string, InsightRow[]>>({});
+  const [campaignBulk, setCampaignBulk] = useState<(InsightRow & { campaign_id?: string; campaign_name?: string })[]>([]);
   const [ageData, setAgeData] = useState<InsightRow[]>([]);
   const [genderData, setGenderData] = useState<InsightRow[]>([]);
   const [platformData, setPlatformData] = useState<InsightRow[]>([]);
@@ -168,18 +167,19 @@ export default function MetaDashboard() {
       setLoading(true);
       setError("");
       try {
-        const [insRes, campRes, ageRes, genderRes, platRes, devRes] = await Promise.all([
+        // 6 API calls total (each = 1 Meta API call, no pagination)
+        const [insRes, campBulkRes, ageRes, genderRes, platRes, devRes] = await Promise.all([
           fetch(`/api/meta/account-insights?date_preset=${datePreset}&time_increment=1`),
-          fetch("/api/meta/campaigns"),
+          fetch(`/api/meta/campaign-insights-bulk?date_preset=${datePreset}`),
           fetch(`/api/meta/breakdowns?breakdown=age&date_preset=${datePreset}`),
           fetch(`/api/meta/breakdowns?breakdown=gender&date_preset=${datePreset}`),
           fetch(`/api/meta/breakdowns?breakdown=publisher_platform&date_preset=${datePreset}`),
           fetch(`/api/meta/breakdowns?breakdown=impression_device&date_preset=${datePreset}`),
         ]);
 
-        const [insData, campData, ageD, genderD, platD, devD] = await Promise.all([
+        const [insData, campBulkData, ageD, genderD, platD, devD] = await Promise.all([
           insRes.json(),
-          campRes.json(),
+          campBulkRes.json(),
           ageRes.json(),
           genderRes.json(),
           platRes.json(),
@@ -189,34 +189,11 @@ export default function MetaDashboard() {
         if (insData.error) throw new Error(insData.error);
 
         setInsights(insData.insights || []);
-        setCampaigns(campData.campaigns || []);
+        setCampaignBulk(campBulkData.insights || []);
         setAgeData(ageD.data || []);
         setGenderData(genderD.data || []);
         setPlatformData(platD.data || []);
         setDeviceData(devD.data || []);
-
-        // Fetch per-campaign insights
-        const camps = campData.campaigns || [];
-        if (camps.length > 0) {
-          const campInsightResults: Record<string, InsightRow[]> = {};
-          const activeCamps = camps.filter((c: Campaign) => c.status === "ACTIVE").slice(0, 10);
-          const allCamps = activeCamps.length > 0 ? activeCamps : camps.slice(0, 10);
-
-          await Promise.all(
-            allCamps.map(async (c: Campaign) => {
-              try {
-                const res = await fetch(
-                  `/api/meta/campaign-insights?campaignId=${c.id}&date_preset=${datePreset}&time_increment=all_days`
-                );
-                const d = await res.json();
-                campInsightResults[c.id] = d.insights || [];
-              } catch {
-                campInsightResults[c.id] = [];
-              }
-            })
-          );
-          setCampaignInsights(campInsightResults);
-        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load");
       } finally {
@@ -266,19 +243,19 @@ export default function MetaDashboard() {
 
   /* ── Campaign bar data ─────────────────────────── */
   const campaignBarData = useMemo(() => {
-    return campaigns
-      .map((c) => {
-        const ins = campaignInsights[c.id]?.[0];
+    return campaignBulk
+      .map((row) => {
+        const name = row.campaign_name || row.campaign_id || "Unknown";
         return {
-          name: c.name.length > 25 ? c.name.slice(0, 25) + "…" : c.name,
-          spend: ins ? num(ins.spend) : 0,
-          clicks: ins ? num(ins.clicks) : 0,
+          name: name.length > 25 ? name.slice(0, 25) + "…" : name,
+          spend: num(row.spend),
+          clicks: num(row.clicks),
         };
       })
       .filter((c) => c.spend > 0)
       .sort((a, b) => b.spend - a.spend)
       .slice(0, 10);
-  }, [campaigns, campaignInsights]);
+  }, [campaignBulk]);
 
   /* ── Conversion action breakdown ───────────────── */
   const conversionData = useMemo(() => {

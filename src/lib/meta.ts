@@ -147,6 +147,38 @@ export async function getAdInsights(
   return data.data || [];
 }
 
+/* ── Bulk Insights (single call, avoids rate limits) ── */
+
+export async function getCampaignInsightsBulk(datePreset = "last_30d") {
+  const data = await metaFetch(`/${AD_ACCOUNT_ID}/insights`, {
+    fields: "campaign_id,campaign_name,spend,impressions,clicks,reach,cpm,ctr,cpc,actions,action_values,purchase_roas",
+    date_preset: datePreset,
+    level: "campaign",
+    limit: "500",
+  });
+  return data.data || [];
+}
+
+export async function getAdSetInsightsBulk(datePreset = "last_30d") {
+  const data = await metaFetch(`/${AD_ACCOUNT_ID}/insights`, {
+    fields: "adset_id,adset_name,campaign_id,spend,impressions,clicks,reach,cpm,ctr,cpc,actions,action_values",
+    date_preset: datePreset,
+    level: "adset",
+    limit: "500",
+  });
+  return data.data || [];
+}
+
+export async function getAdInsightsBulk(datePreset = "last_30d") {
+  const data = await metaFetch(`/${AD_ACCOUNT_ID}/insights`, {
+    fields: "ad_id,ad_name,adset_id,campaign_id,spend,impressions,clicks,reach,cpm,ctr,cpc,actions,action_values",
+    date_preset: datePreset,
+    level: "ad",
+    limit: "500",
+  });
+  return data.data || [];
+}
+
 /* ── Breakdowns ──────────────────────────────────── */
 
 export async function getInsightsBreakdown(

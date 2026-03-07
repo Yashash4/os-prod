@@ -5,38 +5,30 @@ import { Loader2, ImageIcon } from "lucide-react";
 
 /* ── Types ─────────────────────────────────────────── */
 
-interface Campaign {
-  id: string;
-  name: string;
-}
-
-interface AdSet {
-  id: string;
-  name: string;
-  campaign_id?: string;
-}
-
-interface Ad {
-  id: string;
-  name: string;
-  status: string;
+interface BulkAdRow {
+  ad_id?: string;
+  ad_name?: string;
   adset_id?: string;
   campaign_id?: string;
-  creative?: {
-    title?: string;
-    body?: string;
-    image_url?: string;
-    thumbnail_url?: string;
-  };
-}
-
-interface InsightRow {
   spend?: string;
   impressions?: string;
   clicks?: string;
+  reach?: string;
   ctr?: string;
   cpc?: string;
+  cpm?: string;
   actions?: { action_type: string; value: string }[];
+}
+
+interface BulkAdSetRow {
+  adset_id?: string;
+  adset_name?: string;
+  campaign_id?: string;
+}
+
+interface BulkCampaignRow {
+  campaign_id?: string;
+  campaign_name?: string;
 }
 
 /* ── Constants ─────────────────────────────────────── */
@@ -58,13 +50,6 @@ function currency(val: number) {
   return `₹${val.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 }
 
-function statusBadge(status: string) {
-  const s = status.toUpperCase();
-  if (s === "ACTIVE") return "bg-green-500/15 text-green-400 border-green-500/30";
-  if (s === "PAUSED") return "bg-amber-500/15 text-amber-400 border-amber-500/30";
-  return "bg-gray-500/15 text-gray-400 border-gray-500/30";
-}
-
 function getConversions(actions?: { action_type: string; value: string }[]) {
   if (!actions) return 0;
   const purchase = actions.find((a) => a.action_type === "purchase");
@@ -77,10 +62,10 @@ function getConversions(actions?: { action_type: string; value: string }[]) {
 /* ── Main Component ────────────────────────────────── */
 
 export default function AdsPage() {
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [adsets, setAdsets] = useState<AdSet[]>([]);
-  const [ads, setAds] = useState<Ad[]>([]);
-  const [adInsights, setAdInsights] = useState<Record<string, InsightRow[]>>({});
+  const [rows, setRows] = useState<BulkAdRow[]>([]);
+  const [adsetMap, setAdsetMap] = useState<Record<string, string>>({});
+  const [campaignMap, setCampaignMap] = useState<Record<string, string>>({});
+  const [adsetCampaignMap, setAdsetCampaignMap] = useState<Record<string, string>>({});
   const [datePreset, setDatePreset] = useState("last_30d");
   const [selectedCampaign, setSelectedCampaign] = useState("");
   const [selectedAdSet, setSelectedAdSet] = useState("");
@@ -88,86 +73,94 @@ export default function AdsPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    async function fetchFilters() {
-      try {
-        const [campRes, adsetRes] = await Promise.all([
-          fetch("/api/meta/campaigns"),
-          fetch("/api/meta/adsets"),
-        ]);
-        const campData = await campRes.json();
-        const adsetData = await adsetRes.json();
-        setCampaigns(campData.campaigns || []);
-        setAdsets(adsetData.adsets || []);
-      } catch {
-        // silent
-      }
-    }
-    fetchFilters();
-  }, []);
-
-  useEffect(() => {
-    async function fetchAds() {
+    async function fetchData() {
       setLoading(true);
       setError("");
       try {
-        const url = selectedAdSet
-          ? `/api/meta/ads?adSetId=${selectedAdSet}`
-          : "/api/meta/ads";
-        const res = await fetch(url);
-        const data = await res.json();
-        if (data.error) throw new Error(data.error);
-        let adsList = data.ads || [];
+        // Only 3 Meta API calls total (all bulk endpoints)
+        const [adRes, adsetRes, campRes] = await Promise.all([
+          fetch(`/api/meta/ad-insights-bulk?date_preset=${datePreset}`),
+          fetch(`/api/meta/adset-insights-bulk?date_preset=${datePreset}`),
+          fetch(`/api/meta/campaign-insights-bulk?date_preset=${datePreset}`),
+        ]);
+        const adData = await adRes.json();
+        const adsetData = await adsetRes.json();
+        const campData = await campRes.json();
 
-        // Client-side campaign filter
-        if (selectedCampaign) {
-          adsList = adsList.filter((a: Ad) => a.campaign_id === selectedCampaign);
-        }
+        if (adData.error) throw new Error(adData.error);
 
-        setAds(adsList);
+        setRows(adData.insights || []);
 
-        // Fetch insights
-        const insightResults: Record<string, InsightRow[]> = {};
-        await Promise.all(
-          adsList.slice(0, 50).map(async (a: Ad) => {
-            try {
-              const r = await fetch(
-                `/api/meta/ad-insights?adId=${a.id}&date_preset=${datePreset}&time_increment=all_days`
-              );
-              const d = await r.json();
-              insightResults[a.id] = d.insights || [];
-            } catch {
-              insightResults[a.id] = [];
-            }
-          })
-        );
-        setAdInsights(insightResults);
+        // Build adset name map
+        const aMap: Record<string, string> = {};
+        const acMap: Record<string, string> = {};
+        (adsetData.insights || []).forEach((r: BulkAdSetRow) => {
+          if (r.adset_id) {
+            aMap[r.adset_id] = r.adset_name || r.adset_id;
+            if (r.campaign_id) acMap[r.adset_id] = r.campaign_id;
+          }
+        });
+        setAdsetMap(aMap);
+        setAdsetCampaignMap(acMap);
+
+        // Build campaign name map
+        const cMap: Record<string, string> = {};
+        (campData.insights || []).forEach((r: BulkCampaignRow) => {
+          if (r.campaign_id && r.campaign_name) {
+            cMap[r.campaign_id] = r.campaign_name;
+          }
+        });
+        setCampaignMap(cMap);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load");
       } finally {
         setLoading(false);
       }
     }
-    fetchAds();
-  }, [selectedAdSet, selectedCampaign, datePreset]);
+    fetchData();
+  }, [datePreset]);
 
-  const adsetNameMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    adsets.forEach((a) => { map[a.id] = a.name; });
-    return map;
-  }, [adsets]);
-
-  const filteredAdSets = useMemo(() => {
-    if (!selectedCampaign) return adsets;
-    return adsets.filter((a) => a.campaign_id === selectedCampaign);
-  }, [adsets, selectedCampaign]);
-
-  const sortedAds = useMemo(() => {
-    return [...ads].sort((a, b) => {
-      const spendA = num(adInsights[a.id]?.[0]?.spend);
-      const spendB = num(adInsights[b.id]?.[0]?.spend);
-      return spendB - spendA;
+  // Derive campaign list for filter
+  const campaigns = useMemo(() => {
+    const seen = new Set<string>();
+    const result: { id: string; name: string }[] = [];
+    rows.forEach((r) => {
+      const cid = r.campaign_id;
+      if (cid && !seen.has(cid)) {
+        seen.add(cid);
+        result.push({ id: cid, name: campaignMap[cid] || cid });
+      }
     });
-  }, [ads, adInsights]);
+    return result.sort((a, b) => a.name.localeCompare(b.name));
+  }, [rows, campaignMap]);
+
+  // Derive adset list for filter (filtered by selected campaign)
+  const adsets = useMemo(() => {
+    const seen = new Set<string>();
+    const result: { id: string; name: string }[] = [];
+    rows.forEach((r) => {
+      const asid = r.adset_id;
+      if (asid && !seen.has(asid)) {
+        if (!selectedCampaign || r.campaign_id === selectedCampaign) {
+          seen.add(asid);
+          result.push({ id: asid, name: adsetMap[asid] || asid });
+        }
+      }
+    });
+    return result.sort((a, b) => a.name.localeCompare(b.name));
+  }, [rows, adsetMap, selectedCampaign]);
+
+  // Filter + sort
+  const filteredRows = useMemo(() => {
+    let filtered = rows;
+    if (selectedCampaign) {
+      filtered = filtered.filter((r) => r.campaign_id === selectedCampaign);
+    }
+    if (selectedAdSet) {
+      filtered = filtered.filter((r) => r.adset_id === selectedAdSet);
+    }
+    return [...filtered].sort((a, b) => num(b.spend) - num(a.spend));
+  }, [rows, selectedCampaign, selectedAdSet]);
 
   if (loading) {
     return (
@@ -183,7 +176,7 @@ export default function AdsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Ads</h1>
-          <p className="text-muted text-sm mt-1">{ads.length} ads</p>
+          <p className="text-muted text-sm mt-1">{filteredRows.length} ads</p>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[10px] px-2 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
@@ -208,7 +201,7 @@ export default function AdsPage() {
             className="px-3 py-2 bg-surface border border-border rounded-lg text-foreground text-sm focus:outline-none focus:border-accent max-w-[180px]"
           >
             <option value="">All Ad Sets</option>
-            {filteredAdSets.map((a) => (
+            {adsets.map((a) => (
               <option key={a.id} value={a.id}>{a.name}</option>
             ))}
           </select>
@@ -236,7 +229,6 @@ export default function AdsPage() {
               <tr className="border-b border-border">
                 <th className="text-left py-3 px-4 text-xs text-muted font-medium">Ad</th>
                 <th className="text-left py-3 px-3 text-xs text-muted font-medium">Ad Set</th>
-                <th className="text-center py-3 px-3 text-xs text-muted font-medium">Status</th>
                 <th className="text-right py-3 px-3 text-xs text-muted font-medium">Spend</th>
                 <th className="text-right py-3 px-3 text-xs text-muted font-medium">Impressions</th>
                 <th className="text-right py-3 px-3 text-xs text-muted font-medium">Clicks</th>
@@ -246,33 +238,27 @@ export default function AdsPage() {
               </tr>
             </thead>
             <tbody>
-              {sortedAds.map((ad) => {
-                const ins = adInsights[ad.id]?.[0];
-                return (
-                  <tr key={ad.id} className="border-b border-border/50 hover:bg-surface-hover transition-colors">
-                    <td className="py-3 px-4">
-                      <p className="text-foreground truncate font-medium max-w-[250px]">{ad.name}</p>
-                    </td>
-                    <td className="py-3 px-3 text-muted text-xs truncate max-w-[150px]">
-                      {adsetNameMap[ad.adset_id || ""] || "-"}
-                    </td>
-                    <td className="py-3 px-3 text-center">
-                      <span className={`px-2 py-0.5 rounded-full border text-[11px] font-medium ${statusBadge(ad.status)}`}>
-                        {ad.status}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 text-right text-foreground">{ins ? currency(num(ins.spend)) : "-"}</td>
-                    <td className="py-3 px-3 text-right text-foreground">{ins ? Number(num(ins.impressions)).toLocaleString() : "-"}</td>
-                    <td className="py-3 px-3 text-right text-foreground">{ins ? Number(num(ins.clicks)).toLocaleString() : "-"}</td>
-                    <td className="py-3 px-3 text-right text-foreground">{ins ? `${num(ins.ctr).toFixed(2)}%` : "-"}</td>
-                    <td className="py-3 px-3 text-right text-foreground">{ins ? currency(num(ins.cpc)) : "-"}</td>
-                    <td className="py-3 px-3 text-right text-foreground">{ins ? getConversions(ins.actions) : "-"}</td>
-                  </tr>
-                );
-              })}
-              {sortedAds.length === 0 && (
+              {filteredRows.map((row) => (
+                <tr key={row.ad_id} className="border-b border-border/50 hover:bg-surface-hover transition-colors">
+                  <td className="py-3 px-4">
+                    <p className="text-foreground truncate font-medium max-w-[280px]">
+                      {row.ad_name || row.ad_id}
+                    </p>
+                  </td>
+                  <td className="py-3 px-3 text-muted text-xs truncate max-w-[180px]">
+                    {adsetMap[row.adset_id || ""] || "-"}
+                  </td>
+                  <td className="py-3 px-3 text-right text-foreground">{currency(num(row.spend))}</td>
+                  <td className="py-3 px-3 text-right text-foreground">{Number(num(row.impressions)).toLocaleString()}</td>
+                  <td className="py-3 px-3 text-right text-foreground">{Number(num(row.clicks)).toLocaleString()}</td>
+                  <td className="py-3 px-3 text-right text-foreground">{`${num(row.ctr).toFixed(2)}%`}</td>
+                  <td className="py-3 px-3 text-right text-foreground">{currency(num(row.cpc))}</td>
+                  <td className="py-3 px-3 text-right text-foreground">{getConversions(row.actions)}</td>
+                </tr>
+              ))}
+              {filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-muted text-sm">
+                  <td colSpan={8} className="py-12 text-center text-muted text-sm">
                     <ImageIcon className="w-8 h-8 text-muted/30 mx-auto mb-2" />
                     No ads found
                   </td>
