@@ -21,21 +21,38 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const records = Array.isArray(body) ? body : [body];
 
+    // Fetch existing records to preserve user-edited fields during sync
+    const oppIds = records.map((r: Record<string, unknown>) => r.opportunity_id as string);
+    const { data: existing } = await supabaseAdmin
+      .from("sales_payment_done_tracking")
+      .select("opportunity_id, status, notes, last_contacted_at, call_scheduled_at")
+      .in("opportunity_id", oppIds);
+
+    const existingMap = new Map(
+      (existing || []).map((r) => [r.opportunity_id, r])
+    );
+
     const { data, error } = await supabaseAdmin
       .from("sales_payment_done_tracking")
       .upsert(
-        records.map((r: Record<string, unknown>) => ({
-          opportunity_id: r.opportunity_id,
-          contact_name: r.contact_name,
-          contact_email: r.contact_email,
-          contact_phone: r.contact_phone,
-          pipeline_name: r.pipeline_name,
-          stage_name: r.stage_name,
-          source: r.source,
-          status: r.status || "new",
-          notes: r.notes || null,
-          assigned_to: r.assigned_to || null,
-        })),
+        records.map((r: Record<string, unknown>) => {
+          const prev = existingMap.get(r.opportunity_id as string);
+          return {
+            opportunity_id: r.opportunity_id,
+            contact_name: r.contact_name,
+            contact_email: r.contact_email,
+            contact_phone: r.contact_phone,
+            pipeline_name: r.pipeline_name,
+            stage_name: r.stage_name,
+            source: r.source,
+            // Preserve user-edited fields if record already exists
+            status: prev?.status || (r.status as string) || "new",
+            notes: prev?.notes ?? (r.notes as string) ?? null,
+            last_contacted_at: prev?.last_contacted_at ?? null,
+            call_scheduled_at: prev?.call_scheduled_at ?? null,
+            assigned_to: r.assigned_to || null,
+          };
+        }),
         { onConflict: "opportunity_id" }
       )
       .select();
@@ -95,9 +112,12 @@ export async function PUT(req: NextRequest) {
       .update(updates)
       .eq("opportunity_id", opportunity_id)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) throw error;
+    if (!data) {
+      return NextResponse.json({ error: "Record not found" }, { status: 404 });
+    }
     return NextResponse.json({ record: data });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to update payment done tracking";

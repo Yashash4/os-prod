@@ -16,14 +16,16 @@ export default function Breadcrumb({ items }: BreadcrumbProps) {
         return (
           <span key={item.href} className="flex items-center gap-1">
             {index > 0 && (
-              <ChevronRight className="w-3.5 h-3.5 text-muted flex-shrink-0" />
+              <ChevronRight className="w-3.5 h-3.5 text-muted/50 flex-shrink-0" />
             )}
             {isLast ? (
-              <span className="text-foreground font-medium">{item.label}</span>
+              <span className="text-foreground font-medium text-xs">
+                {item.label}
+              </span>
             ) : (
               <Link
                 href={item.href}
-                className="text-muted hover:text-foreground transition-colors"
+                className="text-muted hover:text-foreground transition-colors text-xs"
               >
                 {item.label}
               </Link>

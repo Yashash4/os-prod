@@ -89,7 +89,7 @@ export async function PUT(req: NextRequest) {
         { onConflict: "opportunity_id" }
       )
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) throw error;
     return NextResponse.json({ record: data });

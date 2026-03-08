@@ -18,13 +18,14 @@ export default function SalesPage() {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {children.map((mod) => (
+          {children.map((mod, i) => (
             <ModuleCard
               key={mod.slug}
               name={mod.name}
               description={mod.description}
               icon={mod.icon}
               href={mod.path}
+              index={i}
             />
           ))}
         </div>

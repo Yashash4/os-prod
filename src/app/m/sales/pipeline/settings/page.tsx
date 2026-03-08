@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Shell from "@/components/Shell";
+import { SettingsSkeleton } from "@/components/Skeleton";
 import {
-  Loader2,
   RefreshCw,
   Phone,
   Mail,
@@ -417,7 +417,7 @@ function TrackingSheet({
   }
   function cancelEdit() { setEditingCell(null); setEditValue(""); }
 
-  if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="w-6 h-6 animate-spin text-accent" /></div>;
+  if (loading) return <div className="p-6 space-y-4"><SettingsSkeleton /></div>;
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
@@ -458,7 +458,7 @@ function TrackingSheet({
           <button key={s} onClick={() => setStatusFilter(statusFilter === s ? "all" : s)}
             className={`inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border transition-colors ${statusFilter === s ? statusConfig[s].bg + " " + statusConfig[s].color : "border-border text-muted hover:border-border/80"}`}>
             {statusConfig[s].label}
-            <span className="font-mono">{statusCounts[s] || 0}</span>
+            <span>{statusCounts[s] || 0}</span>
           </button>
         ))}
       </div>

@@ -20,10 +20,9 @@ export default function GHLLayout({ children }: GHLLayoutProps) {
 
   return (
     <Shell userName="Yash" onSignOut={() => {}}>
-      <div className="flex min-h-[calc(100vh-48px)]">
-        {/* Sidebar */}
+      <div className="flex min-h-[calc(100vh-49px)]">
         <aside className="w-52 border-r border-border bg-surface flex-shrink-0">
-          <nav className="p-3 space-y-1">
+          <nav className="p-3 space-y-0.5">
             {sidebarItems.map((item) => {
               const isActive =
                 pathname === item.href ||
@@ -35,12 +34,15 @@ export default function GHLLayout({ children }: GHLLayoutProps) {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                  className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors relative ${
                     isActive
                       ? "bg-accent/10 text-accent"
                       : "text-muted hover:text-foreground hover:bg-surface-hover"
                   }`}
                 >
+                  {isActive && (
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-accent rounded-full" />
+                  )}
                   <Icon className="w-4 h-4" />
                   {item.name}
                 </Link>
@@ -48,8 +50,6 @@ export default function GHLLayout({ children }: GHLLayoutProps) {
             })}
           </nav>
         </aside>
-
-        {/* Content */}
         <div className="flex-1">{children}</div>
       </div>
     </Shell>

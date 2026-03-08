@@ -128,7 +128,7 @@ export async function getAds(adSetId?: string) {
     ? `/${adSetId}/ads`
     : `/${AD_ACCOUNT_ID}/ads`;
   return paginateAll(endpoint, {
-    fields: "name,status,creative{title,body,image_url,thumbnail_url},adset_id,campaign_id,created_time",
+    fields: "name,status,creative{title,body,image_url,thumbnail_url,video_id,object_story_spec},adset_id,campaign_id,created_time",
     limit: "100",
   });
 }
@@ -145,6 +145,43 @@ export async function getAdInsights(
     time_increment: timeIncrement,
   });
   return data.data || [];
+}
+
+/* ── Video Source ────────────────────────────────── */
+
+export async function getVideoSource(videoId: string) {
+  // Try 1: Direct video node (works if token has pages_read_engagement)
+  try {
+    const data = await metaFetch(`/${videoId}`, {
+      fields: "source,picture",
+    });
+    if (data.source) return data;
+  } catch {
+    // fall through to next attempt
+  }
+
+  // Try 2: Ad account advideos endpoint (works with ads_read token)
+  try {
+    const data = await metaFetch(`/${AD_ACCOUNT_ID}/advideos`, {
+      filtering: JSON.stringify([{ field: "id", operator: "EQUAL", value: videoId }]),
+      fields: "source,picture",
+    });
+    const video = data?.data?.[0];
+    if (video?.source) return video;
+    if (video?.picture) return { source: null, picture: video.picture };
+  } catch {
+    // fall through
+  }
+
+  // Try 3: Get high-res picture from video node without source
+  try {
+    const data = await metaFetch(`/${videoId}`, {
+      fields: "picture",
+    });
+    return { source: null, picture: data.picture || null };
+  } catch {
+    return { source: null, picture: null };
+  }
 }
 
 /* ── Bulk Insights (single call, avoids rate limits) ── */

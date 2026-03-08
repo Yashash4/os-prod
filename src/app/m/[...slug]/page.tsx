@@ -13,10 +13,7 @@ export default function ModulePage({ params }: ModulePageProps) {
   const { slug } = use(params);
   const currentSlug = slug[slug.length - 1];
 
-  // Get children of current module
   const children = getChildrenByParentSlug(currentSlug);
-
-  // Find current module info
   const currentModule = MODULE_REGISTRY.find((m) => m.slug === currentSlug);
 
   return (
@@ -35,18 +32,19 @@ export default function ModulePage({ params }: ModulePageProps) {
 
         {children.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {children.map((mod) => (
+            {children.map((mod, i) => (
               <ModuleCard
                 key={mod.slug}
                 name={mod.name}
                 description={mod.description}
                 icon={mod.icon}
                 href={mod.path}
+                index={i}
               />
             ))}
           </div>
         ) : (
-          <div className="flex items-center justify-center h-64 rounded-xl border border-border bg-surface">
+          <div className="flex items-center justify-center h-64 rounded-lg border border-border bg-surface">
             <p className="text-muted text-sm">
               {currentModule?.name || currentSlug} module — coming soon
             </p>

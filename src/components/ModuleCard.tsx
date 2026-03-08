@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { motion } from "framer-motion";
 import {
   TrendingUp,
   Zap,
@@ -20,6 +21,16 @@ import {
   ImageIcon,
   PieChart,
   Folder,
+  FileText,
+  PenTool,
+  Film,
+  Linkedin,
+  Instagram,
+  Youtube,
+  CreditCard,
+  Receipt,
+  Landmark,
+  ScrollText,
 } from "lucide-react";
 
 const iconComponents: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -40,6 +51,16 @@ const iconComponents: Record<string, React.ComponentType<{ className?: string }>
   Layers,
   Image: ImageIcon,
   PieChart,
+  FileText,
+  PenTool,
+  Film,
+  Linkedin,
+  Instagram,
+  Youtube,
+  CreditCard,
+  Receipt,
+  Landmark,
+  ScrollText,
 };
 
 interface ModuleCardProps {
@@ -47,6 +68,7 @@ interface ModuleCardProps {
   description: string;
   icon: string;
   href: string;
+  index?: number;
 }
 
 export default function ModuleCard({
@@ -54,21 +76,32 @@ export default function ModuleCard({
   description,
   icon,
   href,
+  index = 0,
 }: ModuleCardProps) {
   const IconComponent = iconComponents[icon] || Folder;
 
   return (
-    <Link
-      href={href}
-      className="group flex flex-col items-center gap-3 p-6 rounded-xl bg-surface border border-border hover:border-accent/50 hover:bg-surface-hover transition-all"
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: index * 0.03, ease: "easeOut" }}
     >
-      <div className="w-12 h-12 rounded-lg bg-accent/10 flex items-center justify-center group-hover:bg-accent/20 transition-colors">
-        <IconComponent className="w-6 h-6 text-accent" />
-      </div>
-      <div className="text-center">
-        <h3 className="text-sm font-medium text-foreground">{name}</h3>
-        <p className="text-xs text-muted mt-1">{description}</p>
-      </div>
-    </Link>
+      <Link
+        href={href}
+        className="group flex flex-col items-center justify-center gap-3 p-6 rounded-xl bg-surface border border-border hover:border-accent/30 hover:bg-surface-hover transition-all min-h-[160px]"
+      >
+        <div className="w-12 h-12 rounded-lg bg-accent/8 flex items-center justify-center group-hover:bg-accent/12 transition-colors">
+          <IconComponent className="w-6 h-6 text-accent" />
+        </div>
+        <div className="text-center">
+          <h3 className="text-sm font-medium text-foreground">
+            {name}
+          </h3>
+          <p className="text-xs text-muted mt-1">
+            {description}
+          </p>
+        </div>
+      </Link>
+    </motion.div>
   );
 }

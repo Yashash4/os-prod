@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import Link from "next/link";
 import {
   Loader2,
   IndianRupee,
@@ -11,7 +12,9 @@ import {
   TrendingUp,
   Target,
   BarChart3,
+  ImageIcon,
 } from "lucide-react";
+import { MetaDashboardSkeleton } from "@/components/Skeleton";
 import {
   PieChart,
   Pie,
@@ -48,15 +51,31 @@ interface InsightRow {
   gender?: string;
   publisher_platform?: string;
   impression_device?: string;
+  // campaign-level fields
+  campaign_id?: string;
+  campaign_name?: string;
 }
 
-interface Campaign {
+interface AdMeta {
   id: string;
   name: string;
   status: string;
-  objective?: string;
-  daily_budget?: string;
-  lifetime_budget?: string;
+  creative?: {
+    title?: string;
+    body?: string;
+    image_url?: string;
+    thumbnail_url?: string;
+  };
+}
+
+interface BulkAdInsight {
+  ad_id?: string;
+  ad_name?: string;
+  spend?: string;
+  impressions?: string;
+  clicks?: string;
+  ctr?: string;
+  actions?: { action_type: string; value: string }[];
 }
 
 /* ── Constants ─────────────────────────────────────── */
@@ -71,14 +90,14 @@ const DATE_PRESETS = [
 ];
 
 const TOOLTIP_STYLE = {
-  background: "#1a1a1a",
+  background: "#171717",
   border: "1px solid #262626",
   borderRadius: "8px",
-  color: "#ededed",
+  color: "#F5F5F5",
 };
 
 const COLORS = [
-  "#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6",
+  "#B8860B", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6",
   "#06b6d4", "#ec4899", "#6366f1", "#14b8a6", "#f97316",
 ];
 
@@ -104,6 +123,15 @@ function getActionValue(actions: { action_type: string; value: string }[] | unde
   return a ? parseFloat(a.value) : 0;
 }
 
+function getConversions(actions?: { action_type: string; value: string }[]) {
+  if (!actions) return 0;
+  const purchase = actions.find((a) => a.action_type === "purchase");
+  if (purchase) return parseInt(purchase.value);
+  const lead = actions.find((a) => a.action_type === "lead");
+  if (lead) return parseInt(lead.value);
+  return 0;
+}
+
 /* ── Reusable Components ──────────────────────────── */
 
 function StatCard({
@@ -118,10 +146,10 @@ function StatCard({
   color?: string;
 }) {
   return (
-    <div className="bg-surface border border-border rounded-xl p-4">
-      <div className="flex items-center gap-1.5 mb-1">
+    <div className="card rounded-xl p-4 transition-all">
+      <div className="flex items-center gap-1.5 mb-1.5">
         {Icon && <Icon className={`w-3.5 h-3.5 ${color}`} />}
-        <span className="text-xs text-muted">{label}</span>
+        <span className="text-[10px] text-muted uppercase tracking-wider">{label}</span>
       </div>
       <span className="text-xl font-bold text-foreground">{value}</span>
     </div>
@@ -138,9 +166,9 @@ function WidgetCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-surface border border-border rounded-xl p-4">
+    <div className="card rounded-xl p-4">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-medium text-foreground">{title}</h3>
+        <h3 className="text-sm font-bold text-foreground tracking-wide">{title}</h3>
         {right}
       </div>
       {children}
@@ -152,12 +180,15 @@ function WidgetCard({
 
 export default function MetaDashboard() {
   const [datePreset, setDatePreset] = useState("last_30d");
+  const [selectedCampaign, setSelectedCampaign] = useState("");
   const [insights, setInsights] = useState<InsightRow[]>([]);
-  const [campaignBulk, setCampaignBulk] = useState<(InsightRow & { campaign_id?: string; campaign_name?: string })[]>([]);
+  const [campaignBulk, setCampaignBulk] = useState<InsightRow[]>([]);
   const [ageData, setAgeData] = useState<InsightRow[]>([]);
   const [genderData, setGenderData] = useState<InsightRow[]>([]);
   const [platformData, setPlatformData] = useState<InsightRow[]>([]);
   const [deviceData, setDeviceData] = useState<InsightRow[]>([]);
+  const [adsMeta, setAdsMeta] = useState<AdMeta[]>([]);
+  const [adInsightsBulk, setAdInsightsBulk] = useState<BulkAdInsight[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -167,23 +198,26 @@ export default function MetaDashboard() {
       setLoading(true);
       setError("");
       try {
-        // 6 API calls total (each = 1 Meta API call, no pagination)
-        const [insRes, campBulkRes, ageRes, genderRes, platRes, devRes] = await Promise.all([
+        const [insRes, campBulkRes, ageRes, genderRes, platRes, devRes, adsMetaRes, adBulkRes] = await Promise.all([
           fetch(`/api/meta/account-insights?date_preset=${datePreset}&time_increment=1`),
           fetch(`/api/meta/campaign-insights-bulk?date_preset=${datePreset}`),
           fetch(`/api/meta/breakdowns?breakdown=age&date_preset=${datePreset}`),
           fetch(`/api/meta/breakdowns?breakdown=gender&date_preset=${datePreset}`),
           fetch(`/api/meta/breakdowns?breakdown=publisher_platform&date_preset=${datePreset}`),
           fetch(`/api/meta/breakdowns?breakdown=impression_device&date_preset=${datePreset}`),
+          fetch(`/api/meta/ads`),
+          fetch(`/api/meta/ad-insights-bulk?date_preset=${datePreset}`),
         ]);
 
-        const [insData, campBulkData, ageD, genderD, platD, devD] = await Promise.all([
+        const [insData, campBulkData, ageD, genderD, platD, devD, adsMetaData, adBulkData] = await Promise.all([
           insRes.json(),
           campBulkRes.json(),
           ageRes.json(),
           genderRes.json(),
           platRes.json(),
           devRes.json(),
+          adsMetaRes.json(),
+          adBulkRes.json(),
         ]);
 
         if (insData.error) throw new Error(insData.error);
@@ -194,6 +228,8 @@ export default function MetaDashboard() {
         setGenderData(genderD.data || []);
         setPlatformData(platD.data || []);
         setDeviceData(devD.data || []);
+        setAdsMeta(adsMetaData.ads || []);
+        setAdInsightsBulk(adBulkData.insights || []);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load");
       } finally {
@@ -203,18 +239,41 @@ export default function MetaDashboard() {
     fetchAll();
   }, [datePreset]);
 
+  /* ── Campaign list for filter ────────────────── */
+  const campaignList = useMemo(() => {
+    const seen = new Set<string>();
+    const result: { id: string; name: string }[] = [];
+    campaignBulk.forEach((r) => {
+      const cid = r.campaign_id;
+      const name = r.campaign_name;
+      if (cid && name && !seen.has(cid)) {
+        seen.add(cid);
+        result.push({ id: cid, name });
+      }
+    });
+    return result.sort((a, b) => a.name.localeCompare(b.name));
+  }, [campaignBulk]);
+
+  /* ── Filter campaign bulk data ────────────────── */
+  const filteredCampaignBulk = useMemo(() => {
+    if (!selectedCampaign) return campaignBulk;
+    return campaignBulk.filter((r) => r.campaign_id === selectedCampaign);
+  }, [campaignBulk, selectedCampaign]);
+
   /* ── Aggregated KPIs ───────────────────────────── */
   const totals = useMemo(() => {
+    const source = selectedCampaign ? filteredCampaignBulk : insights;
     let spend = 0, impressions = 0, clicks = 0, reach = 0;
-    let purchases = 0, purchaseValue = 0;
+    let purchases = 0, purchaseValue = 0, leads = 0;
 
-    insights.forEach((row) => {
+    source.forEach((row) => {
       spend += num(row.spend);
       impressions += num(row.impressions);
       clicks += num(row.clicks);
       reach += num(row.reach);
       purchases += getActionValue(row.actions, "purchase");
       purchaseValue += getActionValue(row.action_values, "purchase");
+      leads += getActionValue(row.actions, "lead");
     });
 
     const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
@@ -223,8 +282,8 @@ export default function MetaDashboard() {
     const roas = spend > 0 ? purchaseValue / spend : 0;
     const frequency = reach > 0 ? impressions / reach : 0;
 
-    return { spend, impressions, clicks, reach, ctr, cpc, cpm, roas, frequency, purchases, purchaseValue };
-  }, [insights]);
+    return { spend, impressions, clicks, reach, ctr, cpc, cpm, roas, frequency, purchases, purchaseValue, leads };
+  }, [insights, filteredCampaignBulk, selectedCampaign]);
 
   /* ── Daily trend data ──────────────────────────── */
   const dailyData = useMemo(() => {
@@ -243,7 +302,7 @@ export default function MetaDashboard() {
 
   /* ── Campaign bar data ─────────────────────────── */
   const campaignBarData = useMemo(() => {
-    return campaignBulk
+    return filteredCampaignBulk
       .map((row) => {
         const name = row.campaign_name || row.campaign_id || "Unknown";
         return {
@@ -255,7 +314,30 @@ export default function MetaDashboard() {
       .filter((c) => c.spend > 0)
       .sort((a, b) => b.spend - a.spend)
       .slice(0, 10);
-  }, [campaignBulk]);
+  }, [filteredCampaignBulk]);
+
+  /* ── Top performing creatives ──────────────────── */
+  const topCreatives = useMemo(() => {
+    const adMetaMap: Record<string, AdMeta> = {};
+    adsMeta.forEach((ad) => { if (ad.id) adMetaMap[ad.id] = ad; });
+
+    return adInsightsBulk
+      .filter((row) => row.ad_id && adMetaMap[row.ad_id]?.creative)
+      .map((row) => {
+        const meta = adMetaMap[row.ad_id!];
+        return {
+          id: row.ad_id!,
+          name: row.ad_name || meta.name || row.ad_id!,
+          creative: meta.creative!,
+          spend: num(row.spend),
+          clicks: num(row.clicks),
+          ctr: num(row.ctr),
+          conversions: getConversions(row.actions),
+        };
+      })
+      .sort((a, b) => b.spend - a.spend)
+      .slice(0, 5);
+  }, [adsMeta, adInsightsBulk]);
 
   /* ── Conversion action breakdown ───────────────── */
   const conversionData = useMemo(() => {
@@ -305,12 +387,30 @@ export default function MetaDashboard() {
     }));
   }, [deviceData]);
 
+  /* ── Acquisition Funnel ─────────────────────────── */
+  const funnelSteps = useMemo(() => {
+    const steps = [
+      { label: "Impressions", value: totals.impressions, cost: totals.spend },
+      { label: "Clicks", value: totals.clicks, cost: totals.clicks > 0 ? totals.spend / totals.clicks : 0 },
+      { label: "Leads", value: totals.leads, cost: totals.leads > 0 ? totals.spend / totals.leads : 0 },
+      { label: "Purchases", value: totals.purchases, cost: totals.purchases > 0 ? totals.spend / totals.purchases : 0 },
+    ];
+    return steps.map((step, i) => ({
+      ...step,
+      convRate: i === 0 ? 100 : steps[i - 1].value > 0 ? (step.value / steps[i - 1].value) * 100 : 0,
+    }));
+  }, [totals]);
+
   /* ── Render ────────────────────────────────────── */
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[80vh]">
-        <Loader2 className="w-6 h-6 animate-spin text-accent" />
+      <div className="p-6 space-y-4">
+        <div className="flex items-center gap-2">
+          <div className="w-1 h-6 bg-accent rounded-full" />
+          <h1 className="text-xl font-bold text-foreground tracking-tight">Meta Ads Dashboard</h1>
+        </div>
+        <MetaDashboardSkeleton />
       </div>
     );
   }
@@ -318,19 +418,32 @@ export default function MetaDashboard() {
   return (
     <div className="p-6 space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">Meta Ads Dashboard</h1>
-          <p className="text-muted text-sm mt-1">Facebook & Instagram advertising analytics</p>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <div className="w-1 h-6 bg-accent rounded-full" />
+          <div>
+            <h1 className="text-xl font-bold text-foreground tracking-tight">Meta Ads Dashboard</h1>
+            <p className="text-muted text-xs mt-0.5">Facebook & Instagram Analytics</p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[10px] px-2 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
             Read Only
           </span>
           <select
+            value={selectedCampaign}
+            onChange={(e) => setSelectedCampaign(e.target.value)}
+            className="px-3 py-2 bg-background/50 border border-border rounded-lg text-foreground text-sm focus:outline-none focus:border-accent max-w-[200px]"
+          >
+            <option value="">All Campaigns</option>
+            {campaignList.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          <select
             value={datePreset}
             onChange={(e) => setDatePreset(e.target.value)}
-            className="px-3 py-2 bg-surface border border-border rounded-lg text-foreground text-sm focus:outline-none focus:border-accent"
+            className="px-3 py-2 bg-background/50 border border-border rounded-lg text-foreground text-sm focus:outline-none focus:border-accent"
           >
             {DATE_PRESETS.map((p) => (
               <option key={p.value} value={p.value}>
@@ -349,7 +462,7 @@ export default function MetaDashboard() {
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
         <StatCard label="Total Spend" value={currency(totals.spend)} icon={IndianRupee} color="text-green-400" />
         <StatCard label="Impressions" value={compact(totals.impressions)} icon={Eye} color="text-blue-400" />
-        <StatCard label="Clicks" value={compact(totals.clicks)} icon={MousePointer} color="text-cyan-400" />
+        <StatCard label="Clicks" value={compact(totals.clicks)} icon={MousePointer} color="text-blue-400" />
         <StatCard label="Reach" value={compact(totals.reach)} icon={Users} color="text-purple-400" />
         <StatCard label="CTR" value={`${totals.ctr.toFixed(2)}%`} icon={TrendingUp} color="text-amber-400" />
         <StatCard label="CPC" value={currency(totals.cpc)} icon={Target} color="text-red-400" />
@@ -357,16 +470,90 @@ export default function MetaDashboard() {
         <StatCard label="ROAS" value={`${totals.roas.toFixed(2)}x`} icon={Repeat} color="text-emerald-400" />
       </div>
 
+      {/* ── Top Performing Creatives ─────────────── */}
+      {topCreatives.length > 0 && (
+        <WidgetCard
+          title="Top Performing Creatives"
+          right={
+            <Link href="/m/marketing/meta/ads" className="text-xs text-accent hover:underline">
+              View All Ads →
+            </Link>
+          }
+        >
+          <div className="flex gap-3 overflow-x-auto pb-1">
+            {topCreatives.map((ad) => {
+              const imgUrl = ad.creative.thumbnail_url || ad.creative.image_url;
+              return (
+                <div key={ad.id} className="flex-shrink-0 w-[200px] bg-background/50 rounded-lg border border-border/50 overflow-hidden">
+                  <div className="h-20 bg-background flex items-center justify-center overflow-hidden">
+                    {imgUrl ? (
+                      <img src={imgUrl} alt={ad.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <ImageIcon className="w-6 h-6 text-muted/30" />
+                    )}
+                  </div>
+                  <div className="p-2 space-y-1">
+                    <p className="text-xs text-foreground font-medium truncate">{ad.name}</p>
+                    {ad.creative.title && (
+                      <p className="text-[10px] text-muted truncate">{ad.creative.title}</p>
+                    )}
+                    <div className="flex items-center justify-between text-[10px] text-muted pt-1 border-t border-border/30">
+                      <span>{currency(ad.spend)}</span>
+                      <span>{ad.clicks} clicks</span>
+                      <span>{ad.ctr.toFixed(2)}%</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </WidgetCard>
+      )}
+
+      {/* ── Customer Acquisition Funnel ──────────── */}
+      <WidgetCard title="Customer Acquisition Funnel">
+        <div className="flex items-end justify-center gap-1 h-[180px]">
+          {funnelSteps.map((step, i) => {
+            const maxVal = funnelSteps[0].value || 1;
+            const widthPct = Math.max(((funnelSteps.length - i) / funnelSteps.length) * 100, 30);
+            return (
+              <div key={step.label} className="flex flex-col items-center flex-1">
+                <div className="text-center mb-2">
+                  <p className="text-lg font-bold text-foreground">{compact(step.value)}</p>
+                  <p className="text-[10px] text-muted">{step.label}</p>
+                  {i > 0 && (
+                    <p className="text-[10px] text-accent">{step.convRate.toFixed(1)}% conv.</p>
+                  )}
+                  {i > 0 && step.cost > 0 && (
+                    <p className="text-[10px] text-muted">Cost: {currency(step.cost)}</p>
+                  )}
+                </div>
+                <div
+                  className="rounded-t-lg transition-all"
+                  style={{
+                    width: `${widthPct}%`,
+                    height: `${Math.max((step.value / maxVal) * 100, 8)}px`,
+                    background: COLORS[i],
+                    minHeight: "8px",
+                    maxHeight: "80px",
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </WidgetCard>
+
       {/* ── Row 1: Spend Over Time + Performance Trend ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <WidgetCard title="Spend Over Time">
           {dailyData.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={dailyData}>
-                <XAxis dataKey="date" tick={{ fill: "#737373", fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#737373", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="date" tick={{ fill: "#A3A3A3", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "#A3A3A3", fontSize: 10 }} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => currency(Number(v))} />
-                <Line type="monotone" dataKey="spend" stroke="#3b82f6" strokeWidth={2} dot={false} name="Spend" />
+                <Line type="monotone" dataKey="spend" stroke="#B8860B" strokeWidth={2} dot={false} name="Spend" />
               </LineChart>
             </ResponsiveContainer>
           ) : (
@@ -378,9 +565,9 @@ export default function MetaDashboard() {
           {dailyData.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={dailyData}>
-                <XAxis dataKey="date" tick={{ fill: "#737373", fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis yAxisId="left" tick={{ fill: "#737373", fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fill: "#737373", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="date" tick={{ fill: "#A3A3A3", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis yAxisId="left" tick={{ fill: "#A3A3A3", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fill: "#A3A3A3", fontSize: 10 }} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} />
                 <Line yAxisId="left" type="monotone" dataKey="ctr" stroke="#22c55e" strokeWidth={2} dot={false} name="CTR %" />
                 <Line yAxisId="right" type="monotone" dataKey="cpc" stroke="#f59e0b" strokeWidth={2} dot={false} name="CPC ₹" />
@@ -399,8 +586,8 @@ export default function MetaDashboard() {
           {campaignBarData.length > 0 ? (
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={campaignBarData} layout="vertical">
-                <XAxis type="number" tick={{ fill: "#737373", fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis type="category" dataKey="name" tick={{ fill: "#737373", fontSize: 10 }} axisLine={false} tickLine={false} width={140} />
+                <XAxis type="number" tick={{ fill: "#A3A3A3", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="name" tick={{ fill: "#A3A3A3", fontSize: 10 }} axisLine={false} tickLine={false} width={140} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => currency(Number(v))} />
                 <Bar dataKey="spend" radius={[0, 4, 4, 0]}>
                   {campaignBarData.map((_, i) => (
@@ -447,8 +634,8 @@ export default function MetaDashboard() {
           {ageChartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={ageChartData}>
-                <XAxis dataKey="name" tick={{ fill: "#737373", fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#737373", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="name" tick={{ fill: "#A3A3A3", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "#A3A3A3", fontSize: 10 }} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => currency(Number(v))} />
                 <Bar dataKey="spend" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="Spend" />
                 <Legend />
@@ -518,8 +705,8 @@ export default function MetaDashboard() {
           {deviceChartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={deviceChartData}>
-                <XAxis dataKey="name" tick={{ fill: "#737373", fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#737373", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="name" tick={{ fill: "#A3A3A3", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "#A3A3A3", fontSize: 10 }} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => currency(Number(v))} />
                 <Bar dataKey="spend" fill="#06b6d4" radius={[4, 4, 0, 0]} name="Spend" />
                 <Legend />

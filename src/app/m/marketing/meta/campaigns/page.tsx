@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   Loader2,
   ChevronDown,
   ChevronUp,
   IndianRupee,
+  Search,
 } from "lucide-react";
+import { MetaTableSkeleton } from "@/components/Skeleton";
 import {
   LineChart,
   Line,
@@ -53,10 +55,10 @@ const DATE_PRESETS = [
 ];
 
 const TOOLTIP_STYLE = {
-  background: "#1a1a1a",
+  background: "#171717",
   border: "1px solid #262626",
   borderRadius: "8px",
-  color: "#ededed",
+  color: "#F5F5F5",
 };
 
 /* ── Helpers ───────────────────────────────────────── */
@@ -92,6 +94,8 @@ export default function CampaignsPage() {
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandLoading, setExpandLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
 
   useEffect(() => {
     async function fetchData() {
@@ -146,18 +150,45 @@ export default function CampaignsPage() {
     }
   }
 
+  // Status counts for filter pills
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = { ALL: campaigns.length };
+    campaigns.forEach((c) => {
+      const s = c.status.toUpperCase();
+      const bucket = s === "ACTIVE" ? "ACTIVE" : s === "PAUSED" ? "PAUSED" : "OTHER";
+      counts[bucket] = (counts[bucket] || 0) + 1;
+    });
+    return counts;
+  }, [campaigns]);
+
   const sortedCampaigns = useMemo(() => {
-    return [...campaigns].sort((a, b) => {
+    let filtered = [...campaigns];
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      filtered = filtered.filter((c) => c.name.toLowerCase().includes(q));
+    }
+    if (statusFilter !== "ALL") {
+      filtered = filtered.filter((c) => {
+        const s = c.status.toUpperCase();
+        if (statusFilter === "OTHER") return s !== "ACTIVE" && s !== "PAUSED";
+        return s === statusFilter;
+      });
+    }
+    return filtered.sort((a, b) => {
       const spendA = num(campaignInsights[a.id]?.[0]?.spend);
       const spendB = num(campaignInsights[b.id]?.[0]?.spend);
       return spendB - spendA;
     });
-  }, [campaigns, campaignInsights]);
+  }, [campaigns, campaignInsights, search, statusFilter]);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[80vh]">
-        <Loader2 className="w-6 h-6 animate-spin text-accent" />
+      <div className="p-6 space-y-4">
+        <div className="flex items-center gap-2">
+          <div className="w-1 h-6 bg-accent rounded-full" />
+          <h1 className="text-xl font-bold text-foreground tracking-tight">Campaigns</h1>
+        </div>
+        <MetaTableSkeleton />
       </div>
     );
   }
@@ -167,13 +198,28 @@ export default function CampaignsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Campaigns</h1>
-          <p className="text-muted text-sm mt-1">{campaigns.length} campaigns</p>
+          <div className="flex items-center gap-2">
+            <div className="w-1 h-6 bg-accent rounded-full" />
+            <div>
+              <h1 className="text-xl font-bold text-foreground tracking-tight">Campaigns</h1>
+              <p className="text-muted text-xs mt-0.5">{sortedCampaigns.length} campaigns</p>
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[10px] px-2 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
             Read Only
           </span>
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
+            <input
+              type="text"
+              placeholder="Search campaigns..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-8 pr-3 py-2 bg-surface border border-border rounded-lg text-foreground text-sm focus:outline-none focus:border-accent w-[170px]"
+            />
+          </div>
           <select
             value={datePreset}
             onChange={(e) => setDatePreset(e.target.value)}
@@ -186,16 +232,37 @@ export default function CampaignsPage() {
         </div>
       </div>
 
+      {/* Status filter pills */}
+      <div className="flex items-center gap-1.5">
+        {(["ALL", "ACTIVE", "PAUSED", "OTHER"] as const).map((s) => {
+          const count = statusCounts[s] || 0;
+          if (s !== "ALL" && count === 0) return null;
+          return (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                statusFilter === s
+                  ? "bg-accent/15 text-accent border border-accent/30"
+                  : "bg-surface border border-border text-muted hover:text-foreground"
+              }`}
+            >
+              {s === "ALL" ? "All" : s.charAt(0) + s.slice(1).toLowerCase()} ({count})
+            </button>
+          );
+        })}
+      </div>
+
       {error && (
         <div className="text-red-400 text-sm bg-red-500/10 p-3 rounded-lg">{error}</div>
       )}
 
       {/* Table */}
-      <div className="bg-surface border border-border rounded-xl overflow-hidden">
+      <div className="card rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border bg-surface">
+              <tr className="border-b border-border/50 bg-surface/80">
                 <th className="text-left py-3 px-4 text-xs text-muted font-medium">Campaign</th>
                 <th className="text-center py-3 px-3 text-xs text-muted font-medium">Status</th>
                 <th className="text-left py-3 px-3 text-xs text-muted font-medium">Objective</th>
@@ -221,72 +288,71 @@ export default function CampaignsPage() {
                     : "-";
 
                 return (
-                  <tr key={camp.id} className="border-b border-border/50 hover:bg-surface-hover transition-colors">
-                    <td colSpan={11} className="p-0">
-                      <div
-                        className="flex items-center cursor-pointer px-4 py-3"
-                        onClick={() => toggleExpand(camp.id)}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="text-foreground truncate font-medium">{camp.name}</p>
-                        </div>
-                        <div className="flex items-center gap-3 text-xs flex-shrink-0">
-                          <span className={`px-2 py-0.5 rounded-full border text-[11px] font-medium ${statusBadge(camp.status)}`}>
-                            {camp.status}
-                          </span>
-                          <span className="text-muted w-24 text-left">
-                            {camp.objective?.replace(/_/g, " ") || "-"}
-                          </span>
-                          <span className="text-foreground w-24 text-right">{budget}</span>
-                          <span className="text-foreground w-20 text-right">{ins ? currency(num(ins.spend)) : "-"}</span>
-                          <span className="text-foreground w-20 text-right">{ins ? Number(num(ins.impressions)).toLocaleString() : "-"}</span>
-                          <span className="text-foreground w-16 text-right">{ins ? Number(num(ins.clicks)).toLocaleString() : "-"}</span>
-                          <span className="text-foreground w-16 text-right">{ins ? `${num(ins.ctr).toFixed(2)}%` : "-"}</span>
-                          <span className="text-foreground w-16 text-right">{ins ? currency(num(ins.cpc)) : "-"}</span>
-                          <span className="text-foreground w-16 text-right">{ins ? `${getRoas(ins).toFixed(2)}x` : "-"}</span>
-                          {isExpanded ? (
-                            <ChevronUp className="w-4 h-4 text-muted" />
-                          ) : (
-                            <ChevronDown className="w-4 h-4 text-muted" />
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Expanded detail */}
-                      {isExpanded && (
-                        <div className="px-4 pb-4 border-t border-border/30">
-                          {expandLoading ? (
-                            <div className="flex items-center justify-center py-8">
-                              <Loader2 className="w-4 h-4 animate-spin text-accent mr-2" />
-                              <span className="text-xs text-muted">Loading daily data...</span>
-                            </div>
-                          ) : daily.length > 0 ? (
-                            <div className="pt-3">
-                              <p className="text-xs text-muted mb-2">Daily Spend Trend</p>
-                              <ResponsiveContainer width="100%" height={180}>
-                                <LineChart
-                                  data={daily
-                                    .filter((r) => r.date_start)
-                                    .sort((a, b) => (a.date_start || "").localeCompare(b.date_start || ""))
-                                    .map((r) => ({
-                                      date: r.date_start?.slice(5) || "",
-                                      spend: num(r.spend),
-                                    }))}
-                                >
-                                  <XAxis dataKey="date" tick={{ fill: "#737373", fontSize: 10 }} axisLine={false} tickLine={false} />
-                                  <YAxis tick={{ fill: "#737373", fontSize: 10 }} axisLine={false} tickLine={false} />
-                                  <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => currency(Number(v))} />
-                                  <Line type="monotone" dataKey="spend" stroke="#3b82f6" strokeWidth={2} dot={false} />
-                                </LineChart>
-                              </ResponsiveContainer>
-                            </div>
-                          ) : (
-                            <div className="py-6 text-center text-muted text-xs">No daily data available</div>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
+                  <React.Fragment key={camp.id}>
+                    <tr
+                      className="border-b border-border/50 hover:bg-surface-hover transition-colors cursor-pointer"
+                      onClick={() => toggleExpand(camp.id)}
+                    >
+                      <td className="py-3 px-4 text-foreground font-medium truncate max-w-[250px]">{camp.name}</td>
+                      <td className="py-3 px-3 text-center">
+                        <span className={`px-2 py-0.5 rounded-full border text-[11px] font-medium ${statusBadge(camp.status)}`}>
+                          {camp.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-xs text-muted">{camp.objective?.replace(/_/g, " ") || "-"}</td>
+                      <td className="py-3 px-3 text-right text-xs text-foreground">{budget}</td>
+                      <td className="py-3 px-3 text-right text-xs text-foreground">{ins ? currency(num(ins.spend)) : "-"}</td>
+                      <td className="py-3 px-3 text-right text-xs text-foreground">{ins ? Number(num(ins.impressions)).toLocaleString() : "-"}</td>
+                      <td className="py-3 px-3 text-right text-xs text-foreground">{ins ? Number(num(ins.clicks)).toLocaleString() : "-"}</td>
+                      <td className="py-3 px-3 text-right text-xs text-foreground">{ins ? `${num(ins.ctr).toFixed(2)}%` : "-"}</td>
+                      <td className="py-3 px-3 text-right text-xs text-foreground">{ins ? currency(num(ins.cpc)) : "-"}</td>
+                      <td className="py-3 px-3 text-right text-xs text-foreground">{ins ? `${getRoas(ins).toFixed(2)}x` : "-"}</td>
+                      <td className="py-3 px-1 w-8">
+                        {isExpanded ? (
+                          <ChevronUp className="w-4 h-4 text-muted" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-muted" />
+                        )}
+                      </td>
+                    </tr>
+                    {/* Expanded detail */}
+                    {isExpanded && (
+                      <tr className="border-b border-border/50">
+                        <td colSpan={11} className="p-0">
+                          <div className="px-4 pb-4 border-t border-border/30">
+                            {expandLoading ? (
+                              <div className="flex items-center justify-center py-8">
+                                <Loader2 className="w-4 h-4 animate-spin text-accent mr-2" />
+                                <span className="text-xs text-muted">Loading daily data...</span>
+                              </div>
+                            ) : daily.length > 0 ? (
+                              <div className="pt-3">
+                                <p className="text-xs text-muted mb-2">Daily Spend Trend</p>
+                                <ResponsiveContainer width="100%" height={180}>
+                                  <LineChart
+                                    data={daily
+                                      .filter((r) => r.date_start)
+                                      .sort((a, b) => (a.date_start || "").localeCompare(b.date_start || ""))
+                                      .map((r) => ({
+                                        date: r.date_start?.slice(5) || "",
+                                        spend: num(r.spend),
+                                      }))}
+                                  >
+                                    <XAxis dataKey="date" tick={{ fill: "#A3A3A3", fontSize: 10 }} axisLine={false} tickLine={false} />
+                                    <YAxis tick={{ fill: "#A3A3A3", fontSize: 10 }} axisLine={false} tickLine={false} />
+                                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => currency(Number(v))} />
+                                    <Line type="monotone" dataKey="spend" stroke="#B8860B" strokeWidth={2} dot={false} />
+                                  </LineChart>
+                                </ResponsiveContainer>
+                              </div>
+                            ) : (
+                              <div className="py-6 text-center text-muted text-xs">No daily data available</div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 );
               })}
               {sortedCampaigns.length === 0 && (

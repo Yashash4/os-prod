@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useMemo } from "react";
 import {
-  Loader2,
   Phone,
   Mail,
   ChevronDown,
@@ -16,6 +15,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import Link from "next/link";
+import { DataTableSkeleton } from "@/components/Skeleton";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -304,8 +304,9 @@ export default function MeetManagementPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-6 h-6 animate-spin text-accent" />
+      <div className="p-6 space-y-4">
+        <h1 className="text-xl font-bold text-foreground tracking-tight">Meet Management</h1>
+        <DataTableSkeleton cols={16} />
       </div>
     );
   }
@@ -332,15 +333,18 @@ export default function MeetManagementPage() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="px-6 pt-5 pb-3 flex-shrink-0 border-b border-border">
+      <div className="px-6 pt-5 pb-3 flex-shrink-0 border-b border-border/50/50">
         <div className="flex items-center justify-between mb-3">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground">Meet Management</h1>
-            <p className="text-muted text-sm mt-0.5">
+          <div className="flex items-center gap-2">
+            <div className="w-1 h-6 bg-accent rounded-full" />
+            <div>
+              <h1 className="text-xl font-bold text-foreground tracking-tight">Meet Management</h1>
+              <p className="text-muted text-xs mt-0.5">
               Maverick&apos;s leads from Call Booked — {maverickRecords.length} leads
               {maverickUserId && <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/20">Owner: {userNameMap[maverickUserId] || "Maverick"}</span>}
               {!maverickUserId && users.length > 0 && <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">Maverick user not found — showing all</span>}
             </p>
+            </div>
           </div>
         </div>
       </div>
@@ -353,7 +357,7 @@ export default function MeetManagementPage() {
       )}
 
       {/* Toolbar */}
-      <div className="px-6 py-3 flex items-center gap-3 flex-shrink-0 border-b border-border bg-surface/50">
+      <div className="px-6 py-3 flex items-center gap-3 flex-shrink-0 border-b border-border/50 bg-surface/50">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted" />
           <input type="text" placeholder="Search by name, email, phone..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
@@ -411,12 +415,12 @@ export default function MeetManagementPage() {
       </div>
 
       {/* Status Pills */}
-      <div className="px-6 py-2 flex gap-2 flex-wrap flex-shrink-0 border-b border-border">
+      <div className="px-6 py-2 flex gap-2 flex-wrap flex-shrink-0 border-b border-border/50">
         {ALL_GHL_STATUSES.map((s) => (
           <button key={s} onClick={() => setStatusFilter(statusFilter === s ? "all" : s)}
             className={`inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border transition-colors ${statusFilter === s ? GHL_STATUS_CONFIG[s].bg + " " + GHL_STATUS_CONFIG[s].color : "border-border text-muted hover:border-border/80"}`}>
             {GHL_STATUS_CONFIG[s].label}
-            <span className="font-mono">{statusCounts[s] || 0}</span>
+            <span>{statusCounts[s] || 0}</span>
           </button>
         ))}
       </div>
@@ -425,7 +429,7 @@ export default function MeetManagementPage() {
       <div className="flex-1 overflow-auto">
         <table className="w-full border-collapse min-w-[1800px]">
           <thead className="sticky top-0 z-10">
-            <tr className="bg-surface border-b border-border">
+            <tr className="bg-surface/80 border-b border-border/50">
               {COLUMNS.map((col) => (
                 <th key={col.key} className={`${col.width} text-left text-[11px] font-semibold text-muted uppercase tracking-wider px-3 py-2.5 border-r border-border last:border-r-0`}>{col.label}</th>
               ))}
@@ -441,7 +445,7 @@ export default function MeetManagementPage() {
                 </td>
               </tr>
             ) : filteredRecords.map((record, idx) => (
-              <tr key={record.opportunity_id} className="border-b border-border hover:bg-surface-hover/50 transition-colors group">
+              <tr key={record.opportunity_id} className="border-b border-border/50 hover:bg-surface-hover/50 transition-colors group">
                 <td className="px-3 py-2 text-xs text-muted border-r border-border">{idx + 1}</td>
                 <td className="px-3 py-2 text-xs text-foreground font-medium border-r border-border">{record.contact_name || "-"}</td>
                 <td className="px-3 py-2 text-xs text-foreground border-r border-border">

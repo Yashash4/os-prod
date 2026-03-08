@@ -18,6 +18,7 @@ import {
   FileText,
   ClipboardList,
 } from "lucide-react";
+import { CalendarSkeleton } from "@/components/Skeleton";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -252,7 +253,7 @@ function EventTooltip({
 
 export default function MaverickCalendarPageWrapper() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center h-[80vh]"><Loader2 className="w-6 h-6 animate-spin text-accent" /></div>}>
+    <Suspense fallback={<div className="p-6 space-y-4"><CalendarSkeleton /></div>}>
       <MaverickCalendarPage />
     </Suspense>
   );
@@ -691,8 +692,8 @@ function MaverickCalendarPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[80vh]">
-        <Loader2 className="w-6 h-6 animate-spin text-accent" />
+      <div className="p-6 space-y-4">
+        <CalendarSkeleton />
       </div>
     );
   }

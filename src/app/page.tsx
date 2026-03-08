@@ -5,8 +5,6 @@ import ModuleCard from "@/components/ModuleCard";
 import { MODULE_REGISTRY } from "@/lib/modules";
 
 export default function Home() {
-  // For now, show all top-level modules
-  // Once auth is connected to Supabase, this will be role-filtered
   const topLevelModules = MODULE_REGISTRY.filter(
     (m) => m.parent_slug === null && m.is_active
   );
@@ -23,14 +21,15 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {topLevelModules.map((mod) => (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-5 max-w-2xl">
+          {topLevelModules.map((mod, i) => (
             <ModuleCard
               key={mod.slug}
               name={mod.name}
               description={mod.description}
               icon={mod.icon}
               href={mod.path}
+              index={i}
             />
           ))}
         </div>

@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useMemo } from "react";
 import {
-  Loader2,
   Phone,
   Mail,
   Search,
@@ -13,6 +12,7 @@ import {
   Clock,
   AlertCircle,
 } from "lucide-react";
+import { SalesManagementSkeleton } from "@/components/Skeleton";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -193,8 +193,9 @@ export default function SalesManagementPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-6 h-6 animate-spin text-accent" />
+      <div className="p-6 space-y-4">
+        <h1 className="text-xl font-bold text-foreground tracking-tight">Sales Management</h1>
+        <SalesManagementSkeleton />
       </div>
     );
   }
@@ -220,13 +221,16 @@ export default function SalesManagementPage() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="px-6 pt-5 pb-3 flex-shrink-0 border-b border-border">
+      <div className="px-6 pt-5 pb-3 flex-shrink-0 border-b border-border/50/50">
         <div className="flex items-center justify-between mb-3">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground">Sales Management</h1>
-            <p className="text-muted text-sm mt-0.5">
-              Won deals from Meet Management — {maverickRecords.length} deals
-            </p>
+          <div className="flex items-center gap-2">
+            <div className="w-1 h-6 bg-accent rounded-full" />
+            <div>
+              <h1 className="text-xl font-bold text-foreground tracking-tight">Sales Management</h1>
+              <p className="text-muted text-xs mt-0.5">
+                Won deals from Meet Management — {maverickRecords.length} deals
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -239,7 +243,7 @@ export default function SalesManagementPage() {
       )}
 
       {/* Stats Cards */}
-      <div className="px-6 py-3 flex gap-3 flex-shrink-0 border-b border-border">
+      <div className="px-6 py-3 flex gap-3 flex-shrink-0 border-b border-border/50">
         <StatCard icon={<TrendingUp className="w-4 h-4" />} label="Total Quoted" value={`₹${stats.totalQuoted.toLocaleString()}`} color="text-blue-400" bg="bg-blue-500/10" />
         <StatCard icon={<DollarSign className="w-4 h-4" />} label="Collected" value={`₹${stats.totalCollected.toLocaleString()}`} color="text-green-400" bg="bg-green-500/10" />
         <StatCard icon={<Clock className="w-4 h-4" />} label="Pending" value={`₹${stats.totalPending.toLocaleString()}`} color="text-amber-400" bg="bg-amber-500/10" />
@@ -247,7 +251,7 @@ export default function SalesManagementPage() {
       </div>
 
       {/* Toolbar */}
-      <div className="px-6 py-3 flex items-center gap-3 flex-shrink-0 border-b border-border bg-surface/50">
+      <div className="px-6 py-3 flex items-center gap-3 flex-shrink-0 border-b border-border/50 bg-surface/50">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted" />
           <input type="text" placeholder="Search by name, email, phone..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
@@ -257,10 +261,10 @@ export default function SalesManagementPage() {
       </div>
 
       {/* Collection Status Pills */}
-      <div className="px-6 py-2 flex gap-2 flex-wrap flex-shrink-0 border-b border-border">
+      <div className="px-6 py-2 flex gap-2 flex-wrap flex-shrink-0 border-b border-border/50">
         <button onClick={() => setCollectionFilter("all")}
           className={`inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border transition-colors ${collectionFilter === "all" ? "bg-accent/10 border-accent/20 text-accent" : "border-border text-muted hover:border-border/80"}`}>
-          All <span className="font-mono">{maverickRecords.length}</span>
+          All <span>{maverickRecords.length}</span>
         </button>
         {COLLECTION_STATUSES.map((cs) => {
           const count = maverickRecords.filter((r) => r.collection_status === cs.value).length;
@@ -268,7 +272,7 @@ export default function SalesManagementPage() {
             <button key={cs.value} onClick={() => setCollectionFilter(collectionFilter === cs.value ? "all" : cs.value)}
               className={`inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border transition-colors ${collectionFilter === cs.value ? cs.bg + " " + cs.color : "border-border text-muted hover:border-border/80"}`}>
               {cs.label}
-              <span className="font-mono">{count}</span>
+              <span>{count}</span>
             </button>
           );
         })}
@@ -278,7 +282,7 @@ export default function SalesManagementPage() {
       <div className="flex-1 overflow-auto">
         <table className="w-full border-collapse min-w-[1600px]">
           <thead className="sticky top-0 z-10">
-            <tr className="bg-surface border-b border-border">
+            <tr className="bg-surface border-b border-border/50">
               {COLUMNS.map((col) => (
                 <th key={col.key} className={`${col.width} text-left text-[11px] font-semibold text-muted uppercase tracking-wider px-3 py-2.5 border-r border-border last:border-r-0`}>{col.label}</th>
               ))}
@@ -294,7 +298,7 @@ export default function SalesManagementPage() {
                 </td>
               </tr>
             ) : filteredRecords.map((record, idx) => (
-              <tr key={record.opportunity_id} className="border-b border-border hover:bg-surface-hover/50 transition-colors">
+              <tr key={record.opportunity_id} className="border-b border-border/50 hover:bg-surface-hover/50 transition-colors">
                 <td className="px-3 py-2 text-xs text-muted border-r border-border">{idx + 1}</td>
                 <td className="px-3 py-2 text-xs text-foreground font-medium border-r border-border">{record.contact_name || "-"}</td>
                 <td className="px-3 py-2 text-xs text-foreground border-r border-border">
@@ -426,11 +430,11 @@ export default function SalesManagementPage() {
 
 function StatCard({ icon, label, value, color, bg }: { icon: React.ReactNode; label: string; value: string; color: string; bg: string }) {
   return (
-    <div className={`flex items-center gap-3 px-4 py-2.5 rounded-lg border border-border ${bg}`}>
+    <div className={`flex items-center gap-3 px-4 py-2.5 rounded-lg border border-border/30 ${bg}`}>
       <div className={color}>{icon}</div>
       <div>
-        <p className="text-[10px] text-muted uppercase tracking-wider">{label}</p>
-        <p className={`text-sm font-semibold ${color}`}>{value}</p>
+        <p className="text-[9px] text-muted uppercase tracking-wider">{label}</p>
+        <p className={`text-sm font-bold ${color}`}>{value}</p>
       </div>
     </div>
   );
