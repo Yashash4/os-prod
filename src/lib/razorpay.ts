@@ -94,3 +94,61 @@ export async function getInvoices(from?: number, to?: number) {
 export async function getPaymentPages() {
   return paginateAll("/payment_pages");
 }
+
+/* ── POST helper ─────────────────────────────────── */
+
+export async function razorpayPost(endpoint: string, body: Record<string, unknown>) {
+  const res = await fetch(`${RAZORPAY_BASE_URL}${endpoint}`, {
+    method: "POST",
+    cache: "no-store",
+    headers: {
+      Authorization: getAuthHeader(),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Razorpay API error ${res.status}: ${text}`);
+  }
+
+  return res.json();
+}
+
+/* ── Payment Links ───────────────────────────────── */
+
+export interface CreatePaymentLinkParams {
+  amountInRupees: number;
+  currency?: string;
+  description: string;
+  customerName: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  notifySms: boolean;
+  notifyEmail: boolean;
+  expireByUnix?: number;
+  notes?: Record<string, string>;
+}
+
+export async function createPaymentLink(params: CreatePaymentLinkParams) {
+  const body: Record<string, unknown> = {
+    amount: Math.round(params.amountInRupees * 100),
+    currency: params.currency || "INR",
+    description: params.description,
+    customer: {
+      name: params.customerName,
+      ...(params.customerEmail ? { email: params.customerEmail } : {}),
+      ...(params.customerPhone ? { contact: params.customerPhone } : {}),
+    },
+    notify: {
+      sms: params.notifySms,
+      email: params.notifyEmail,
+    },
+  };
+
+  if (params.expireByUnix) body.expire_by = params.expireByUnix;
+  if (params.notes) body.notes = params.notes;
+
+  return razorpayPost("/payment_links", body);
+}

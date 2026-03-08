@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Loader2 } from "lucide-react";
+import { signIn } from "@/lib/auth";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -11,6 +13,13 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      router.replace("/");
+    }
+  }, [authLoading, user, router]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -18,19 +27,29 @@ export default function LoginPage() {
     setError("");
 
     try {
+      await signIn(email, password);
       router.push("/");
-    } catch {
-      setError("Invalid email or password");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Invalid email or password");
     } finally {
       setLoading(false);
     }
   }
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-6 h-6 text-accent animate-spin" />
+      </div>
+    );
+  }
+
+  if (user) return null;
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <div className="bg-surface border border-border rounded-2xl p-8">
-          {/* Logo & Title */}
           <div className="text-center mb-8">
             <Image
               src="/logo.png"
@@ -39,15 +58,10 @@ export default function LoginPage() {
               height={80}
               className="mx-auto mb-4 invert mix-blend-screen"
             />
-            <h1 className="text-xl font-bold text-foreground">
-              APEX OS
-            </h1>
-            <p className="text-muted text-sm mt-1">
-              Sign in to your account
-            </p>
+            <h1 className="text-xl font-bold text-foreground">APEX OS</h1>
+            <p className="text-muted text-sm mt-1">Sign in to your account</p>
           </div>
 
-          {/* Form */}
           <form onSubmit={handleLogin} className="space-y-4">
             {error && (
               <div className="text-red-500 text-sm text-center bg-red-500/10 py-2 rounded-lg">

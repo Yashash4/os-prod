@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 // GET: Fetch won leads from call_booked_tracking joined with sales tracking data
+// Only shows leads with ghl_status='won'
 export async function GET() {
   try {
     const { data: callBooked, error: cbError } = await supabaseAdmin

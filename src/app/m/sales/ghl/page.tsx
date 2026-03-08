@@ -412,6 +412,14 @@ export default function GHLDashboard() {
   const filteredCallBooked = useMemo(() => callBookedRecords.filter(matchesTime), [callBookedRecords, timeFilter, oppDateMap]);
   const filteredPayments = useMemo(() => paymentRecords.filter(matchesTime), [paymentRecords, timeFilter, oppDateMap]);
 
+  // Time-filtered opportunities for pipeline snapshot and charts
+  const filteredOpportunities = useMemo(() => {
+    return opportunities.filter((o) => {
+      const dateStr = o.lastStageChangeAt || o.updatedAt || o.createdAt;
+      return timeCheck(dateStr);
+    });
+  }, [opportunities, timeFilter]);
+
   const meetingsToday = useMemo(() => calendarEvents.filter((ev) => isToday(ev.startTime)), [calendarEvents]);
   const meetingsCompleted = useMemo(() => meetingsToday.filter((ev) => ev.appointmentStatus === "confirmed" || ev.status === "confirmed"), [meetingsToday]);
   const meetingsUpcoming = useMemo(
@@ -421,7 +429,7 @@ export default function GHLDashboard() {
 
   /* ── Opportunity computed data ──────────────────── */
 
-  const statusCounts = opportunities.reduce(
+  const statusCounts = filteredOpportunities.reduce(
     (acc, opp) => {
       const s = opp.status || "open";
       acc[s] = (acc[s] || 0) + 1;
@@ -436,24 +444,24 @@ export default function GHLDashboard() {
     color: STATUS_COLORS[name] || "#6b7280",
   }));
 
-  const totalValue = opportunities.reduce((sum, o) => sum + (o.monetaryValue || 0), 0);
-  const wonOpps = opportunities.filter((o) => o.status === "won");
-  const openOpps = opportunities.filter((o) => o.status === "open");
-  const lostOpps = opportunities.filter((o) => o.status === "lost");
+  const totalValue = filteredOpportunities.reduce((sum, o) => sum + (o.monetaryValue || 0), 0);
+  const wonOpps = filteredOpportunities.filter((o) => o.status === "won");
+  const openOpps = filteredOpportunities.filter((o) => o.status === "open");
+  const lostOpps = filteredOpportunities.filter((o) => o.status === "lost");
   const wonValue = wonOpps.reduce((sum, o) => sum + (o.monetaryValue || 0), 0);
   const openValue = openOpps.reduce((sum, o) => sum + (o.monetaryValue || 0), 0);
-  const conversionRate = opportunities.length > 0 ? Math.round((wonOpps.length / opportunities.length) * 100) : 0;
+  const conversionRate = filteredOpportunities.length > 0 ? Math.round((wonOpps.length / filteredOpportunities.length) * 100) : 0;
 
   const currentPipeline = pipelines.find((p) => p.id === selectedPipeline);
   const stageData = (currentPipeline?.stages || []).map((stage) => {
-    const stageOpps = opportunities.filter((o) => o.pipelineStageId === stage.id);
+    const stageOpps = filteredOpportunities.filter((o) => o.pipelineStageId === stage.id);
     const stageValue = stageOpps.reduce((sum, o) => sum + (o.monetaryValue || 0), 0);
     return { name: stage.name, count: stageOpps.length, value: stageValue };
   });
 
   /* Lead source data */
   const leadSourceMap: Record<string, { total: number; value: number; open: number; won: number; lost: number; abandoned: number }> = {};
-  opportunities.forEach((opp) => {
+  filteredOpportunities.forEach((opp) => {
     const source = opp.source || "Direct";
     if (!leadSourceMap[source]) leadSourceMap[source] = { total: 0, value: 0, open: 0, won: 0, lost: 0, abandoned: 0 };
     const existing = leadSourceMap[source];
@@ -486,35 +494,35 @@ export default function GHLDashboard() {
     else avgSalesDuration = `${Math.round(avg * 24 * 60)}m`;
   }
 
-  /* Optin status breakdown */
+  /* Optin status breakdown (time-filtered) */
   const optinStatusCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    optinRecords.forEach((r) => {
+    filteredOptins.forEach((r) => {
       const s = r.status || "new";
       counts[s] = (counts[s] || 0) + 1;
     });
     return counts;
-  }, [optinRecords]);
+  }, [filteredOptins]);
 
-  /* Call booked status breakdown */
+  /* Call booked status breakdown (time-filtered) */
   const callBookedStatusCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    callBookedRecords.forEach((r) => {
+    filteredCallBooked.forEach((r) => {
       const s = r.ghl_status || "open";
       counts[s] = (counts[s] || 0) + 1;
     });
     return counts;
-  }, [callBookedRecords]);
+  }, [filteredCallBooked]);
 
-  /* Payment status breakdown */
+  /* Payment status breakdown (time-filtered) */
   const paymentStatusCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    paymentRecords.forEach((r) => {
+    filteredPayments.forEach((r) => {
       const s = r.status || "pending";
       counts[s] = (counts[s] || 0) + 1;
     });
     return counts;
-  }, [paymentRecords]);
+  }, [filteredPayments]);
 
   /* Recent items for lists */
   const recentOptins = useMemo(
@@ -661,7 +669,7 @@ export default function GHLDashboard() {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <div className="bg-surface border border-border rounded-xl p-4 text-center">
           <p className="text-xs text-muted">Total Pipeline</p>
-          <p className="text-xl font-bold text-foreground mt-1">{opportunities.length}</p>
+          <p className="text-xl font-bold text-foreground mt-1">{filteredOpportunities.length}</p>
           <p className="text-[11px] text-muted">₹{totalValue.toLocaleString("en-IN")}</p>
         </div>
         <div className="bg-surface border border-border rounded-xl p-4 text-center">
@@ -779,13 +787,13 @@ export default function GHLDashboard() {
       {/* ── Row 4: Funnel Visualization ──────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Conversion Funnel */}
-        <WidgetCard title="Sales Funnel" right={<span className="text-xs text-muted">All time</span>}>
+        <WidgetCard title="Sales Funnel" right={<span className="text-xs text-muted">{timeLabel}</span>}>
           <div className="space-y-2">
             {[
-              { label: "Opt-ins", count: optinRecords.length, color: "bg-emerald-500" },
-              { label: "Meetings Booked", count: callBookedRecords.length, color: "bg-blue-500" },
+              { label: "Opt-ins", count: filteredOptins.length, color: "bg-emerald-500" },
+              { label: "Meetings Booked", count: filteredCallBooked.length, color: "bg-blue-500" },
               { label: "Won Deals", count: wonOpps.length, color: "bg-green-500" },
-              { label: "Payments Done", count: paymentRecords.length, color: "bg-amber-500" },
+              { label: "Payments Done", count: filteredPayments.length, color: "bg-amber-500" },
             ].map((step, i, arr) => {
               const maxCount = Math.max(...arr.map((s) => s.count), 1);
               const widthPct = Math.max((step.count / maxCount) * 100, 8);

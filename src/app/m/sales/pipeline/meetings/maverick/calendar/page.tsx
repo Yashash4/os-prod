@@ -216,10 +216,12 @@ function EventTooltip({
   event,
   rect,
   calendarName,
+  displayName,
 }: {
   event: CalendarEvent;
   rect: DOMRect;
   calendarName: string;
+  displayName: string;
 }) {
   const start = new Date(event.startTime);
   const end = new Date(event.endTime);
@@ -235,7 +237,7 @@ function EventTooltip({
     >
       <div className="bg-[#1a1a2e] border border-border rounded-lg shadow-xl px-3 py-2.5 max-w-[280px]">
         <p className="text-xs font-semibold text-foreground truncate mb-1">
-          {event.title || "Appointment"}
+          {displayName}
         </p>
         <p className="text-[11px] text-muted mb-1.5">
           {formatTime(start)} - {formatTime(end)} (IST)
@@ -272,6 +274,9 @@ function MaverickCalendarPage() {
   const [eventsLoading, setEventsLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Contact name map from our tracking DB (contactId → name)
+  const [contactNameMap, setContactNameMap] = useState<Record<string, string>>({});
+
   const [view] = useState("month");
   const [baseDate, setBaseDate] = useState(() => new Date());
   const [showSidebar, setShowSidebar] = useState(true);
@@ -304,12 +309,14 @@ function MaverickCalendarPage() {
   useEffect(() => {
     async function init() {
       try {
-        const [calRes, userRes] = await Promise.all([
+        const [calRes, userRes, trackingRes] = await Promise.all([
           fetch("/api/ghl/calendars"),
           fetch("/api/ghl/users"),
+          fetch("/api/sales/call-booked-tracking"),
         ]);
         const calData = await calRes.json();
         const userData = await userRes.json();
+        const trackingData = await trackingRes.json();
 
         if (calData.error) throw new Error(calData.error);
 
@@ -317,6 +324,13 @@ function MaverickCalendarPage() {
         const usrs = userData.users || [];
 
         setCalendars(cals);
+
+        // Build contact name map from tracking records (contact_id → contact_name)
+        const nameMap: Record<string, string> = {};
+        (trackingData.records || []).forEach((r: { contact_id?: string; contact_name?: string }) => {
+          if (r.contact_id && r.contact_name) nameMap[r.contact_id] = r.contact_name;
+        });
+        setContactNameMap(nameMap);
 
         // Find Maverick's user ID
         const mav = usrs.find((u: GHLUser) =>
@@ -665,6 +679,13 @@ function MaverickCalendarPage() {
     : filteredCalendarsList.slice(0, 5);
 
   /* ── Event chip render helper ────────────────────── */
+  function getEventDisplayName(ev: CalendarEvent) {
+    if (ev.title && ev.title !== "Appointment") return ev.title;
+    // Try to resolve name from our tracking data using contactId
+    if (ev.contactId && contactNameMap[ev.contactId]) return contactNameMap[ev.contactId];
+    return ev.title || "Appointment";
+  }
+
   function renderEventChip(
     ev: CalendarEvent,
     size: "sm" | "md" = "sm"
@@ -683,7 +704,7 @@ function MaverickCalendarPage() {
         }}
       >
         {size === "md" && formatTime(new Date(ev.startTime)) + " "}
-        {ev.title || "Appointment"}
+        {getEventDisplayName(ev)}
       </div>
     );
   }
@@ -835,6 +856,7 @@ function MaverickCalendarPage() {
           event={hoveredEvent}
           rect={hoverRect}
           calendarName={calNameMap[hoveredEvent.calendarId] || ""}
+          displayName={getEventDisplayName(hoveredEvent)}
         />
       )}
 
@@ -862,7 +884,7 @@ function MaverickCalendarPage() {
 
             {/* Title */}
             <h3 className="text-sm font-semibold text-foreground mt-3 mb-3">
-              {selectedEvent.title || "Appointment"}
+              {getEventDisplayName(selectedEvent)}
             </h3>
 
             {/* Tab Switcher */}

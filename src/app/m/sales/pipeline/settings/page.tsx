@@ -108,6 +108,9 @@ const TABS: { key: SettingsTab; label: string }[] = [
 ];
 
 /* ── Helper: sync a stage into a tracking table ────── */
+// Non-destructive: upserts records currently in the stage, and also
+// updates ghl_status + assigned_to for records that moved to other stages.
+// This way, if a lead is marked "won" directly in GHL, our DB picks it up.
 
 async function syncStage(
   pipelineId: string,
@@ -119,20 +122,15 @@ async function syncStage(
   const oRes = await fetch(`/api/ghl/opportunities?pipeline_id=${pipelineId}`);
   const oData = await oRes.json();
   if (oData.error) throw new Error(oData.error);
-  const opps: GHLOpportunity[] = (oData.opportunities || []).filter(
-    (o: GHLOpportunity) => o.pipelineStageId === stageId
-  );
-  const ids = opps.map((o) => o.id);
-  if (ids.length > 0) {
-    await fetch(`${apiPath}?keep_ids=${ids.join(",")}`, { method: "DELETE" });
-  } else {
-    await fetch(apiPath, { method: "DELETE" });
-  }
-  if (opps.length > 0) {
+  const allOpps: GHLOpportunity[] = oData.opportunities || [];
+
+  // 1. Upsert records currently in the target stage (new leads + updates)
+  const stageOpps = allOpps.filter((o) => o.pipelineStageId === stageId);
+  if (stageOpps.length > 0) {
     const sRes = await fetch(apiPath, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(opps.map((opp) => ({
+      body: JSON.stringify(stageOpps.map((opp) => ({
         opportunity_id: opp.id,
         contact_name: opp.contact?.name || opp.name || "",
         contact_email: opp.contact?.email || "",
@@ -148,6 +146,45 @@ async function syncStage(
     });
     const sData = await sRes.json();
     if (sData.error) throw new Error(sData.error);
+  }
+
+  // 2. For leads that moved OUT of this stage: update ghl_status + assigned_to
+  // so that status changes made directly in GHL (e.g. won, lost) propagate.
+  // First fetch existing records to know which ones to update.
+  const existingRes = await fetch(apiPath);
+  const existingData = await existingRes.json();
+  const existingRecords: { opportunity_id: string; ghl_status: string; assigned_to: string }[] = existingData.records || [];
+
+  // Build a lookup of current GHL state for all pipeline opportunities
+  const ghlLookup: Record<string, { status: string; assignedTo: string }> = {};
+  allOpps.forEach((opp) => {
+    ghlLookup[opp.id] = { status: opp.status || "open", assignedTo: opp.assignedTo || "" };
+  });
+
+  // Find existing records whose ghl_status or assigned_to is stale
+  const staleRecords = existingRecords.filter((rec) => {
+    const ghl = ghlLookup[rec.opportunity_id];
+    if (!ghl) return false; // opportunity no longer in pipeline
+    return rec.ghl_status !== ghl.status || rec.assigned_to !== ghl.assignedTo;
+  });
+
+  // Update stale records in parallel (batches of 10)
+  for (let i = 0; i < staleRecords.length; i += 10) {
+    const batch = staleRecords.slice(i, i + 10);
+    await Promise.all(
+      batch.map((rec) => {
+        const ghl = ghlLookup[rec.opportunity_id];
+        return fetch(apiPath, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            opportunity_id: rec.opportunity_id,
+            ghl_status: ghl.status,
+            assigned_to: ghl.assignedTo,
+          }),
+        }).catch(() => null);
+      })
+    );
   }
 }
 
@@ -310,7 +347,7 @@ export default function SalesSettingPage() {
   const active = tabConfig[activeTab];
 
   return (
-    <Shell userName="Yash" onSignOut={() => {}}>
+    <Shell>
     <div className="flex flex-col h-[calc(100vh-48px)] overflow-hidden">
       {/* Header */}
       <div className="px-6 pt-5 pb-3 flex-shrink-0 border-b border-border">

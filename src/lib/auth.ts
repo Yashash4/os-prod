@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import type { Role } from "@/types";
 
 export async function signIn(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({
@@ -22,11 +23,17 @@ export async function getCurrentUser() {
 
   const { data: profile } = await supabase
     .from("users")
-    .select("*, role:roles(*)")
+    .select("full_name, avatar_url, role:roles(*)")
     .eq("id", user.id)
     .single();
 
-  return profile;
+  return {
+    id: user.id,
+    email: user.email!,
+    full_name: profile?.full_name ?? null,
+    avatar_url: profile?.avatar_url ?? undefined,
+    role: (profile?.role as unknown as Role) ?? null,
+  };
 }
 
 export function onAuthStateChange(

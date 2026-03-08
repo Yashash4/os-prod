@@ -11,8 +11,10 @@ import {
   CheckCircle,
   Clock,
   AlertCircle,
+  IndianRupee,
 } from "lucide-react";
 import { SalesManagementSkeleton } from "@/components/Skeleton";
+import PaymentLinkModal from "@/components/PaymentLinkModal";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -45,6 +47,9 @@ interface SalesRecord {
   collection_status: string;
   onboarding_status: string;
   sales_notes: string | null;
+  payment_link_id: string | null;
+  payment_link_url: string | null;
+  payment_link_sent_at: string | null;
   created_at: string;
 }
 
@@ -83,6 +88,9 @@ export default function SalesManagementPage() {
   // Editing
   const [editingCell, setEditingCell] = useState<{ oppId: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState("");
+
+  // Payment Link Modal
+  const [paymentLinkRecord, setPaymentLinkRecord] = useState<SalesRecord | null>(null);
 
   useEffect(() => {
     async function init() {
@@ -415,6 +423,13 @@ export default function SalesManagementPage() {
                     {record.contact_phone && <a href={`tel:${record.contact_phone}`} className="p-1 rounded hover:bg-green-500/10 text-muted hover:text-green-400 transition-colors" title="Call"><Phone className="w-3.5 h-3.5" /></a>}
                     {record.contact_email && <a href={`mailto:${record.contact_email}`} className="p-1 rounded hover:bg-blue-500/10 text-muted hover:text-blue-400 transition-colors" title="Email"><Mail className="w-3.5 h-3.5" /></a>}
                     {record.contact_phone && <a href={`https://wa.me/${record.contact_phone.replace(/[^0-9]/g, "")}`} target="_blank" rel="noopener noreferrer" className="p-1 rounded hover:bg-green-500/10 text-muted hover:text-green-400 transition-colors" title="WhatsApp"><MessageSquare className="w-3.5 h-3.5" /></a>}
+                    <button
+                      onClick={() => setPaymentLinkRecord(record)}
+                      className={`p-1 rounded hover:bg-indigo-500/10 transition-colors ${record.payment_link_url ? "text-indigo-400" : "text-muted hover:text-indigo-400"}`}
+                      title={record.payment_link_url ? "Resend Payment Link" : "Send Payment Link"}
+                    >
+                      <IndianRupee className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -422,6 +437,26 @@ export default function SalesManagementPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Payment Link Modal */}
+      {paymentLinkRecord && (
+        <PaymentLinkModal
+          open={!!paymentLinkRecord}
+          onClose={() => setPaymentLinkRecord(null)}
+          customerName={paymentLinkRecord.contact_name}
+          customerEmail={paymentLinkRecord.contact_email}
+          customerPhone={paymentLinkRecord.contact_phone}
+          amount={paymentLinkRecord.pending_amount > 0 ? paymentLinkRecord.pending_amount : paymentLinkRecord.fees_quoted}
+          opportunityId={paymentLinkRecord.opportunity_id}
+          onSuccess={(data) => {
+            updateSalesRecord(paymentLinkRecord.opportunity_id, {
+              payment_link_id: data.id,
+              payment_link_url: data.short_url,
+              payment_link_sent_at: new Date().toISOString(),
+            });
+          }}
+        />
+      )}
     </div>
   );
 }

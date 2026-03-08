@@ -10,7 +10,7 @@ export default function MarketingPage() {
   );
 
   return (
-    <Shell userName="Yash" onSignOut={() => {}}>
+    <Shell>
       <div className="p-6 max-w-5xl mx-auto">
         <div className="mb-8">
           <h1 className="text-2xl font-semibold text-foreground">Marketing</h1>

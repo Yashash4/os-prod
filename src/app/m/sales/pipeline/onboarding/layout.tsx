@@ -14,7 +14,7 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
   const pathname = usePathname();
 
   return (
-    <Shell userName="Yash" onSignOut={() => {}}>
+    <Shell>
       <div className="flex h-[calc(100vh-49px)] overflow-hidden">
         <aside className="w-52 border-r border-border bg-surface flex-shrink-0 overflow-y-auto">
           <div className="p-3">

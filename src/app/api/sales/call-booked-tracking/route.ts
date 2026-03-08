@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET() {
   try {
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     const oppIds = records.map((r: Record<string, unknown>) => r.opportunity_id as string);
     const { data: existing } = await supabaseAdmin
       .from("sales_call_booked_tracking")
-      .select("opportunity_id, status, rating, comments, notes")
+      .select("opportunity_id, status, rating, comments, notes, ghl_status")
       .in("opportunity_id", oppIds);
 
     const existingMap = new Map(
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
             comments: prev?.comments ?? (r.comments as string) ?? null,
             notes: prev?.notes ?? (r.notes as string) ?? null,
             assigned_to: r.assigned_to || null,
-            ghl_status: r.ghl_status || null,
+            ghl_status: (r.ghl_status as string) || prev?.ghl_status || null,
             pipeline_id: r.pipeline_id || null,
             contact_id: r.contact_id || null,
           };

@@ -72,6 +72,20 @@ export async function getAccountInsights(
   return data.data || [];
 }
 
+/** Account insights for a specific date range (ISO dates YYYY-MM-DD) */
+export async function getAccountInsightsByRange(
+  since: string,
+  until: string,
+  timeIncrement = "1"
+) {
+  const data = await metaFetch(`/${AD_ACCOUNT_ID}/insights`, {
+    fields: "spend,impressions,clicks,reach",
+    time_range: JSON.stringify({ since, until }),
+    time_increment: timeIncrement,
+  });
+  return data.data || [];
+}
+
 /* ── Campaigns ───────────────────────────────────── */
 
 export async function getCampaigns() {

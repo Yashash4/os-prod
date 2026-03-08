@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 // GET: Fetch won leads from call_booked_tracking joined with sales tracking data
+// Only shows leads with ghl_status='won' — sales data persists because
+// sync no longer deletes records when leads move stages in GHL
 export async function GET() {
   try {
     // Fetch call_booked_tracking records with ghl_status = 'won'

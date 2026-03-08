@@ -30,7 +30,7 @@ export default function PaymentsLayout({ children }: { children: React.ReactNode
   }
 
   return (
-    <Shell userName="Yash" onSignOut={() => {}}>
+    <Shell>
       <div className="flex h-[calc(100vh-48px)] overflow-hidden">
         {/* Sidebar */}
         <aside className="w-52 border-r border-border bg-surface flex-shrink-0 overflow-y-auto">

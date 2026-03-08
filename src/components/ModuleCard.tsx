@@ -31,6 +31,8 @@ import {
   Receipt,
   Landmark,
   ScrollText,
+  Shield,
+  KeyRound,
 } from "lucide-react";
 
 const iconComponents: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -61,6 +63,8 @@ const iconComponents: Record<string, React.ComponentType<{ className?: string }>
   Receipt,
   Landmark,
   ScrollText,
+  Shield,
+  Key: KeyRound,
 };
 
 interface ModuleCardProps {

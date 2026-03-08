@@ -25,7 +25,7 @@ export default function SeoLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   return (
-    <Shell userName="Yash" onSignOut={() => {}}>
+    <Shell>
       <div className="flex h-[calc(100vh-48px)] overflow-hidden">
         <aside className="w-52 border-r border-border bg-surface flex-shrink-0 overflow-y-auto">
           <div className="p-3">

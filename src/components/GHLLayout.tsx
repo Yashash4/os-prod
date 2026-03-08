@@ -19,7 +19,7 @@ export default function GHLLayout({ children }: GHLLayoutProps) {
   const pathname = usePathname();
 
   return (
-    <Shell userName="Yash" onSignOut={() => {}}>
+    <Shell>
       <div className="flex min-h-[calc(100vh-49px)]">
         <aside className="w-52 border-r border-border bg-surface flex-shrink-0">
           <nav className="p-3 space-y-0.5">

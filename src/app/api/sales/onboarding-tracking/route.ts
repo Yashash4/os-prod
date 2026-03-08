@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 const DEFAULT_CHECKLIST = [
   { id: "intro", label: "Introduction call completed", done: false },
