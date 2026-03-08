@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAccountInsightsByRange } from "@/lib/meta";
+import { authenticateRequest } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
+  const auth = await authenticateRequest(req);
+  if ("error" in auth) return auth.error;
   try {
     const since = req.nextUrl.searchParams.get("since") || "";
     const until = req.nextUrl.searchParams.get("until") || "";

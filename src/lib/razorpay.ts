@@ -95,6 +95,15 @@ export async function getPaymentPages() {
   return paginateAll("/payment_pages");
 }
 
+/* ── Payment Links (list) ────────────────────────── */
+
+export async function getPaymentLinks(from?: number, to?: number) {
+  const params: Record<string, string> = {};
+  if (from) params.from = String(from);
+  if (to) params.to = String(to);
+  return paginateAll("/payment_links", params);
+}
+
 /* ── POST helper ─────────────────────────────────── */
 
 export async function razorpayPost(endpoint: string, body: Record<string, unknown>) {

@@ -11,6 +11,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { DataTableSkeleton } from "@/components/Skeleton";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -78,8 +79,8 @@ export default function OnboardingManagementPage() {
     async function init() {
       try {
         const [onboardRes, usersRes] = await Promise.all([
-          fetch("/api/sales/onboarding-tracking"),
-          fetch("/api/ghl/users"),
+          apiFetch("/api/sales/onboarding-tracking"),
+          apiFetch("/api/ghl/users"),
         ]);
         const [onboardData, usersData] = await Promise.all([
           onboardRes.json(),
@@ -160,7 +161,7 @@ export default function OnboardingManagementPage() {
 
   async function updateRecord(opportunityId: string, updates: Record<string, unknown>) {
     try {
-      const res = await fetch("/api/sales/onboarding-tracking", {
+      const res = await apiFetch("/api/sales/onboarding-tracking", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ opportunity_id: opportunityId, ...updates }),

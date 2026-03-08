@@ -10,14 +10,32 @@ import {
   FileText,
   ScrollText,
   PieChart,
+  AlertTriangle,
+  Send,
+  ClipboardList,
+  AlertCircle,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-const PAYMENTS_NAV = [
+interface NavItem {
+  name: string;
+  href: string;
+  icon: LucideIcon | null;
+  separator?: boolean;
+}
+
+const PAYMENTS_NAV: NavItem[] = [
   { name: "Dashboard", href: "/m/payments/dashboard", icon: LayoutDashboard },
   { name: "Transactions", href: "/m/payments/transactions", icon: Receipt },
   { name: "Settlements", href: "/m/payments/settlements", icon: Landmark },
   { name: "Invoices", href: "/m/payments/invoices", icon: FileText },
   { name: "Payment Pages", href: "/m/payments/payment-pages", icon: ScrollText },
+  { name: "Sheets", href: "", icon: null, separator: true },
+  { name: "Failed Payments", href: "/m/payments/failed-payments", icon: AlertTriangle },
+  { name: "Send Links", href: "/m/payments/send-links", icon: Send },
+  { name: "Collection Log", href: "/m/payments/collection-log", icon: ClipboardList },
+  { name: "Outstanding", href: "/m/payments/outstanding", icon: AlertCircle },
+  { name: "Insights", href: "", icon: null, separator: true },
   { name: "Analytics", href: "/m/payments/analytics", icon: PieChart },
 ];
 
@@ -39,9 +57,21 @@ export default function PaymentsLayout({ children }: { children: React.ReactNode
               Payments
             </p>
             <nav className="space-y-0.5">
-              {PAYMENTS_NAV.map((item) => {
+              {PAYMENTS_NAV.map((item, idx) => {
+                if (item.separator) {
+                  return (
+                    <div key={`sep-${idx}`} className="pt-3 pb-1 px-3">
+                      <div className="border-t border-border" />
+                      <p className="text-[10px] text-muted/50 uppercase tracking-widest mt-2">
+                        {item.name}
+                      </p>
+                    </div>
+                  );
+                }
+
                 const isActive =
                   pathname === item.href || pathname.startsWith(item.href + "/");
+                const Icon = item.icon;
                 return (
                   <Link
                     key={item.href}
@@ -52,7 +82,7 @@ export default function PaymentsLayout({ children }: { children: React.ReactNode
                         : "text-muted hover:text-foreground hover:bg-surface-hover"
                     }`}
                   >
-                    <item.icon className="w-4 h-4" />
+                    {Icon && <Icon className="w-4 h-4" />}
                     {item.name}
                   </Link>
                 );

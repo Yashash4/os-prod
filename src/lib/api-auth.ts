@@ -1,0 +1,127 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "./supabase-admin";
+
+/**
+ * Server-side auth helper for API routes.
+ * Extracts the Supabase session from cookies/headers and verifies the user.
+ * Returns the authenticated user or a 401 response.
+ */
+
+interface AuthResult {
+  userId: string;
+  email: string;
+  roleId: string | null;
+  isAdmin: boolean;
+}
+
+/**
+ * Authenticate the request using the Authorization header (Bearer token)
+ * or Supabase cookie-based session.
+ */
+export async function authenticateRequest(
+  req: NextRequest
+): Promise<{ auth: AuthResult } | { error: NextResponse }> {
+  try {
+    // Try Bearer token first
+    const authHeader = req.headers.get("authorization");
+    let accessToken: string | undefined;
+
+    if (authHeader?.startsWith("Bearer ")) {
+      accessToken = authHeader.slice(7);
+    }
+
+    // Try cookie-based session
+    if (!accessToken) {
+      const cookieHeader = req.headers.get("cookie") || "";
+      // Create a temporary client with cookies forwarded
+      const supabaseServer = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          global: {
+            headers: { cookie: cookieHeader },
+          },
+        }
+      );
+      const {
+        data: { session },
+      } = await supabaseServer.auth.getSession();
+      accessToken = session?.access_token;
+    }
+
+    if (!accessToken) {
+      return {
+        error: NextResponse.json(
+          { error: "Authentication required" },
+          { status: 401 }
+        ),
+      };
+    }
+
+    // Verify the token with Supabase
+    const {
+      data: { user },
+      error,
+    } = await supabaseAdmin.auth.getUser(accessToken);
+
+    if (error || !user) {
+      return {
+        error: NextResponse.json(
+          { error: "Invalid or expired session" },
+          { status: 401 }
+        ),
+      };
+    }
+
+    // Get user's role
+    const { data: profile } = await supabaseAdmin
+      .from("users")
+      .select("role_id, role:roles(is_admin)")
+      .eq("id", user.id)
+      .single();
+
+    const roleId = profile?.role_id || null;
+    const isAdmin =
+      profile?.role && typeof profile.role === "object"
+        ? (profile.role as { is_admin?: boolean }).is_admin === true
+        : false;
+
+    return {
+      auth: {
+        userId: user.id,
+        email: user.email || "",
+        roleId,
+        isAdmin,
+      },
+    };
+  } catch {
+    return {
+      error: NextResponse.json(
+        { error: "Authentication failed" },
+        { status: 401 }
+      ),
+    };
+  }
+}
+
+/**
+ * Require the user to be an admin. Returns 403 if not.
+ */
+export async function requireAdmin(
+  req: NextRequest
+): Promise<{ auth: AuthResult } | { error: NextResponse }> {
+  const result = await authenticateRequest(req);
+  if ("error" in result) return result;
+
+  if (!result.auth.isAdmin) {
+    return {
+      error: NextResponse.json(
+        { error: "Admin access required" },
+        { status: 403 }
+      ),
+    };
+  }
+
+  return result;
+}

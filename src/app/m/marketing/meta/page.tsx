@@ -15,6 +15,7 @@ import {
   ImageIcon,
 } from "lucide-react";
 import { MetaDashboardSkeleton } from "@/components/Skeleton";
+import { apiFetch } from "@/lib/api-fetch";
 import {
   PieChart,
   Pie,
@@ -199,14 +200,14 @@ export default function MetaDashboard() {
       setError("");
       try {
         const [insRes, campBulkRes, ageRes, genderRes, platRes, devRes, adsMetaRes, adBulkRes] = await Promise.all([
-          fetch(`/api/meta/account-insights?date_preset=${datePreset}&time_increment=1`),
-          fetch(`/api/meta/campaign-insights-bulk?date_preset=${datePreset}`),
-          fetch(`/api/meta/breakdowns?breakdown=age&date_preset=${datePreset}`),
-          fetch(`/api/meta/breakdowns?breakdown=gender&date_preset=${datePreset}`),
-          fetch(`/api/meta/breakdowns?breakdown=publisher_platform&date_preset=${datePreset}`),
-          fetch(`/api/meta/breakdowns?breakdown=impression_device&date_preset=${datePreset}`),
-          fetch(`/api/meta/ads`),
-          fetch(`/api/meta/ad-insights-bulk?date_preset=${datePreset}`),
+          apiFetch(`/api/meta/account-insights?date_preset=${datePreset}&time_increment=1`),
+          apiFetch(`/api/meta/campaign-insights-bulk?date_preset=${datePreset}`),
+          apiFetch(`/api/meta/breakdowns?breakdown=age&date_preset=${datePreset}`),
+          apiFetch(`/api/meta/breakdowns?breakdown=gender&date_preset=${datePreset}`),
+          apiFetch(`/api/meta/breakdowns?breakdown=publisher_platform&date_preset=${datePreset}`),
+          apiFetch(`/api/meta/breakdowns?breakdown=impression_device&date_preset=${datePreset}`),
+          apiFetch(`/api/meta/ads`),
+          apiFetch(`/api/meta/ad-insights-bulk?date_preset=${datePreset}`),
         ]);
 
         const [insData, campBulkData, ageD, genderD, platD, devD, adsMetaData, adBulkData] = await Promise.all([

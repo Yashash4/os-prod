@@ -33,7 +33,7 @@ interface MeetRecord {
 
 function authorize(req: NextRequest): boolean {
   const secret = req.headers.get("x-cron-secret") || req.nextUrl.searchParams.get("secret");
-  return secret === process.env.CRON_SECRET || secret === "manual-trigger";
+  return !!secret && secret === process.env.CRON_SECRET;
 }
 
 async function runSync(req: NextRequest) {

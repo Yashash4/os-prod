@@ -17,6 +17,7 @@ import {
   FileText,
   ClipboardList,
 } from "lucide-react";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -292,8 +293,8 @@ export default function CalendarPage() {
     async function init() {
       try {
         const [calRes, userRes] = await Promise.all([
-          fetch("/api/ghl/calendars"),
-          fetch("/api/ghl/users"),
+          apiFetch("/api/ghl/calendars"),
+          apiFetch("/api/ghl/users"),
         ]);
         const calData = await calRes.json();
         const userData = await userRes.json();
@@ -321,6 +322,13 @@ export default function CalendarPage() {
       }
     }
     init();
+  }, []);
+
+  /* ── Cleanup hover timeout on unmount ────────────── */
+  useEffect(() => {
+    return () => {
+      if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
+    };
   }, []);
 
   /* ── Compute date range based on view ────────────── */
@@ -380,7 +388,7 @@ export default function CalendarPage() {
           const batch = cals.slice(i, i + 5);
           const results = await Promise.all(
             batch.map((cal) =>
-              fetch(
+              apiFetch(
                 `/api/ghl/calendar-events?calendarId=${cal.id}&startTime=${rangeStart.toISOString()}&endTime=${rangeEnd.toISOString()}`
               ).then((r) => r.json())
             )
@@ -410,7 +418,7 @@ export default function CalendarPage() {
     async function fetchContact() {
       setContactLoading(true);
       try {
-        const res = await fetch(
+        const res = await apiFetch(
           `/api/ghl/contacts?contactId=${selectedEvent!.contactId}`
         );
         const data = await res.json();
@@ -427,7 +435,7 @@ export default function CalendarPage() {
     async function fetchFormSubmissions() {
       setFormLoading(true);
       try {
-        const res = await fetch(
+        const res = await apiFetch(
           `/api/ghl/form-submissions?contactId=${selectedEvent!.contactId}`
         );
         const data = await res.json();

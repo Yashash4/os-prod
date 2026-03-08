@@ -12,6 +12,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { PaymentsTableSkeleton } from "@/components/Skeleton";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -147,7 +148,7 @@ export default function InvoicesPage() {
         if (from) params.set("from", String(from));
         if (to) params.set("to", String(to));
 
-        const res = await fetch(`/api/razorpay/invoices?${params}`);
+        const res = await apiFetch(`/api/razorpay/invoices?${params}`);
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         setAllInvoices(data.invoices || []);

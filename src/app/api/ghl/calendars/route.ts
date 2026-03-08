@@ -1,7 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getCalendars } from "@/lib/ghl";
+import { authenticateRequest } from "@/lib/api-auth";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const auth = await authenticateRequest(req);
+  if ("error" in auth) return auth.error;
   try {
     const calendars = await getCalendars();
     return NextResponse.json({ calendars });

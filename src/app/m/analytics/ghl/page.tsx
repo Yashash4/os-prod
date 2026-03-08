@@ -35,6 +35,7 @@ import {
   AreaChart,
   Area,
 } from "recharts";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -176,13 +177,15 @@ export default function GHLDashboardPage() {
   const [datePreset, setDatePreset] = useState("all");
 
   useEffect(() => {
+    const controller = new AbortController();
+
     async function load() {
       try {
         setLoading(true); setError(null);
         // Fetch pipelines and calendars in parallel
         const [pipRes, calRes] = await Promise.all([
-          fetch("/api/ghl/pipelines"),
-          fetch("/api/ghl/calendars"),
+          apiFetch("/api/ghl/pipelines", { signal: controller.signal }),
+          apiFetch("/api/ghl/calendars", { signal: controller.signal }),
         ]);
         if (!pipRes.ok) throw new Error("Failed to fetch pipelines");
         const pipJson = await pipRes.json();
@@ -192,7 +195,7 @@ export default function GHLDashboardPage() {
         // Fetch opportunities for EACH pipeline, then combine
         const oppResults = await Promise.all(
           fetchedPipelines.map((p) =>
-            fetch(`/api/ghl/opportunities?pipeline_id=${p.id}`).then((r) => r.json())
+            apiFetch(`/api/ghl/opportunities?pipeline_id=${p.id}`, { signal: controller.signal }).then((r) => r.json())
           )
         );
         const allOpportunities = oppResults.flatMap((r) => r.opportunities || []);
@@ -208,7 +211,7 @@ export default function GHLDashboardPage() {
           const allEvents: CalendarEvent[] = [];
           const evtResults = await Promise.all(
             calendars.map((cal) =>
-              fetch(`/api/ghl/calendar-events?calendarId=${cal.id}&startTime=${start.toISOString()}&endTime=${now.toISOString()}`)
+              apiFetch(`/api/ghl/calendar-events?calendarId=${cal.id}&startTime=${start.toISOString()}&endTime=${now.toISOString()}`, { signal: controller.signal })
                 .then((r) => r.json())
                 .catch(() => ({ events: [] }))
             )
@@ -217,10 +220,13 @@ export default function GHLDashboardPage() {
           setEvents(allEvents);
         }
       } catch (err: unknown) {
+        if (err instanceof Error && err.name === "AbortError") return;
         setError(err instanceof Error ? err.message : "Unknown error");
       } finally { setLoading(false); }
     }
     load();
+
+    return () => controller.abort();
   }, [datePreset]);
 
   const stageMap = useMemo(() => {

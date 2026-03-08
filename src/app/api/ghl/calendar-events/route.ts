@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCalendarEvents } from "@/lib/ghl";
+import { authenticateRequest } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
+  const auth = await authenticateRequest(req);
+  if ("error" in auth) return auth.error;
   try {
     const calendarId = req.nextUrl.searchParams.get("calendarId");
     const startTime = req.nextUrl.searchParams.get("startTime");

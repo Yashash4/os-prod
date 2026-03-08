@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { inspectUrls } from "@/lib/gsc";
+import { authenticateRequest } from "@/lib/api-auth";
 
 export async function POST(req: NextRequest) {
+  const auth = await authenticateRequest(req);
+  if ("error" in auth) return auth.error;
   try {
     const body = await req.json();
     const urls: string[] = body.urls || [];

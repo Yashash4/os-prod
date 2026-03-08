@@ -34,6 +34,7 @@ import {
   Legend,
   ReferenceLine,
 } from "recharts";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -279,6 +280,8 @@ export default function MetaAdsAnalyticsPage() {
   const [datePreset, setDatePreset] = useState("last_30d");
 
   useEffect(() => {
+    const controller = new AbortController();
+
     async function load() {
       try {
         setLoading(true);
@@ -288,9 +291,9 @@ export default function MetaAdsAnalyticsPage() {
         const untilDate = today <= COHORT_END ? today : COHORT_END;
 
         const [acctRes, campRes, dailyRes] = await Promise.all([
-          fetch(`/api/meta/account-insights?date_preset=${datePreset}&time_increment=all_days`),
-          fetch(`/api/meta/campaign-insights-bulk?date_preset=${datePreset}`),
-          fetch(`/api/meta/account-insights-range?since=${COHORT_START}&until=${untilDate}&time_increment=1`)
+          apiFetch(`/api/meta/account-insights?date_preset=${datePreset}&time_increment=all_days`, { signal: controller.signal }),
+          apiFetch(`/api/meta/campaign-insights-bulk?date_preset=${datePreset}`, { signal: controller.signal }),
+          apiFetch(`/api/meta/account-insights-range?since=${COHORT_START}&until=${untilDate}&time_increment=1`, { signal: controller.signal })
             .then((r) => r.json()).catch(() => ({ insights: [] })),
         ]);
 
@@ -308,12 +311,15 @@ export default function MetaAdsAnalyticsPage() {
         setCampaigns(camps);
         setDailyInsights(dailyRes.insights || []);
       } catch (err: unknown) {
+        if (err instanceof Error && err.name === "AbortError") return;
         setError(err instanceof Error ? err.message : "Unknown error");
       } finally {
         setLoading(false);
       }
     }
     load();
+
+    return () => controller.abort();
   }, [datePreset]);
 
   /* ── Derived data ── */

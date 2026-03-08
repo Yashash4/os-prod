@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { Loader2, Layers, Search } from "lucide-react";
 import { MetaTableSkeleton } from "@/components/Skeleton";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -76,9 +77,9 @@ export default function AdSetsPage() {
       setError("");
       try {
         const [adsetRes, campRes, adsetMetaRes] = await Promise.all([
-          fetch(`/api/meta/adset-insights-bulk?date_preset=${datePreset}`),
-          fetch(`/api/meta/campaign-insights-bulk?date_preset=${datePreset}`),
-          fetch(`/api/meta/adsets`),
+          apiFetch(`/api/meta/adset-insights-bulk?date_preset=${datePreset}`),
+          apiFetch(`/api/meta/campaign-insights-bulk?date_preset=${datePreset}`),
+          apiFetch(`/api/meta/adsets`),
         ]);
         const adsetData = await adsetRes.json();
         const campData = await campRes.json();

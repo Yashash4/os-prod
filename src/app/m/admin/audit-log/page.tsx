@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { AuditLog } from "@/types";
+import { apiFetch } from "@/lib/api-fetch";
 
 export default function AuditLogPage() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
@@ -20,7 +21,8 @@ export default function AuditLogPage() {
       if (filterTier) params.set("tier", filterTier);
       if (filterModule) params.set("module", filterModule);
 
-      const res = await fetch(`/api/admin/audit-logs?${params}`);
+      const res = await apiFetch(`/api/admin/audit-logs?${params}`);
+      if (!res.ok) throw new Error("Failed to fetch logs");
       const data = await res.json();
       setLogs(data.logs || []);
       setTotalPages(data.totalPages || 1);

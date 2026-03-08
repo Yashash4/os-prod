@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { authenticateRequest } from "@/lib/api-auth";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const auth = await authenticateRequest(req);
+  if ("error" in auth) return auth.error;
+
   try {
     const { data, error } = await supabaseAdmin
       .from("sales_optin_tracking")
       .select("*")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(1000);
 
     if (error) throw error;
     return NextResponse.json({ records: data || [] });
@@ -17,11 +22,13 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await authenticateRequest(req);
+  if ("error" in auth) return auth.error;
+
   try {
     const body = await req.json();
     const records = Array.isArray(body) ? body : [body];
 
-    // Fetch existing records to preserve user-edited fields during sync
     const oppIds = records.map((r: Record<string, unknown>) => r.opportunity_id as string);
     const { data: existing } = await supabaseAdmin
       .from("sales_optin_tracking")
@@ -46,7 +53,6 @@ export async function POST(req: NextRequest) {
             stage_name: r.stage_name,
             source: r.source,
             monetary_value: r.monetary_value || 0,
-            // Preserve user-edited fields if record already exists
             status: prev?.status || (r.status as string) || "new",
             notes: prev?.notes ?? (r.notes as string) ?? null,
             last_contacted_at: prev?.last_contacted_at ?? null,
@@ -66,19 +72,28 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const auth = await authenticateRequest(req);
+  if ("error" in auth) return auth.error;
+
   try {
     const oppIds = req.nextUrl.searchParams.get("keep_ids");
 
     if (oppIds) {
-      // Delete all records NOT in the provided list
-      const keepList = oppIds.split(",");
-      const { error } = await supabaseAdmin
+      const keepSet = new Set(oppIds.split(",").map((id) => id.trim()).filter(Boolean));
+      const { data: allRecords } = await supabaseAdmin
         .from("sales_optin_tracking")
-        .delete()
-        .not("opportunity_id", "in", `(${keepList.map((id) => `"${id}"`).join(",")})`);
-      if (error) throw error;
+        .select("opportunity_id");
+      const toDelete = (allRecords || [])
+        .map((r) => r.opportunity_id as string)
+        .filter((id) => !keepSet.has(id));
+      if (toDelete.length > 0) {
+        const { error } = await supabaseAdmin
+          .from("sales_optin_tracking")
+          .delete()
+          .in("opportunity_id", toDelete);
+        if (error) throw error;
+      }
     } else {
-      // Delete all records
       const { error } = await supabaseAdmin
         .from("sales_optin_tracking")
         .delete()
@@ -94,6 +109,9 @@ export async function DELETE(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
+  const auth = await authenticateRequest(req);
+  if ("error" in auth) return auth.error;
+
   try {
     const body = await req.json();
     const { opportunity_id, ...updates } = body;
@@ -102,7 +120,6 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "opportunity_id is required" }, { status: 400 });
     }
 
-    // If status is changing, track when last contacted
     if (updates.status === "contacted") {
       updates.last_contacted_at = new Date().toISOString();
     }

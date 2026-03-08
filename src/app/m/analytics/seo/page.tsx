@@ -32,6 +32,7 @@ import {
   Zap,
   Globe,
 } from "lucide-react";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* -- Constants ------------------------------------------------ */
 
@@ -176,15 +177,17 @@ export default function SEOAnalyticsPage() {
   const [datePreset, setDatePreset] = useState("28d");
 
   useEffect(() => {
+    const controller = new AbortController();
+
     async function fetchData() {
       setLoading(true);
       setError("");
       try {
         const { startDate, endDate } = getDateRange(datePreset);
         const [dailyRes, queryRes, pageRes] = await Promise.all([
-          fetch(`/api/seo/daily?startDate=${startDate}&endDate=${endDate}`),
-          fetch(`/api/seo/search-analytics?dimensions=query&rowLimit=20&startDate=${startDate}&endDate=${endDate}`),
-          fetch(`/api/seo/search-analytics?dimensions=page&rowLimit=20&startDate=${startDate}&endDate=${endDate}`),
+          apiFetch(`/api/seo/daily?startDate=${startDate}&endDate=${endDate}`, { signal: controller.signal }),
+          apiFetch(`/api/seo/search-analytics?dimensions=query&rowLimit=20&startDate=${startDate}&endDate=${endDate}`, { signal: controller.signal }),
+          apiFetch(`/api/seo/search-analytics?dimensions=page&rowLimit=20&startDate=${startDate}&endDate=${endDate}`, { signal: controller.signal }),
         ]);
         const [dailyData, queryData, pageData] = await Promise.all([dailyRes.json(), queryRes.json(), pageRes.json()]);
         if (!dailyRes.ok) throw new Error(dailyData.error || "Failed to load daily data");
@@ -192,12 +195,15 @@ export default function SEOAnalyticsPage() {
         setQueryRows(queryData.rows || []);
         setPageRows(pageData.rows || []);
       } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
         setError(err instanceof Error ? err.message : "Failed to load");
       } finally {
         setLoading(false);
       }
     }
     fetchData();
+
+    return () => controller.abort();
   }, [datePreset]);
 
   /* -- Derived data ------------------------------------------- */

@@ -34,6 +34,7 @@ import {
   Line,
   ComposedChart,
 } from "recharts";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -301,6 +302,8 @@ export default function PaymentsAnalyticsPage() {
   const [datePreset, setDatePreset] = useState("last_30d");
 
   useEffect(() => {
+    const controller = new AbortController();
+
     async function fetchData() {
       setLoading(true);
       setError("");
@@ -311,8 +314,8 @@ export default function PaymentsAnalyticsPage() {
         if (to) params.set("to", String(to));
 
         const [paymentsRes, refundsRes] = await Promise.all([
-          fetch(`/api/razorpay/payments?${params}`),
-          fetch(`/api/razorpay/refunds?${params}`),
+          apiFetch(`/api/razorpay/payments?${params}`, { signal: controller.signal }),
+          apiFetch(`/api/razorpay/refunds?${params}`, { signal: controller.signal }),
         ]);
         const [paymentsData, refundsData] = await Promise.all([
           paymentsRes.json(),
@@ -322,12 +325,15 @@ export default function PaymentsAnalyticsPage() {
         setPayments(paymentsData.payments || []);
         setRefunds(refundsData.refunds || []);
       } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
         setError(err instanceof Error ? err.message : "Failed to load");
       } finally {
         setLoading(false);
       }
     }
     fetchData();
+
+    return () => controller.abort();
   }, [datePreset]);
 
   /* ── KPI Calculations ───────────────────────────── */

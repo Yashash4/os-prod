@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { SalesManagementSkeleton } from "@/components/Skeleton";
 import PaymentLinkModal from "@/components/PaymentLinkModal";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -96,8 +97,8 @@ export default function SalesManagementPage() {
     async function init() {
       try {
         const [usersRes, recordsRes] = await Promise.all([
-          fetch("/api/ghl/users"),
-          fetch("/api/sales/jobin-sales-tracking"),
+          apiFetch("/api/ghl/users"),
+          apiFetch("/api/sales/jobin-sales-tracking"),
         ]);
         const usersData = await usersRes.json();
         const recordsData = await recordsRes.json();
@@ -161,7 +162,7 @@ export default function SalesManagementPage() {
         updates.pending_amount = Math.max(0, quoted - collected);
       }
 
-      const res = await fetch("/api/sales/jobin-sales-tracking", {
+      const res = await apiFetch("/api/sales/jobin-sales-tracking", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ opportunity_id: oppId, ...updates }),

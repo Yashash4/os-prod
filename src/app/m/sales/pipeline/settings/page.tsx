@@ -13,6 +13,7 @@ import {
   MessageSquare,
   Star,
 } from "lucide-react";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -119,7 +120,7 @@ async function syncStage(
   stageName: string,
   apiPath: string,
 ) {
-  const oRes = await fetch(`/api/ghl/opportunities?pipeline_id=${pipelineId}`);
+  const oRes = await apiFetch(`/api/ghl/opportunities?pipeline_id=${pipelineId}`);
   const oData = await oRes.json();
   if (oData.error) throw new Error(oData.error);
   const allOpps: GHLOpportunity[] = oData.opportunities || [];
@@ -127,7 +128,7 @@ async function syncStage(
   // 1. Upsert records currently in the target stage (new leads + updates)
   const stageOpps = allOpps.filter((o) => o.pipelineStageId === stageId);
   if (stageOpps.length > 0) {
-    const sRes = await fetch(apiPath, {
+    const sRes = await apiFetch(apiPath, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(stageOpps.map((opp) => ({
@@ -151,7 +152,7 @@ async function syncStage(
   // 2. For leads that moved OUT of this stage: update ghl_status + assigned_to
   // so that status changes made directly in GHL (e.g. won, lost) propagate.
   // First fetch existing records to know which ones to update.
-  const existingRes = await fetch(apiPath);
+  const existingRes = await apiFetch(apiPath);
   const existingData = await existingRes.json();
   const existingRecords: { opportunity_id: string; ghl_status: string; assigned_to: string }[] = existingData.records || [];
 
@@ -174,7 +175,7 @@ async function syncStage(
     await Promise.all(
       batch.map((rec) => {
         const ghl = ghlLookup[rec.opportunity_id];
-        return fetch(apiPath, {
+        return apiFetch(apiPath, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -230,7 +231,7 @@ export default function SalesSettingPage() {
 
   // Load pipelines
   useEffect(() => {
-    fetch("/api/ghl/pipelines")
+    apiFetch("/api/ghl/pipelines")
       .then((r) => r.json())
       .then((data) => {
         if (data.pipelines?.length > 0) {
@@ -254,15 +255,15 @@ export default function SalesSettingPage() {
   /* ── Data loaders ── */
 
   const loadOptinRecords = useCallback(async () => {
-    try { const r = await fetch("/api/sales/optin-tracking"); const d = await r.json(); if (!d.error) setOptinRecords(d.records || []); } catch {}
+    try { const r = await apiFetch("/api/sales/optin-tracking"); const d = await r.json(); if (!d.error) setOptinRecords(d.records || []); } catch {}
   }, []);
 
   const loadPdRecords = useCallback(async () => {
-    try { const r = await fetch("/api/sales/payment-done-tracking"); const d = await r.json(); if (!d.error) setPdRecords(d.records || []); } catch {}
+    try { const r = await apiFetch("/api/sales/payment-done-tracking"); const d = await r.json(); if (!d.error) setPdRecords(d.records || []); } catch {}
   }, []);
 
   const loadCbRecords = useCallback(async () => {
-    try { const r = await fetch("/api/sales/call-booked-tracking"); const d = await r.json(); if (!d.error) setCbRecords(d.records || []); } catch {}
+    try { const r = await apiFetch("/api/sales/call-booked-tracking"); const d = await r.json(); if (!d.error) setCbRecords(d.records || []); } catch {}
   }, []);
 
   useEffect(() => {
@@ -304,7 +305,7 @@ export default function SalesSettingPage() {
   const makeUpdateHandler = (apiPath: string, setRecords: React.Dispatch<React.SetStateAction<TrackingRecord[]>>) =>
     async (oppId: string, updates: Record<string, unknown>) => {
       try {
-        const res = await fetch(apiPath, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ opportunity_id: oppId, ...updates }) });
+        const res = await apiFetch(apiPath, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ opportunity_id: oppId, ...updates }) });
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         setRecords((prev) => prev.map((r) => r.opportunity_id === oppId ? { ...r, ...updates } as TrackingRecord : r));

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAds } from "@/lib/meta";
+import { authenticateRequest } from "@/lib/api-auth";
 
 // In-memory cache + in-flight dedup to avoid concurrent Meta API calls
 let adsCache: { data: unknown[]; ts: number; key: string } | null = null;
@@ -7,6 +8,8 @@ let inflight: { promise: Promise<unknown[]>; key: string } | null = null;
 const CACHE_TTL = 120_000; // 2 minutes
 
 export async function GET(req: NextRequest) {
+  const auth = await authenticateRequest(req);
+  if ("error" in auth) return auth.error;
   try {
     const adSetId = req.nextUrl.searchParams.get("adSetId") || undefined;
     const cacheKey = adSetId || "__all__";

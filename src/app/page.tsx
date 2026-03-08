@@ -7,6 +7,7 @@ import ModuleCard from "@/components/ModuleCard";
 import { MODULE_REGISTRY } from "@/lib/modules";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Module } from "@/types";
+import { apiFetch } from "@/lib/api-fetch";
 
 type ModuleLike = Omit<Module, "id" | "created_at"> | Module;
 
@@ -28,7 +29,7 @@ export default function Home() {
       }
 
       try {
-        const res = await fetch(`/api/modules/effective?role_id=${role.id}&user_id=${user.id}`);
+        const res = await apiFetch(`/api/modules/effective?role_id=${role.id}&user_id=${user.id}`);
         const data = await res.json();
         const effective: Module[] = data.modules || [];
         const topLevel = effective.filter((m: Module) => m.parent_slug === null);

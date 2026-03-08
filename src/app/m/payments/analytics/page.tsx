@@ -8,6 +8,7 @@ import {
   CreditCard,
 } from "lucide-react";
 import { PaymentsDashboardSkeleton } from "@/components/Skeleton";
+import { apiFetch } from "@/lib/api-fetch";
 import {
   PieChart,
   Pie,
@@ -197,9 +198,9 @@ export default function AnalyticsPage() {
         if (to) params.set("to", String(to));
 
         const [paymentsRes, refundsRes, settlementsRes] = await Promise.all([
-          fetch(`/api/razorpay/payments?${params}`),
-          fetch(`/api/razorpay/refunds?${params}`),
-          fetch(`/api/razorpay/settlements?${params}`),
+          apiFetch(`/api/razorpay/payments?${params}`),
+          apiFetch(`/api/razorpay/refunds?${params}`),
+          apiFetch(`/api/razorpay/settlements?${params}`),
         ]);
         const [paymentsData, refundsData, settlementsData] = await Promise.all([
           paymentsRes.json(),

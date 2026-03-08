@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { requireAdmin } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
+  const authResult = await requireAdmin(req);
+  if ("error" in authResult) return authResult.error;
+
   try {
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get("user_id");
@@ -50,6 +54,9 @@ export async function GET(req: NextRequest) {
 
 // Toggle role-module assignment
 export async function PUT(req: NextRequest) {
+  const authResult = await requireAdmin(req);
+  if ("error" in authResult) return authResult.error;
+
   try {
     const body = await req.json();
     const { role_id, module_id, action } = body;
@@ -86,6 +93,9 @@ export async function PUT(req: NextRequest) {
 
 // Set user module override
 export async function POST(req: NextRequest) {
+  const authResult = await requireAdmin(req);
+  if ("error" in authResult) return authResult.error;
+
   try {
     const body = await req.json();
     const { user_id, module_id, access_type } = body;
@@ -117,6 +127,9 @@ export async function POST(req: NextRequest) {
 
 // Remove user module override
 export async function DELETE(req: NextRequest) {
+  const authResult = await requireAdmin(req);
+  if ("error" in authResult) return authResult.error;
+
   try {
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get("user_id");

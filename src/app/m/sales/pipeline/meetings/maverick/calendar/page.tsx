@@ -19,6 +19,7 @@ import {
   ClipboardList,
 } from "lucide-react";
 import { CalendarSkeleton } from "@/components/Skeleton";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -310,9 +311,9 @@ function MaverickCalendarPage() {
     async function init() {
       try {
         const [calRes, userRes, trackingRes] = await Promise.all([
-          fetch("/api/ghl/calendars"),
-          fetch("/api/ghl/users"),
-          fetch("/api/sales/call-booked-tracking"),
+          apiFetch("/api/ghl/calendars"),
+          apiFetch("/api/ghl/users"),
+          apiFetch("/api/sales/call-booked-tracking"),
         ]);
         const calData = await calRes.json();
         const userData = await userRes.json();
@@ -417,7 +418,7 @@ function MaverickCalendarPage() {
           const batch = cals.slice(i, i + 5);
           const results = await Promise.all(
             batch.map((cal) =>
-              fetch(
+              apiFetch(
                 `/api/ghl/calendar-events?calendarId=${cal.id}&startTime=${rangeStart.toISOString()}&endTime=${rangeEnd.toISOString()}`
               ).then((r) => r.json())
             )
@@ -465,7 +466,7 @@ function MaverickCalendarPage() {
       const calIds = Array.from(selectedCalendars);
       Promise.all(
         calIds.map((calId) =>
-          fetch(
+          apiFetch(
             `/api/ghl/calendar-events?calendarId=${calId}&startTime=${start.toISOString()}&endTime=${end.toISOString()}`
           ).then((r) => r.json())
         )
@@ -497,7 +498,7 @@ function MaverickCalendarPage() {
     async function fetchContact() {
       setContactLoading(true);
       try {
-        const res = await fetch(
+        const res = await apiFetch(
           `/api/ghl/contacts?contactId=${selectedEvent!.contactId}`
         );
         const data = await res.json();
@@ -514,7 +515,7 @@ function MaverickCalendarPage() {
     async function fetchFormSubmissions() {
       setFormLoading(true);
       try {
-        const res = await fetch(
+        const res = await apiFetch(
           `/api/ghl/form-submissions?contactId=${selectedEvent!.contactId}`
         );
         const data = await res.json();

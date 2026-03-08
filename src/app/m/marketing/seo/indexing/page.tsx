@@ -9,6 +9,7 @@ import {
   CheckCircle, XCircle, Clock, Smartphone, Zap,
 } from "lucide-react";
 import { IndexingSkeleton } from "@/components/Skeleton";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Helpers ─────────────────────────────────────── */
 
@@ -84,7 +85,7 @@ export default function IndexingPage() {
     (async () => {
       setLoading(true);
       try {
-        const res = await fetch("/api/seo/sitemaps");
+        const res = await apiFetch("/api/seo/sitemaps");
         const data = await res.json();
         setSitemaps(data.sitemaps || []);
       } catch (err) {
@@ -100,7 +101,7 @@ export default function IndexingPage() {
     if (!urls.length) return;
     setInspecting(true);
     try {
-      const res = await fetch("/api/seo/url-inspection", {
+      const res = await apiFetch("/api/seo/url-inspection", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ urls }),
@@ -120,7 +121,7 @@ export default function IndexingPage() {
       // Fetch top 20 pages from GSC
       const end = new Date().toISOString().split("T")[0];
       const start = new Date(Date.now() - 28 * 86400000).toISOString().split("T")[0];
-      const pagesRes = await fetch(`/api/seo/search-analytics?startDate=${start}&endDate=${end}&dimensions=page&rowLimit=20`);
+      const pagesRes = await apiFetch(`/api/seo/search-analytics?startDate=${start}&endDate=${end}&dimensions=page&rowLimit=20`);
       const pagesData = await pagesRes.json();
       const urls = (pagesData.rows || []).map((r: { keys: string[] }) => r.keys[0]).filter(Boolean);
 
@@ -130,7 +131,7 @@ export default function IndexingPage() {
         return;
       }
 
-      const res = await fetch("/api/seo/url-inspection", {
+      const res = await apiFetch("/api/seo/url-inspection", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ urls }),

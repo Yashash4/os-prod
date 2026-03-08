@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import DateRangeFilter, { type DateRange } from "@/components/seo/DateRangeFilter";
 import { KeywordsSkeleton } from "@/components/Skeleton";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* -- Helpers ------------------------------------------------- */
 
@@ -123,8 +124,8 @@ export default function KeywordsPage() {
     setLoading(true);
     setError("");
     Promise.all([
-      fetch(`/api/seo/search-analytics?startDate=${r.startDate}&endDate=${r.endDate}&dimensions=query&rowLimit=1000`),
-      fetch(`/api/seo/search-analytics?startDate=${r.prevStartDate}&endDate=${r.prevEndDate}&dimensions=query&rowLimit=1000`),
+      apiFetch(`/api/seo/search-analytics?startDate=${r.startDate}&endDate=${r.endDate}&dimensions=query&rowLimit=1000`),
+      apiFetch(`/api/seo/search-analytics?startDate=${r.prevStartDate}&endDate=${r.prevEndDate}&dimensions=query&rowLimit=1000`),
     ])
       .then(async ([curRes, prevRes]) => {
         const [curData, prevData] = await Promise.all([curRes.json(), prevRes.json()]);

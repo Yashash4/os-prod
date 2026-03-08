@@ -38,6 +38,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -266,15 +267,17 @@ export default function SalesAnalyticsPage() {
   const [jobinMeets, setJobinMeets] = useState<MeetRecord[]>([]);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     async function fetchAll() {
       setLoading(true);
       setError("");
       try {
         const [mavSalesRes, jobSalesRes, mavMeetRes, jobMeetRes] = await Promise.all([
-          fetch("/api/sales/maverick-sales-tracking").then((r) => r.json()).catch(() => ({ records: [] })),
-          fetch("/api/sales/jobin-sales-tracking").then((r) => r.json()).catch(() => ({ records: [] })),
-          fetch("/api/sales/maverick-meet-tracking").then((r) => r.json()).catch(() => ({ records: [] })),
-          fetch("/api/sales/jobin-meet-tracking").then((r) => r.json()).catch(() => ({ records: [] })),
+          apiFetch("/api/sales/maverick-sales-tracking", { signal: controller.signal }).then((r) => r.json()).catch(() => ({ records: [] })),
+          apiFetch("/api/sales/jobin-sales-tracking", { signal: controller.signal }).then((r) => r.json()).catch(() => ({ records: [] })),
+          apiFetch("/api/sales/maverick-meet-tracking", { signal: controller.signal }).then((r) => r.json()).catch(() => ({ records: [] })),
+          apiFetch("/api/sales/jobin-meet-tracking", { signal: controller.signal }).then((r) => r.json()).catch(() => ({ records: [] })),
         ]);
 
         // Store raw unfiltered data
@@ -296,12 +299,15 @@ export default function SalesAnalyticsPage() {
         setMaverickMeets(filterByDate(mavMeetRes.records || [], "created_at"));
         setJobinMeets(filterByDate(jobMeetRes.records || [], "created_at"));
       } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
         setError(err instanceof Error ? err.message : "Failed to load sales analytics");
       } finally {
         setLoading(false);
       }
     }
     fetchAll();
+
+    return () => controller.abort();
   }, [datePreset]);
 
   /* ── Combined records with team tag ─────────────── */
@@ -624,7 +630,7 @@ export default function SalesAnalyticsPage() {
           detail: `${last.month} collected ${currency(last.collected)} vs ${prev.month} at ${currency(prev.collected)} — positive trend.`,
         });
       } else if (last.collected < prev.collected && prev.collected > 0) {
-        const decline = ((prev.collected - last.collected) / prev.collected) * 100;
+        const decline = prev.collected > 0 ? ((prev.collected - last.collected) / prev.collected) * 100 : 0;
         items.push({
           type: "warning",
           title: `Revenue Down ${decline.toFixed(0)}% Month-over-Month`,

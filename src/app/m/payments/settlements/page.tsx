@@ -8,6 +8,7 @@ import {
   CheckCircle,
 } from "lucide-react";
 import { PaymentsTableSkeleton } from "@/components/Skeleton";
+import { apiFetch } from "@/lib/api-fetch";
 import {
   BarChart,
   Bar,
@@ -153,7 +154,7 @@ export default function SettlementsPage() {
         if (from) params.set("from", String(from));
         if (to) params.set("to", String(to));
 
-        const res = await fetch(`/api/razorpay/settlements?${params}`);
+        const res = await apiFetch(`/api/razorpay/settlements?${params}`);
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         setSettlements(data.settlements || []);

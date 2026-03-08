@@ -31,6 +31,7 @@ import {
   Legend,
 } from "recharts";
 import { SalesDashboardSkeleton } from "@/components/Skeleton";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -313,11 +314,11 @@ export default function GHLDashboard() {
     async function init() {
       try {
         const [pipelinesRes, optinRes, callRes, paymentRes, calRes] = await Promise.all([
-          fetch("/api/ghl/pipelines"),
-          fetch("/api/sales/optin-tracking"),
-          fetch("/api/sales/call-booked-tracking"),
-          fetch("/api/sales/payment-done-tracking"),
-          fetch("/api/ghl/calendars"),
+          apiFetch("/api/ghl/pipelines"),
+          apiFetch("/api/sales/optin-tracking"),
+          apiFetch("/api/sales/call-booked-tracking"),
+          apiFetch("/api/sales/payment-done-tracking"),
+          apiFetch("/api/ghl/calendars"),
         ]);
 
         const [pData, oData, cData, pDoneData, calData] = await Promise.all([
@@ -340,7 +341,7 @@ export default function GHLDashboard() {
         // Fetch opportunities from ALL pipelines for date lookup
         const oppResults = await Promise.all(
           pipelineList.map((p) =>
-            fetch(`/api/ghl/opportunities?pipeline_id=${p.id}`).then((r) => r.json())
+            apiFetch(`/api/ghl/opportunities?pipeline_id=${p.id}`).then((r) => r.json())
           )
         );
         const allOpps: Opportunity[] = [];
@@ -360,7 +361,7 @@ export default function GHLDashboard() {
           const allEvents: CalendarEvent[] = [];
           const results = await Promise.all(
             cals.map((cal) =>
-              fetch(`/api/ghl/calendar-events?calendarId=${cal.id}&startTime=${start.toISOString()}&endTime=${end.toISOString()}`).then((r) => r.json())
+              apiFetch(`/api/ghl/calendar-events?calendarId=${cal.id}&startTime=${start.toISOString()}&endTime=${end.toISOString()}`).then((r) => r.json())
             )
           );
           results.forEach((data) => { if (data.events) allEvents.push(...data.events); });

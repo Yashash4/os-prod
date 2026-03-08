@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import DateRangeFilter, { type DateRange } from "@/components/seo/DateRangeFilter";
 import { BusinessSkeleton } from "@/components/Skeleton";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Helpers ─────────────────────────────────────── */
 
@@ -102,12 +103,12 @@ export default function GoogleBusinessPage() {
 
     try {
       const fetches: Promise<Response>[] = [
-        fetch(`/api/seo/gbp/performance?startDate=${r.startDate}&endDate=${r.endDate}`),
-        fetch(`/api/seo/gbp/keywords?yearMonth=${yearMonth}`),
-        fetch(`/api/seo/gbp/reviews?pageSize=20`),
+        apiFetch(`/api/seo/gbp/performance?startDate=${r.startDate}&endDate=${r.endDate}`),
+        apiFetch(`/api/seo/gbp/keywords?yearMonth=${yearMonth}`),
+        apiFetch(`/api/seo/gbp/reviews?pageSize=20`),
       ];
       if (r.compare) {
-        fetches.push(fetch(`/api/seo/gbp/performance?startDate=${r.prevStartDate}&endDate=${r.prevEndDate}`));
+        fetches.push(apiFetch(`/api/seo/gbp/performance?startDate=${r.prevStartDate}&endDate=${r.prevEndDate}`));
       }
 
       const responses = await Promise.all(fetches);

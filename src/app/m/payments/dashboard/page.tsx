@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import {
   IndianRupee,
   Hash,
@@ -10,8 +10,18 @@ import {
   RotateCcw,
   Wallet,
   Percent,
+  ArrowUp,
+  ArrowDown,
+  Target,
+  AlertTriangle,
+  Clock,
+  RefreshCw,
+  ShieldAlert,
+  CreditCard,
 } from "lucide-react";
+import Link from "next/link";
 import { PaymentsDashboardSkeleton } from "@/components/Skeleton";
+import { apiFetch } from "@/lib/api-fetch";
 import {
   PieChart,
   Pie,
@@ -47,6 +57,12 @@ interface Refund {
   amount: number;
   status: string;
   razorpay_created_at: number;
+}
+
+interface RevenueTarget {
+  id?: string;
+  period_type: "daily" | "weekly" | "monthly";
+  target_amount: number;
 }
 
 /* ── Constants ─────────────────────────────────────── */
@@ -126,18 +142,90 @@ function getDateRange(preset: string): { from?: number; to?: number } {
   }
 }
 
+function getTodayRange(): { from: number; to: number } {
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+  return { from: Math.floor(startOfDay.getTime() / 1000), to: Math.floor(endOfDay.getTime() / 1000) };
+}
+
+function getYesterdayRange(): { from: number; to: number } {
+  const now = new Date();
+  const y = new Date(now);
+  y.setDate(y.getDate() - 1);
+  const startOfDay = new Date(y.getFullYear(), y.getMonth(), y.getDate());
+  const endOfDay = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23, 59, 59);
+  return { from: Math.floor(startOfDay.getTime() / 1000), to: Math.floor(endOfDay.getTime() / 1000) };
+}
+
+function computeTotals(payments: Payment[], refunds: Refund[]) {
+  let revenue = 0, capturedCount = 0, failedCount = 0, totalCount = 0;
+  payments.forEach((p) => {
+    totalCount++;
+    if (p.status === "captured") {
+      revenue += p.amount;
+      capturedCount++;
+    }
+    if (p.status === "failed") failedCount++;
+  });
+
+  const successRate = totalCount > 0 ? (capturedCount / totalCount) * 100 : 0;
+  const avgOrderValue = capturedCount > 0 ? revenue / capturedCount : 0;
+  const totalRefunds = refunds.reduce((sum, r) => sum + r.amount, 0);
+  const netRevenue = revenue - totalRefunds;
+  const refundRate = capturedCount > 0 ? (refunds.length / capturedCount) * 100 : 0;
+
+  return {
+    revenue: revenue / 100,
+    capturedCount,
+    failedCount,
+    totalCount,
+    successRate,
+    avgOrderValue: avgOrderValue / 100,
+    totalRefunds: totalRefunds / 100,
+    netRevenue: netRevenue / 100,
+    refundRate,
+  };
+}
+
 /* ── Reusable Components ──────────────────────────── */
+
+function DeltaIndicator({ current, prev }: { current: number; prev: number | undefined }) {
+  if (prev === undefined || prev === null) return null;
+  if (current === prev || (prev === 0 && current === 0)) {
+    return <span className="text-[10px] text-muted ml-1">--</span>;
+  }
+  if (prev === 0) {
+    return (
+      <span className="inline-flex items-center text-[10px] text-green-400 ml-1">
+        <ArrowUp className="w-2.5 h-2.5 mr-0.5" />new
+      </span>
+    );
+  }
+  const pct = ((current - prev) / Math.abs(prev)) * 100;
+  const isUp = pct > 0;
+  return (
+    <span className={`inline-flex items-center text-[10px] ml-1 ${isUp ? "text-green-400" : "text-red-400"}`}>
+      {isUp ? <ArrowUp className="w-2.5 h-2.5 mr-0.5" /> : <ArrowDown className="w-2.5 h-2.5 mr-0.5" />}
+      {Math.abs(pct).toFixed(1)}%
+    </span>
+  );
+}
 
 function StatCard({
   label,
   value,
   icon: Icon,
   color = "text-accent",
+  prevValue,
+  currentNumeric,
 }: {
   label: string;
   value: string | number;
   icon?: React.ElementType;
   color?: string;
+  prevValue?: number;
+  currentNumeric?: number;
 }) {
   return (
     <div className="card rounded-xl p-4 transition-all">
@@ -145,7 +233,12 @@ function StatCard({
         {Icon && <Icon className={`w-3.5 h-3.5 ${color}`} />}
         <span className="text-[10px] text-muted uppercase tracking-wider">{label}</span>
       </div>
-      <span className="text-xl font-bold text-foreground">{value}</span>
+      <div className="flex items-baseline">
+        <span className="text-xl font-bold text-foreground">{value}</span>
+        {prevValue !== undefined && currentNumeric !== undefined && (
+          <DeltaIndicator current={currentNumeric} prev={prevValue} />
+        )}
+      </div>
     </div>
   );
 }
@@ -170,14 +263,60 @@ function WidgetCard({
   );
 }
 
+function StatusBadge({ status }: { status: string }) {
+  const colorMap: Record<string, string> = {
+    captured: "bg-green-500/20 text-green-400",
+    failed: "bg-red-500/20 text-red-400",
+    authorized: "bg-blue-500/20 text-blue-400",
+    refunded: "bg-amber-500/20 text-amber-400",
+    created: "bg-purple-500/20 text-purple-400",
+  };
+  const cls = colorMap[status] || "bg-gray-500/20 text-gray-400";
+  return (
+    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${cls}`}>
+      {status}
+    </span>
+  );
+}
+
 /* ── Main Dashboard ────────────────────────────────── */
 
 export default function PaymentsDashboard() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [refunds, setRefunds] = useState<Refund[]>([]);
+  const [yesterdayPayments, setYesterdayPayments] = useState<Payment[]>([]);
+  const [yesterdayRefunds, setYesterdayRefunds] = useState<Refund[]>([]);
+  const [todayPayments, setTodayPayments] = useState<Payment[]>([]);
+  const [todayRefunds, setTodayRefunds] = useState<Refund[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [datePreset, setDatePreset] = useState("last_30d");
+
+  // Revenue Targets
+  const [targets, setTargets] = useState<RevenueTarget[]>([]);
+  const [showTargetForm, setShowTargetForm] = useState(false);
+  const [targetPeriod, setTargetPeriod] = useState<"daily" | "weekly" | "monthly">("daily");
+  const [targetAmount, setTargetAmount] = useState("");
+  const [savingTarget, setSavingTarget] = useState(false);
+
+  const fetchTodayData = useCallback(async () => {
+    try {
+      const todayRange = getTodayRange();
+      const todayParams = new URLSearchParams();
+      todayParams.set("from", String(todayRange.from));
+      todayParams.set("to", String(todayRange.to));
+
+      const [pRes, rRes] = await Promise.all([
+        apiFetch(`/api/razorpay/payments?${todayParams}`),
+        apiFetch(`/api/razorpay/refunds?${todayParams}`),
+      ]);
+      const [pData, rData] = await Promise.all([pRes.json(), rRes.json()]);
+      setTodayPayments(pData.payments || []);
+      setTodayRefunds(rData.refunds || []);
+    } catch {
+      // silently fail for live feed refresh
+    }
+  }, []);
 
   useEffect(() => {
     async function fetchData() {
@@ -189,17 +328,59 @@ export default function PaymentsDashboard() {
         if (from) params.set("from", String(from));
         if (to) params.set("to", String(to));
 
-        const [paymentsRes, refundsRes] = await Promise.all([
-          fetch(`/api/razorpay/payments?${params}`),
-          fetch(`/api/razorpay/refunds?${params}`),
+        // Always fetch today + yesterday for comparison, plus the selected preset
+        const todayRange = getTodayRange();
+        const yesterdayRange = getYesterdayRange();
+
+        const todayParams = new URLSearchParams();
+        todayParams.set("from", String(todayRange.from));
+        todayParams.set("to", String(todayRange.to));
+
+        const yesterdayParams = new URLSearchParams();
+        yesterdayParams.set("from", String(yesterdayRange.from));
+        yesterdayParams.set("to", String(yesterdayRange.to));
+
+        const [
+          paymentsRes, refundsRes,
+          todayPayRes, todayRefRes,
+          yesterdayPayRes, yesterdayRefRes,
+          targetsRes,
+        ] = await Promise.all([
+          apiFetch(`/api/razorpay/payments?${params}`),
+          apiFetch(`/api/razorpay/refunds?${params}`),
+          apiFetch(`/api/razorpay/payments?${todayParams}`),
+          apiFetch(`/api/razorpay/refunds?${todayParams}`),
+          apiFetch(`/api/razorpay/payments?${yesterdayParams}`),
+          apiFetch(`/api/razorpay/refunds?${yesterdayParams}`),
+          apiFetch(`/api/payments/revenue-targets`).catch(() => null),
         ]);
-        const [paymentsData, refundsData] = await Promise.all([
+
+        const [
+          paymentsData, refundsData,
+          todayPayData, todayRefData,
+          yesterdayPayData, yesterdayRefData,
+        ] = await Promise.all([
           paymentsRes.json(),
           refundsRes.json(),
+          todayPayRes.json(),
+          todayRefRes.json(),
+          yesterdayPayRes.json(),
+          yesterdayRefRes.json(),
         ]);
+
         if (paymentsData.error) throw new Error(paymentsData.error);
+
         setPayments(paymentsData.payments || []);
         setRefunds(refundsData.refunds || []);
+        setTodayPayments(todayPayData.payments || []);
+        setTodayRefunds(todayRefData.refunds || []);
+        setYesterdayPayments(yesterdayPayData.payments || []);
+        setYesterdayRefunds(yesterdayRefData.refunds || []);
+
+        if (targetsRes) {
+          const targetsData = await targetsRes.json();
+          setTargets(targetsData.targets || []);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load");
       } finally {
@@ -209,36 +390,16 @@ export default function PaymentsDashboard() {
     fetchData();
   }, [datePreset]);
 
+  // Auto-refresh today's payments every 60 seconds
+  useEffect(() => {
+    const interval = setInterval(fetchTodayData, 60_000);
+    return () => clearInterval(interval);
+  }, [fetchTodayData]);
+
   /* ── KPI Calculations ───────────────────────────── */
-  const totals = useMemo(() => {
-    let revenue = 0, capturedCount = 0, failedCount = 0, totalCount = 0;
-    payments.forEach((p) => {
-      totalCount++;
-      if (p.status === "captured") {
-        revenue += p.amount;
-        capturedCount++;
-      }
-      if (p.status === "failed") failedCount++;
-    });
-
-    const successRate = totalCount > 0 ? (capturedCount / totalCount) * 100 : 0;
-    const avgOrderValue = capturedCount > 0 ? revenue / capturedCount : 0;
-    const totalRefunds = refunds.reduce((sum, r) => sum + r.amount, 0);
-    const netRevenue = revenue - totalRefunds;
-    const refundRate = capturedCount > 0 ? (refunds.length / capturedCount) * 100 : 0;
-
-    return {
-      revenue: revenue / 100,
-      capturedCount,
-      failedCount,
-      totalCount,
-      successRate,
-      avgOrderValue: avgOrderValue / 100,
-      totalRefunds: totalRefunds / 100,
-      netRevenue: netRevenue / 100,
-      refundRate,
-    };
-  }, [payments, refunds]);
+  const totals = useMemo(() => computeTotals(payments, refunds), [payments, refunds]);
+  const todayTotals = useMemo(() => computeTotals(todayPayments, todayRefunds), [todayPayments, todayRefunds]);
+  const yesterdayTotals = useMemo(() => computeTotals(yesterdayPayments, yesterdayRefunds), [yesterdayPayments, yesterdayRefunds]);
 
   /* ── Revenue Over Time ──────────────────────────── */
   const dailyRevenue = useMemo(() => {
@@ -329,6 +490,70 @@ export default function PaymentsDashboard() {
     });
   }, [dailyRevenue]);
 
+  /* ── Action Items (from already-fetched data) ───── */
+  const actionItems = useMemo(() => {
+    const failedCount = payments.filter((p) => p.status === "failed").length;
+    const authorizedCount = payments.filter((p) => p.status === "authorized").length;
+    const totalRefundAmount = refunds.reduce((sum, r) => sum + r.amount, 0) / 100;
+    return { failedCount, authorizedCount, totalRefundAmount };
+  }, [payments, refunds]);
+
+  /* ── Live Feed: Today's Payments sorted by time ─── */
+  const todayFeed = useMemo(() => {
+    return [...todayPayments]
+      .sort((a, b) => b.razorpay_created_at - a.razorpay_created_at);
+  }, [todayPayments]);
+
+  /* ── Revenue Targets: current revenue for progress */
+  const targetProgress = useMemo(() => {
+    const todayRev = todayTotals.revenue;
+    // Weekly: sum captured payments from last 7 days from main dataset
+    const now = new Date();
+    const weekStart = new Date(now);
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // start of week (Sunday)
+    weekStart.setHours(0, 0, 0, 0);
+    const weekStartUnix = Math.floor(weekStart.getTime() / 1000);
+
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthStartUnix = Math.floor(monthStart.getTime() / 1000);
+
+    let weeklyRev = 0;
+    let monthlyRev = 0;
+    payments
+      .filter((p) => p.status === "captured" && p.razorpay_created_at)
+      .forEach((p) => {
+        if (p.razorpay_created_at >= weekStartUnix) weeklyRev += p.amount / 100;
+        if (p.razorpay_created_at >= monthStartUnix) monthlyRev += p.amount / 100;
+      });
+
+    return { daily: todayRev, weekly: weeklyRev, monthly: monthlyRev };
+  }, [todayTotals.revenue, payments]);
+
+  /* ── Save Target Handler ────────────────────────── */
+  async function handleSaveTarget() {
+    if (!targetAmount || isNaN(Number(targetAmount))) return;
+    setSavingTarget(true);
+    try {
+      const res = await apiFetch(`/api/payments/revenue-targets`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ period_type: targetPeriod, target_amount: Number(targetAmount) }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      // Refresh targets
+      const tRes = await apiFetch(`/api/payments/revenue-targets`);
+      const tData = await tRes.json();
+      setTargets(tData.targets || []);
+      setShowTargetForm(false);
+      setTargetAmount("");
+    } catch {
+      // silently fail
+    } finally {
+      setSavingTarget(false);
+    }
+  }
+
   /* ── Render ─────────────────────────────────────── */
 
   if (loading) {
@@ -369,16 +594,102 @@ export default function PaymentsDashboard() {
         <div className="text-red-400 text-sm bg-red-500/10 p-3 rounded-lg">{error}</div>
       )}
 
-      {/* KPI Cards */}
+      {/* KPI Cards with Today vs Yesterday Comparison */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="Total Revenue" value={currency(totals.revenue)} icon={IndianRupee} color="text-green-400" />
-        <StatCard label="Payment Count" value={compact(totals.capturedCount)} icon={Hash} color="text-blue-400" />
-        <StatCard label="Success Rate" value={`${totals.successRate.toFixed(1)}%`} icon={CheckCircle} color="text-emerald-400" />
-        <StatCard label="Failed Payments" value={compact(totals.failedCount)} icon={XCircle} color="text-red-400" />
-        <StatCard label="Avg Order Value" value={currency(totals.avgOrderValue)} icon={TrendingUp} color="text-amber-400" />
-        <StatCard label="Refunds Issued" value={currency(totals.totalRefunds)} icon={RotateCcw} color="text-purple-400" />
-        <StatCard label="Net Revenue" value={currency(totals.netRevenue)} icon={Wallet} color="text-teal-400" />
-        <StatCard label="Refund Rate" value={`${totals.refundRate.toFixed(1)}%`} icon={Percent} color="text-pink-400" />
+        <StatCard label="Total Revenue" value={currency(totals.revenue)} icon={IndianRupee} color="text-green-400" prevValue={yesterdayTotals.revenue} currentNumeric={todayTotals.revenue} />
+        <StatCard label="Payment Count" value={compact(totals.capturedCount)} icon={Hash} color="text-blue-400" prevValue={yesterdayTotals.capturedCount} currentNumeric={todayTotals.capturedCount} />
+        <StatCard label="Success Rate" value={`${totals.successRate.toFixed(1)}%`} icon={CheckCircle} color="text-emerald-400" prevValue={yesterdayTotals.successRate} currentNumeric={todayTotals.successRate} />
+        <StatCard label="Failed Payments" value={compact(totals.failedCount)} icon={XCircle} color="text-red-400" prevValue={yesterdayTotals.failedCount} currentNumeric={todayTotals.failedCount} />
+        <StatCard label="Avg Order Value" value={currency(totals.avgOrderValue)} icon={TrendingUp} color="text-amber-400" prevValue={yesterdayTotals.avgOrderValue} currentNumeric={todayTotals.avgOrderValue} />
+        <StatCard label="Refunds Issued" value={currency(totals.totalRefunds)} icon={RotateCcw} color="text-purple-400" prevValue={yesterdayTotals.totalRefunds} currentNumeric={todayTotals.totalRefunds} />
+        <StatCard label="Net Revenue" value={currency(totals.netRevenue)} icon={Wallet} color="text-teal-400" prevValue={yesterdayTotals.netRevenue} currentNumeric={todayTotals.netRevenue} />
+        <StatCard label="Refund Rate" value={`${totals.refundRate.toFixed(1)}%`} icon={Percent} color="text-pink-400" prevValue={yesterdayTotals.refundRate} currentNumeric={todayTotals.refundRate} />
+      </div>
+
+      {/* Revenue Targets Section */}
+      <div className="card rounded-xl p-4">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Target className="w-4 h-4 text-accent" />
+            <h3 className="text-sm font-bold text-foreground tracking-wide">Revenue Targets</h3>
+          </div>
+          <button
+            onClick={() => setShowTargetForm(!showTargetForm)}
+            className="text-xs px-3 py-1.5 rounded-lg bg-accent/20 text-accent hover:bg-accent/30 transition-colors font-medium"
+          >
+            {showTargetForm ? "Cancel" : "Set Target"}
+          </button>
+        </div>
+
+        {/* Inline target form */}
+        {showTargetForm && (
+          <div className="flex items-end gap-3 mb-4 p-3 rounded-lg bg-surface-hover/50 border border-border">
+            <div className="flex-1">
+              <label className="text-[10px] text-muted uppercase tracking-wider block mb-1">Period</label>
+              <select
+                value={targetPeriod}
+                onChange={(e) => setTargetPeriod(e.target.value as "daily" | "weekly" | "monthly")}
+                className="w-full px-3 py-2 bg-background/50 border border-border rounded-lg text-foreground text-sm focus:outline-none focus:border-accent"
+              >
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </div>
+            <div className="flex-1">
+              <label className="text-[10px] text-muted uppercase tracking-wider block mb-1">Target Amount (₹)</label>
+              <input
+                type="number"
+                value={targetAmount}
+                onChange={(e) => setTargetAmount(e.target.value)}
+                placeholder="e.g. 50000"
+                className="w-full px-3 py-2 bg-background/50 border border-border rounded-lg text-foreground text-sm focus:outline-none focus:border-accent"
+              />
+            </div>
+            <button
+              onClick={handleSaveTarget}
+              disabled={savingTarget || !targetAmount}
+              className="px-4 py-2 rounded-lg bg-accent text-black text-sm font-medium hover:bg-accent/80 transition-colors disabled:opacity-50"
+            >
+              {savingTarget ? "Saving..." : "Save"}
+            </button>
+            <button
+              onClick={() => { setShowTargetForm(false); setTargetAmount(""); }}
+              className="px-4 py-2 rounded-lg bg-surface-hover text-muted text-sm font-medium hover:bg-surface-hover/80 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+
+        {/* Progress bars */}
+        <div className="space-y-3">
+          {(["daily", "weekly", "monthly"] as const).map((period) => {
+            const target = targets.find((t) => t.period_type === period);
+            if (!target) return null;
+            const current = targetProgress[period];
+            const pct = Math.min((current / target.target_amount) * 100, 100);
+            return (
+              <div key={period}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-muted capitalize">{period} Target</span>
+                  <span className="text-xs text-foreground">
+                    {currency(current)} / {currency(target.target_amount)} ({pct.toFixed(0)}%)
+                  </span>
+                </div>
+                <div className="w-full h-2 rounded-full bg-surface-hover overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${pct}%`, backgroundColor: "#B8860B" }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+          {targets.length === 0 && !showTargetForm && (
+            <p className="text-xs text-muted">No revenue targets set. Click &quot;Set Target&quot; to add one.</p>
+          )}
+        </div>
       </div>
 
       {/* Charts Row 1: Revenue + Method Breakdown */}
@@ -416,8 +727,8 @@ export default function PaymentsDashboard() {
         </WidgetCard>
       </div>
 
-      {/* Charts Row 2: Volume + Status */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Charts Row 2: Volume + Status + Needs Attention */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <WidgetCard title="Daily Payment Volume">
           {dailyVolume.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
@@ -449,6 +760,53 @@ export default function PaymentsDashboard() {
           ) : (
             <div className="h-[220px] flex items-center justify-center text-muted text-sm">No data available</div>
           )}
+        </WidgetCard>
+
+        {/* Needs Attention Panel */}
+        <WidgetCard
+          title="Needs Attention"
+          right={<AlertTriangle className="w-4 h-4 text-amber-400" />}
+        >
+          <div className="space-y-3">
+            <Link
+              href="/m/payments/failed-payments"
+              className="flex items-center gap-3 p-3 rounded-lg bg-red-500/10 hover:bg-red-500/15 transition-colors group"
+            >
+              <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0">
+                <XCircle className="w-4 h-4 text-red-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-muted">Failed Payments</p>
+                <p className="text-lg font-bold text-red-400">{actionItems.failedCount}</p>
+              </div>
+            </Link>
+
+            <Link
+              href="/m/payments/transactions"
+              className="flex items-center gap-3 p-3 rounded-lg bg-blue-500/10 hover:bg-blue-500/15 transition-colors group"
+            >
+              <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                <ShieldAlert className="w-4 h-4 text-blue-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-muted">Authorized (Not Captured)</p>
+                <p className="text-lg font-bold text-blue-400">{actionItems.authorizedCount}</p>
+              </div>
+            </Link>
+
+            <Link
+              href="/m/payments/transactions"
+              className="flex items-center gap-3 p-3 rounded-lg bg-amber-500/10 hover:bg-amber-500/15 transition-colors group"
+            >
+              <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                <RotateCcw className="w-4 h-4 text-amber-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-muted">Total Refunds</p>
+                <p className="text-lg font-bold text-amber-400">{currency(actionItems.totalRefundAmount)}</p>
+              </div>
+            </Link>
+          </div>
         </WidgetCard>
       </div>
 
@@ -486,6 +844,56 @@ export default function PaymentsDashboard() {
           )}
         </WidgetCard>
       </div>
+
+      {/* Live Payment Feed */}
+      <WidgetCard
+        title={`Today's Payments (${todayFeed.length})`}
+        right={
+          <button
+            onClick={fetchTodayData}
+            className="flex items-center gap-1 text-xs text-muted hover:text-accent transition-colors"
+          >
+            <RefreshCw className="w-3 h-3" />
+            Refresh
+          </button>
+        }
+      >
+        {todayFeed.length > 0 ? (
+          <div className="max-h-[300px] overflow-y-auto space-y-1 scrollbar-thin">
+            {todayFeed.map((p) => {
+              const time = new Date(p.razorpay_created_at * 1000);
+              const hh = String(time.getHours()).padStart(2, "0");
+              const mm = String(time.getMinutes()).padStart(2, "0");
+              return (
+                <div
+                  key={p.id}
+                  className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-surface-hover/50 transition-colors text-sm"
+                >
+                  <span className="text-muted text-xs font-mono w-12 flex-shrink-0 flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {hh}:{mm}
+                  </span>
+                  <span className="font-semibold text-foreground w-24 flex-shrink-0">
+                    {currency(p.amount / 100)}
+                  </span>
+                  <StatusBadge status={p.status} />
+                  <span className="text-xs text-muted flex items-center gap-1 flex-shrink-0">
+                    <CreditCard className="w-3 h-3" />
+                    {(p.method || "—").toUpperCase()}
+                  </span>
+                  <span className="text-xs text-muted truncate ml-auto" title={p.email}>
+                    {p.email || "—"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="h-[100px] flex items-center justify-center text-muted text-sm">
+            No payments today yet
+          </div>
+        )}
+      </WidgetCard>
     </div>
   );
 }

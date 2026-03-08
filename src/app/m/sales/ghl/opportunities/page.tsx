@@ -21,6 +21,7 @@ import {
   Video,
   BarChart3,
 } from "lucide-react";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -138,8 +139,8 @@ export default function OpportunitiesPage() {
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/ghl/pipelines").then((r) => r.json()),
-      fetch("/api/ghl/users").then((r) => r.json()),
+      apiFetch("/api/ghl/pipelines").then((r) => r.json()),
+      apiFetch("/api/ghl/users").then((r) => r.json()),
     ])
       .then(([pData, uData]) => {
         if (pData.error) throw new Error(pData.error);
@@ -157,7 +158,7 @@ export default function OpportunitiesPage() {
 
   useEffect(() => {
     if (!selectedPipeline) return;
-    fetch(`/api/ghl/opportunities?pipeline_id=${selectedPipeline}`)
+    apiFetch(`/api/ghl/opportunities?pipeline_id=${selectedPipeline}`)
       .then((r) => r.json())
       .then((data) => {
         if (data.error) throw new Error(data.error);
@@ -180,7 +181,7 @@ export default function OpportunitiesPage() {
 
     // Contact
     setContactLoading(true);
-    fetch(`/api/ghl/contacts?contactId=${cid}`)
+    apiFetch(`/api/ghl/contacts?contactId=${cid}`)
       .then((r) => r.json())
       .then((d) => d.contact && setContactDetail(d.contact))
       .catch(() => {})
@@ -188,7 +189,7 @@ export default function OpportunitiesPage() {
 
     // Notes
     setNotesLoading(true);
-    fetch(`/api/ghl/contacts/notes?contactId=${cid}`)
+    apiFetch(`/api/ghl/contacts/notes?contactId=${cid}`)
       .then((r) => r.json())
       .then((d) => setNotes(d.notes || []))
       .catch(() => {})
@@ -196,7 +197,7 @@ export default function OpportunitiesPage() {
 
     // Tasks
     setTasksLoading(true);
-    fetch(`/api/ghl/contacts/tasks?contactId=${cid}`)
+    apiFetch(`/api/ghl/contacts/tasks?contactId=${cid}`)
       .then((r) => r.json())
       .then((d) => setTasks(d.tasks || []))
       .catch(() => {})

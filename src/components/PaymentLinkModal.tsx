@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { X, Send, Copy, Check, Loader2, IndianRupee, ExternalLink } from "lucide-react";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface PaymentLinkModalProps {
   open: boolean;
@@ -63,7 +64,7 @@ export default function PaymentLinkModal({
         ? Math.floor(Date.now() / 1000) + parseInt(expiryDays) * 86400
         : undefined;
 
-      const res = await fetch("/api/razorpay/payment-links", {
+      const res = await apiFetch("/api/razorpay/payment-links", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -78,6 +79,7 @@ export default function PaymentLinkModal({
         }),
       });
 
+      if (!res.ok) throw new Error(`Request failed (${res.status})`);
       const data = await res.json();
       if (data.error) throw new Error(data.error);
 

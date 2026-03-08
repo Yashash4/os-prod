@@ -24,6 +24,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { OnboardingSkeleton } from "@/components/Skeleton";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -82,7 +83,7 @@ export default function OnboardingAnalyticsPage() {
   useEffect(() => {
     async function init() {
       try {
-        const res = await fetch("/api/sales/onboarding-tracking");
+        const res = await apiFetch("/api/sales/onboarding-tracking");
         const data = await res.json();
         setRecords(data.records || []);
       } catch { /* silent */ } finally {

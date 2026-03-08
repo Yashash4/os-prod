@@ -39,6 +39,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { MetaAnalyticsSkeleton } from "@/components/Skeleton";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -315,12 +316,12 @@ function AnalyticsPage() {
       setError("");
       try {
         const [ageRes, genderRes, platRes, devRes, countryRes, campRes] = await Promise.all([
-          fetch(`/api/meta/breakdowns?breakdown=age&date_preset=${datePreset}`),
-          fetch(`/api/meta/breakdowns?breakdown=gender&date_preset=${datePreset}`),
-          fetch(`/api/meta/breakdowns?breakdown=publisher_platform&date_preset=${datePreset}`),
-          fetch(`/api/meta/breakdowns?breakdown=impression_device&date_preset=${datePreset}`),
-          fetch(`/api/meta/breakdowns?breakdown=country&date_preset=${datePreset}`),
-          fetch(`/api/meta/campaign-insights-bulk?date_preset=${datePreset}`),
+          apiFetch(`/api/meta/breakdowns?breakdown=age&date_preset=${datePreset}`),
+          apiFetch(`/api/meta/breakdowns?breakdown=gender&date_preset=${datePreset}`),
+          apiFetch(`/api/meta/breakdowns?breakdown=publisher_platform&date_preset=${datePreset}`),
+          apiFetch(`/api/meta/breakdowns?breakdown=impression_device&date_preset=${datePreset}`),
+          apiFetch(`/api/meta/breakdowns?breakdown=country&date_preset=${datePreset}`),
+          apiFetch(`/api/meta/campaign-insights-bulk?date_preset=${datePreset}`),
         ]);
         const [ageD, genderD, platD, devD, countryD, campD] = await Promise.all([
           ageRes.json(), genderRes.json(), platRes.json(), devRes.json(), countryRes.json(), campRes.json(),
@@ -353,8 +354,8 @@ function AnalyticsPage() {
       setAdsetLoading(true);
       try {
         const [insRes, metaRes] = await Promise.all([
-          fetch(`/api/meta/adset-insights-bulk?date_preset=${datePreset}`),
-          fetch(`/api/meta/adsets`),
+          apiFetch(`/api/meta/adset-insights-bulk?date_preset=${datePreset}`),
+          apiFetch(`/api/meta/adsets`),
         ]);
         const [insD, metaD] = await Promise.all([insRes.json(), metaRes.json()]);
         setAdsetInsights(insD.insights || []);
@@ -376,8 +377,8 @@ function AnalyticsPage() {
       setAdLoading(true);
       try {
         const [insRes, metaRes] = await Promise.all([
-          fetch(`/api/meta/ad-insights-bulk?date_preset=${datePreset}`),
-          fetch(`/api/meta/ads`),
+          apiFetch(`/api/meta/ad-insights-bulk?date_preset=${datePreset}`),
+          apiFetch(`/api/meta/ads`),
         ]);
         const [insD, metaD] = await Promise.all([insRes.json(), metaRes.json()]);
         setAdInsights(insD.insights || []);

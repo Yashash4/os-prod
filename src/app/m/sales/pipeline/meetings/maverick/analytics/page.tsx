@@ -36,6 +36,7 @@ import {
   Cell,
 } from "recharts";
 import { AnalyticsSkeleton } from "@/components/Skeleton";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -139,10 +140,10 @@ export default function AnalyticsPage() {
     async function init() {
       try {
         const [usersRes, meetRes, salesRes, calRes] = await Promise.all([
-          fetch("/api/ghl/users"),
-          fetch("/api/sales/maverick-meet-tracking"),
-          fetch("/api/sales/maverick-sales-tracking"),
-          fetch("/api/ghl/calendars"),
+          apiFetch("/api/ghl/users"),
+          apiFetch("/api/sales/maverick-meet-tracking"),
+          apiFetch("/api/sales/maverick-sales-tracking"),
+          apiFetch("/api/ghl/calendars"),
         ]);
         const usersData = await usersRes.json();
         const meetData = await meetRes.json();
@@ -167,7 +168,7 @@ export default function AnalyticsPage() {
             const allEvents: CalendarEvent[] = [];
             const results = await Promise.all(
               mavCals.map((cal) =>
-                fetch(`/api/ghl/calendar-events?calendarId=${cal.id}&startTime=${start.toISOString()}&endTime=${end.toISOString()}`).then((r) => r.json())
+                apiFetch(`/api/ghl/calendar-events?calendarId=${cal.id}&startTime=${start.toISOString()}&endTime=${end.toISOString()}`).then((r) => r.json())
               )
             );
             results.forEach((data) => { if (data.events) allEvents.push(...data.events); });

@@ -9,6 +9,7 @@ import {
   Search,
 } from "lucide-react";
 import { MetaTableSkeleton } from "@/components/Skeleton";
+import { apiFetch } from "@/lib/api-fetch";
 import {
   LineChart,
   Line,
@@ -102,14 +103,14 @@ export default function CampaignsPage() {
       setLoading(true);
       setError("");
       try {
-        const res = await fetch("/api/meta/campaigns");
+        const res = await apiFetch("/api/meta/campaigns");
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         const camps = data.campaigns || [];
         setCampaigns(camps);
 
         // Fetch all campaign insights in ONE call (avoids rate limits)
-        const bulkRes = await fetch(`/api/meta/campaign-insights-bulk?date_preset=${datePreset}`);
+        const bulkRes = await apiFetch(`/api/meta/campaign-insights-bulk?date_preset=${datePreset}`);
         const bulkData = await bulkRes.json();
         const insightResults: Record<string, InsightRow[]> = {};
         (bulkData.insights || []).forEach((row: InsightRow & { campaign_id?: string }) => {
@@ -137,7 +138,7 @@ export default function CampaignsPage() {
     if (!dailyInsights[campaignId]) {
       setExpandLoading(true);
       try {
-        const res = await fetch(
+        const res = await apiFetch(
           `/api/meta/campaign-insights?campaignId=${campaignId}&date_preset=${datePreset}&time_increment=1`
         );
         const data = await res.json();

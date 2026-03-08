@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { searchOpportunities, updateOpportunity } from "@/lib/ghl";
+import { authenticateRequest } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
+  const auth = await authenticateRequest(req);
+  if ("error" in auth) return auth.error;
   try {
     const pipelineId = req.nextUrl.searchParams.get("pipeline_id");
     if (!pipelineId) {
@@ -16,6 +19,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
+  const auth = await authenticateRequest(req);
+  if ("error" in auth) return auth.error;
   try {
     const body = await req.json();
     const { opportunityId, pipelineId, ...updates } = body;

@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { Loader2, ImageIcon, Search, LayoutGrid, List, X, Play } from "lucide-react";
 import { MetaTableSkeleton } from "@/components/Skeleton";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -118,10 +119,10 @@ export default function AdsPage() {
       setError("");
       try {
         const [adRes, adsetRes, campRes, adsMetaRes] = await Promise.all([
-          fetch(`/api/meta/ad-insights-bulk?date_preset=${datePreset}`),
-          fetch(`/api/meta/adset-insights-bulk?date_preset=${datePreset}`),
-          fetch(`/api/meta/campaign-insights-bulk?date_preset=${datePreset}`),
-          fetch(`/api/meta/ads`),
+          apiFetch(`/api/meta/ad-insights-bulk?date_preset=${datePreset}`),
+          apiFetch(`/api/meta/adset-insights-bulk?date_preset=${datePreset}`),
+          apiFetch(`/api/meta/campaign-insights-bulk?date_preset=${datePreset}`),
+          apiFetch(`/api/meta/ads`),
         ]);
         const adData = await adRes.json();
         const adsetData = await adsetRes.json();
@@ -184,7 +185,7 @@ export default function AdsPage() {
     if (ad.creative?.video_id) {
       setVideoLoading(true);
       try {
-        const res = await fetch(`/api/meta/video?videoId=${ad.creative.video_id}`);
+        const res = await apiFetch(`/api/meta/video?videoId=${ad.creative.video_id}`);
         const data = await res.json();
         if (data.source) setVideoSrc(data.source);
         if (data.picture) setVideoPicture(data.picture);

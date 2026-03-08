@@ -37,6 +37,7 @@ import {
   AreaChart,
   Area,
 } from "recharts";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -321,6 +322,8 @@ export default function AnalyticsOverview() {
   const [cohortMetrics, setCohortMetrics] = useState<CohortMetric[]>([]);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     async function fetchAll() {
       setLoading(true);
       setError("");
@@ -331,13 +334,13 @@ export default function AnalyticsOverview() {
         payParams.set("to", String(toUnix));
 
         const [metaRes, seoRes, payRes, mavRes, jobRes, ghlRes, cohortRes] = await Promise.all([
-          fetch(`/api/meta/account-insights?date_preset=${datePreset}`).then((r) => r.json()).catch(() => ({ insights: [] })),
-          fetch(`/api/seo/daily?startDate=${sd}&endDate=${ed}`).then((r) => r.json()).catch(() => ({ rows: [] })),
-          fetch(`/api/razorpay/payments?${payParams}`).then((r) => r.json()).catch(() => ({ payments: [] })),
-          fetch("/api/sales/maverick-sales-tracking").then((r) => r.json()).catch(() => ({ records: [] })),
-          fetch("/api/sales/jobin-sales-tracking").then((r) => r.json()).catch(() => ({ records: [] })),
-          fetch("/api/ghl/opportunities").then((r) => r.json()).catch(() => ({ opportunities: [] })),
-          fetch("/api/analytics/cohort-metrics").then((r) => r.json()).catch(() => ({ metrics: [] })),
+          apiFetch(`/api/meta/account-insights?date_preset=${datePreset}`, { signal: controller.signal }).then((r) => r.json()).catch(() => ({ insights: [] })),
+          apiFetch(`/api/seo/daily?startDate=${sd}&endDate=${ed}`, { signal: controller.signal }).then((r) => r.json()).catch(() => ({ rows: [] })),
+          apiFetch(`/api/razorpay/payments?${payParams}`, { signal: controller.signal }).then((r) => r.json()).catch(() => ({ payments: [] })),
+          apiFetch("/api/sales/maverick-sales-tracking", { signal: controller.signal }).then((r) => r.json()).catch(() => ({ records: [] })),
+          apiFetch("/api/sales/jobin-sales-tracking", { signal: controller.signal }).then((r) => r.json()).catch(() => ({ records: [] })),
+          apiFetch("/api/ghl/opportunities", { signal: controller.signal }).then((r) => r.json()).catch(() => ({ opportunities: [] })),
+          apiFetch("/api/analytics/cohort-metrics", { signal: controller.signal }).then((r) => r.json()).catch(() => ({ metrics: [] })),
         ]);
 
         const metaRaw = metaRes.insights;
@@ -365,12 +368,15 @@ export default function AnalyticsOverview() {
           })
         );
       } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
         setError(err instanceof Error ? err.message : "Failed to load analytics data");
       } finally {
         setLoading(false);
       }
     }
     fetchAll();
+
+    return () => controller.abort();
   }, [datePreset]);
 
   /* ── KPI Calculations ───────────────────────────── */

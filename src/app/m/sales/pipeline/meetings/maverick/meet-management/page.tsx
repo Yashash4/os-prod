@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { DataTableSkeleton } from "@/components/Skeleton";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -120,9 +121,9 @@ export default function MeetManagementPage() {
     async function init() {
       try {
         const [usersRes, recordsRes, calRes] = await Promise.all([
-          fetch("/api/ghl/users"),
-          fetch("/api/sales/maverick-meet-tracking"),
-          fetch("/api/ghl/calendars"),
+          apiFetch("/api/ghl/users"),
+          apiFetch("/api/sales/maverick-meet-tracking"),
+          apiFetch("/api/ghl/calendars"),
         ]);
         const usersData = await usersRes.json();
         const recordsData = await recordsRes.json();
@@ -154,7 +155,7 @@ export default function MeetManagementPage() {
             const allEvents: CalendarEvent[] = [];
             const results = await Promise.all(
               mavCals.map((cal) =>
-                fetch(
+                apiFetch(
                   `/api/ghl/calendar-events?calendarId=${cal.id}&startTime=${start.toISOString()}&endTime=${end.toISOString()}`
                 ).then((r) => r.json())
               )
@@ -204,7 +205,7 @@ export default function MeetManagementPage() {
       return;
     }
     try {
-      const res = await fetch("/api/ghl/opportunities", {
+      const res = await apiFetch("/api/ghl/opportunities", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -223,7 +224,7 @@ export default function MeetManagementPage() {
         )
       );
       // Also update our tracking table so it stays in sync
-      await fetch("/api/sales/call-booked-tracking", {
+      await apiFetch("/api/sales/call-booked-tracking", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ opportunity_id: record.opportunity_id, ghl_status: newStatus }),
@@ -236,7 +237,7 @@ export default function MeetManagementPage() {
   // Update Maverick's own fields (meet_notes, outcome — stored in our DB)
   const updateMeetRecord = async (oppId: string, updates: Record<string, unknown>) => {
     try {
-      const res = await fetch("/api/sales/maverick-meet-tracking", {
+      const res = await apiFetch("/api/sales/maverick-meet-tracking", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ opportunity_id: oppId, ...updates }),

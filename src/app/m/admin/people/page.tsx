@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { UserPlus, Trash2, Edit3, Check, X } from "lucide-react";
 import InviteUserModal from "@/components/admin/InviteUserModal";
 import type { Role } from "@/types";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface UserRow {
   id: string;
@@ -25,8 +26,8 @@ export default function PeoplePage() {
   const fetchData = useCallback(async () => {
     try {
       const [usersRes, rolesRes] = await Promise.all([
-        fetch("/api/admin/users"),
-        fetch("/api/admin/roles"),
+        apiFetch("/api/admin/users"),
+        apiFetch("/api/admin/roles"),
       ]);
       const usersData = await usersRes.json();
       const rolesData = await rolesRes.json();
@@ -45,8 +46,13 @@ export default function PeoplePage() {
 
   async function handleDelete(userId: string, name: string) {
     if (!confirm(`Delete user "${name || "this user"}"? This cannot be undone.`)) return;
-    await fetch(`/api/admin/users?user_id=${userId}`, { method: "DELETE" });
-    fetchData();
+    try {
+      const res = await apiFetch(`/api/admin/users?user_id=${userId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete user");
+      fetchData();
+    } catch {
+      alert("Failed to delete user. Please try again.");
+    }
   }
 
   function startEdit(user: UserRow) {
@@ -56,13 +62,18 @@ export default function PeoplePage() {
   }
 
   async function saveEdit(userId: string) {
-    await fetch("/api/admin/users", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: userId, full_name: editName, role_id: editRole || null }),
-    });
-    setEditingId(null);
-    fetchData();
+    try {
+      const res = await apiFetch("/api/admin/users", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId, full_name: editName, role_id: editRole || null }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      setEditingId(null);
+      fetchData();
+    } catch {
+      alert("Failed to save changes. Please try again.");
+    }
   }
 
   function getInitials(name: string | null, email: string) {
@@ -74,7 +85,7 @@ export default function PeoplePage() {
         .toUpperCase()
         .slice(0, 2);
     }
-    return email[0].toUpperCase();
+    return email?.[0]?.toUpperCase() || "?";
   }
 
   if (loading) {

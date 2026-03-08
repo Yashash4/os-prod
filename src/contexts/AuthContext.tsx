@@ -42,7 +42,11 @@ async function fetchUserData(userId: string, email: string): Promise<{ user: Aut
     .eq("id", userId)
     .single();
 
-  const role = (profile?.role as unknown as Role) ?? null;
+  const rawRole = profile?.role;
+  const role: Role | null =
+    rawRole && typeof rawRole === "object" && !Array.isArray(rawRole) && "id" in rawRole
+      ? (rawRole as unknown as Role)
+      : null;
 
   return {
     user: {

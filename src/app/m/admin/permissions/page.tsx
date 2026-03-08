@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { ChevronRight, ChevronDown, Search } from "lucide-react";
 import type { Role, Module } from "@/types";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface RoleModule {
   role_id: string;
@@ -99,24 +100,25 @@ export default function PermissionsPage() {
 
   const fetchPermissions = useCallback(async () => {
     try {
-      const res = await fetch("/api/admin/permissions");
+      const res = await apiFetch("/api/admin/permissions");
       const data = await res.json();
       setRoles(data.roles || []);
       setModules(data.modules || []);
       setRoleModules(data.roleModules || []);
-      if (!selectedRoleId && data.roles?.length) {
-        setSelectedRoleId(data.roles[0].id);
-      }
+      setSelectedRoleId((prev) => {
+        if (!prev && data.roles?.length) return data.roles[0].id;
+        return prev;
+      });
     } catch {
       // silently fail
     } finally {
       setLoading(false);
     }
-  }, [selectedRoleId]);
+  }, []);
 
   const fetchUsers = useCallback(async () => {
     try {
-      const res = await fetch("/api/admin/users");
+      const res = await apiFetch("/api/admin/users");
       const data = await res.json();
       setUsers(data.users || []);
     } catch {
@@ -127,7 +129,7 @@ export default function PermissionsPage() {
   const fetchUserOverrides = useCallback(async (userId: string) => {
     if (!userId) { setUserOverrides([]); return; }
     try {
-      const res = await fetch(`/api/admin/permissions?user_id=${userId}`);
+      const res = await apiFetch(`/api/admin/permissions?user_id=${userId}`);
       const data = await res.json();
       setUserOverrides(data.userOverrides || []);
     } catch {
@@ -187,7 +189,7 @@ export default function PermissionsPage() {
       );
     }
 
-    const res = await fetch("/api/admin/permissions", {
+    const res = await apiFetch("/api/admin/permissions", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -230,30 +232,38 @@ export default function PermissionsPage() {
 
     setSaving((prev) => new Set(prev).add(moduleId));
 
-    if (current) {
-      await fetch(`/api/admin/permissions?user_id=${selectedUserId}&module_id=${moduleId}`, { method: "DELETE" });
-    } else if (roleHas) {
-      await fetch("/api/admin/permissions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: selectedUserId, module_id: moduleId, access_type: "revoke" }),
-      });
-    } else {
-      await fetch("/api/admin/permissions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: selectedUserId, module_id: moduleId, access_type: "grant" }),
+    try {
+      let res: Response;
+      if (current) {
+        res = await apiFetch(`/api/admin/permissions?user_id=${selectedUserId}&module_id=${moduleId}`, { method: "DELETE" });
+      } else if (roleHas) {
+        res = await apiFetch("/api/admin/permissions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: selectedUserId, module_id: moduleId, access_type: "revoke" }),
+        });
+      } else {
+        res = await apiFetch("/api/admin/permissions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: selectedUserId, module_id: moduleId, access_type: "grant" }),
+        });
+      }
+
+      if (!res.ok) throw new Error("Failed to update override");
+
+      fetchUserOverrides(selectedUserId);
+      const mod = modules.find((m) => m.id === moduleId);
+      showToast(`${mod?.name || "Module"} override updated`);
+    } catch {
+      showToast("Failed to save — please retry");
+    } finally {
+      setSaving((prev) => {
+        const next = new Set(prev);
+        next.delete(moduleId);
+        return next;
       });
     }
-
-    setSaving((prev) => {
-      const next = new Set(prev);
-      next.delete(moduleId);
-      return next;
-    });
-    fetchUserOverrides(selectedUserId);
-    const mod = modules.find((m) => m.id === moduleId);
-    showToast(`${mod?.name || "Module"} override updated`);
   }
 
   function renderModuleRow(node: ModuleNode, depth: number, mode: "role" | "user") {

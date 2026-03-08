@@ -1,13 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { authenticateRequest } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
+  const authResult = await authenticateRequest(req);
+  if ("error" in authResult) return authResult.error;
+
   try {
+    // Use the authenticated user's identity — ignore query params for user_id
+    // role_id is still accepted because it comes from the user's own profile
     const { searchParams } = new URL(req.url);
     const roleId = searchParams.get("role_id");
-    const userId = searchParams.get("user_id");
 
     if (!roleId) {
+      return NextResponse.json({ modules: [] });
+    }
+
+    // Verify the role_id belongs to the authenticated user
+    const { data: userProfile } = await supabaseAdmin
+      .from("users")
+      .select("role_id")
+      .eq("id", authResult.auth.userId)
+      .single();
+
+    if (userProfile?.role_id !== roleId && !authResult.auth.isAdmin) {
       return NextResponse.json({ modules: [] });
     }
 
@@ -21,16 +37,11 @@ export async function GET(req: NextRequest) {
       .map((rm: Record<string, unknown>) => rm.module)
       .filter((m: unknown) => m && (m as { is_active: boolean }).is_active);
 
-    // If no userId, just return role modules
-    if (!userId) {
-      return NextResponse.json({ modules: roleModules });
-    }
-
-    // Get user overrides
+    // Get user overrides using the authenticated user's ID
     const { data: overrides } = await supabaseAdmin
       .from("user_module_overrides")
       .select("module_id, access_type")
-      .eq("user_id", userId);
+      .eq("user_id", authResult.auth.userId);
 
     if (!overrides || overrides.length === 0) {
       return NextResponse.json({ modules: roleModules });

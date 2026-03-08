@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import DateRangeFilter, { type DateRange, aggregateByGranularity } from "@/components/seo/DateRangeFilter";
 import { DashboardSkeleton } from "@/components/Skeleton";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Helpers ─────────────────────────────────────── */
 
@@ -116,14 +117,14 @@ export default function SeoDashboard() {
     setError("");
     try {
       const fetches = [
-        fetch(`/api/seo/daily?startDate=${r.startDate}&endDate=${r.endDate}`),
-        fetch(`/api/seo/search-analytics?startDate=${r.startDate}&endDate=${r.endDate}&dimensions=query&rowLimit=10`),
-        fetch(`/api/seo/search-analytics?startDate=${r.startDate}&endDate=${r.endDate}&dimensions=page&rowLimit=10`),
+        apiFetch(`/api/seo/daily?startDate=${r.startDate}&endDate=${r.endDate}`),
+        apiFetch(`/api/seo/search-analytics?startDate=${r.startDate}&endDate=${r.endDate}&dimensions=query&rowLimit=10`),
+        apiFetch(`/api/seo/search-analytics?startDate=${r.startDate}&endDate=${r.endDate}&dimensions=page&rowLimit=10`),
       ];
       if (r.compare) {
         fetches.push(
-          fetch(`/api/seo/daily?startDate=${r.prevStartDate}&endDate=${r.prevEndDate}`),
-          fetch(`/api/seo/search-analytics?startDate=${r.prevStartDate}&endDate=${r.prevEndDate}&dimensions=query&rowLimit=10`),
+          apiFetch(`/api/seo/daily?startDate=${r.prevStartDate}&endDate=${r.prevEndDate}`),
+          apiFetch(`/api/seo/search-analytics?startDate=${r.prevStartDate}&endDate=${r.prevEndDate}&dimensions=query&rowLimit=10`),
         );
       }
 
@@ -144,7 +145,7 @@ export default function SeoDashboard() {
 
       // GBP non-blocking
       try {
-        const gbpRes = await fetch(`/api/seo/gbp/performance?startDate=${r.startDate}&endDate=${r.endDate}`);
+        const gbpRes = await apiFetch(`/api/seo/gbp/performance?startDate=${r.startDate}&endDate=${r.endDate}`);
         const gbpData = await gbpRes.json();
         if (!gbpData.error) setGbpMetrics(gbpData.metrics || []);
       } catch { /* GBP unavailable */ }

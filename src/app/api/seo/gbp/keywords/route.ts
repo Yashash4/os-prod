@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSearchKeywords } from "@/lib/gmb";
+import { authenticateRequest } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
+  const auth = await authenticateRequest(req);
+  if ("error" in auth) return auth.error;
   try {
     const yearMonth = req.nextUrl.searchParams.get("yearMonth") || "";
 

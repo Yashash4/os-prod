@@ -9,6 +9,7 @@ import {
   CheckCircle, AlertTriangle, XCircle, Shield,
 } from "lucide-react";
 import { SitemapSkeleton } from "@/components/Skeleton";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Helpers ─────────────────────────────────────── */
 
@@ -92,7 +93,7 @@ export default function SitemapPage() {
     (async () => {
       setLoading(true);
       try {
-        const res = await fetch("/api/seo/sitemaps");
+        const res = await apiFetch("/api/seo/sitemaps");
         const data = await res.json();
         setSitemaps(data.sitemaps || []);
       } catch (err) {

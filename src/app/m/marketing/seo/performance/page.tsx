@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import DateRangeFilter, { type DateRange } from "@/components/seo/DateRangeFilter";
 import { PerformanceSkeleton } from "@/components/Skeleton";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* -- Helpers ------------------------------------------------- */
 
@@ -90,19 +91,19 @@ export default function SearchPerformancePage() {
     try {
       const base = `/api/seo/search-analytics?startDate=${range.startDate}&endDate=${range.endDate}&type=${searchType}`;
       const fetches: Promise<Response>[] = [
-        fetch(`${base}&dimensions=query&rowLimit=500`),
-        fetch(`${base}&dimensions=page&rowLimit=500`),
-        fetch(`${base}&dimensions=country&rowLimit=50`),
-        fetch(`${base}&dimensions=device`),
-        fetch(`/api/seo/daily?startDate=${range.startDate}&endDate=${range.endDate}`),
+        apiFetch(`${base}&dimensions=query&rowLimit=500`),
+        apiFetch(`${base}&dimensions=page&rowLimit=500`),
+        apiFetch(`${base}&dimensions=country&rowLimit=50`),
+        apiFetch(`${base}&dimensions=device`),
+        apiFetch(`/api/seo/daily?startDate=${range.startDate}&endDate=${range.endDate}`),
       ];
 
       // If compare mode, also fetch previous period
       if (range.compare) {
         const prevBase = `/api/seo/search-analytics?startDate=${range.prevStartDate}&endDate=${range.prevEndDate}&type=${searchType}`;
         fetches.push(
-          fetch(`${prevBase}&dimensions=query&rowLimit=500`),
-          fetch(`${prevBase}&dimensions=page&rowLimit=500`),
+          apiFetch(`${prevBase}&dimensions=query&rowLimit=500`),
+          apiFetch(`${prevBase}&dimensions=page&rowLimit=500`),
         );
       }
 

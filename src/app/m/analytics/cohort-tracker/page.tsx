@@ -29,6 +29,7 @@ import {
   Legend,
   ReferenceLine,
 } from "recharts";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -244,9 +245,9 @@ export default function CohortTrackerPage() {
   const todayRowRef = useRef<HTMLTableRowElement | null>(null);
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
 
-  const fetchMetrics = useCallback(async () => {
+  const fetchMetrics = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch("/api/analytics/cohort-metrics");
+      const res = await apiFetch("/api/analytics/cohort-metrics", { signal });
       const json = await res.json();
       if (json.metrics) {
         setMetrics(json.metrics);
@@ -260,13 +261,14 @@ export default function CohortTrackerPage() {
         }
       }
     } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") return;
       console.error("Failed to fetch cohort metrics:", e);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const fetchLiveData = useCallback(async () => {
+  const fetchLiveData = useCallback(async (signal?: AbortSignal) => {
     const today = new Date().toISOString().slice(0, 10);
     const untilDate = today <= CAMPAIGN_END ? today : CAMPAIGN_END;
     let totalAdSpend = 0;
@@ -279,8 +281,9 @@ export default function CohortTrackerPage() {
 
     // ── 1. Meta Ad Spend ──
     try {
-      const metaRes = await fetch(
-        `/api/meta/account-insights-range?since=${ADS_START}&until=${untilDate}&time_increment=1`
+      const metaRes = await apiFetch(
+        `/api/meta/account-insights-range?since=${ADS_START}&until=${untilDate}&time_increment=1`,
+        { signal }
       ).then((r) => r.json());
       interface MetaRow { date_start: string; spend?: string }
       const metaRows: MetaRow[] = metaRes.insights || [];
@@ -288,20 +291,22 @@ export default function CohortTrackerPage() {
       const todayRow = metaRows.find((r) => r.date_start === today);
       todayAdSpend = todayRow ? parseFloat(todayRow.spend || "0") : 0;
     } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") return;
       console.error("Live: Meta fetch failed", e);
     }
 
     // ── 2. Optins ──
     try {
-      const optinRes = await fetch("/api/sales/optin-tracking").then((r) => r.json());
+      const optinRes = await apiFetch("/api/sales/optin-tracking", { signal }).then((r) => r.json());
       totalOptins = (optinRes.records || []).length;
     } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") return;
       console.error("Live: Optin fetch failed", e);
     }
 
     // ── 3. Meetings booked ──
     try {
-      const callBookedRes = await fetch("/api/sales/call-booked-tracking").then((r) => r.json());
+      const callBookedRes = await apiFetch("/api/sales/call-booked-tracking", { signal }).then((r) => r.json());
       interface CallRow { created_at?: string }
       const callBooked: CallRow[] = callBookedRes.records || [];
       totalMeetings = callBooked.filter((r) => {
@@ -309,14 +314,15 @@ export default function CohortTrackerPage() {
         return d >= CAMPAIGN_START && d <= CAMPAIGN_END;
       }).length;
     } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") return;
       console.error("Live: Call booked fetch failed", e);
     }
 
     // ── 4. Admissions + Revenue ──
     try {
       const [mavSalesRes, jobSalesRes] = await Promise.all([
-        fetch("/api/sales/maverick-sales-tracking").then((r) => r.json()),
-        fetch("/api/sales/jobin-sales-tracking").then((r) => r.json()),
+        apiFetch("/api/sales/maverick-sales-tracking", { signal }).then((r) => r.json()),
+        apiFetch("/api/sales/jobin-sales-tracking", { signal }).then((r) => r.json()),
       ]);
       interface SaleRow { opportunity_id: string; fees_collected?: number }
       const mavSales: SaleRow[] = mavSalesRes.records || [];
@@ -332,14 +338,16 @@ export default function CohortTrackerPage() {
       totalAdmissions = allWonDeals.length;
       totalRevenue = allWonDeals.reduce((s, r) => s + (r.fees_collected || 0), 0);
     } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") return;
       console.error("Live: Sales fetch failed", e);
     }
 
     // ── 5. Payments ──
     try {
-      const payRes = await fetch("/api/sales/payment-done-tracking").then((r) => r.json());
+      const payRes = await apiFetch("/api/sales/payment-done-tracking", { signal }).then((r) => r.json());
       totalPayments = (payRes.records || []).length;
     } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") return;
       console.error("Live: Payment fetch failed", e);
     }
 
@@ -347,8 +355,10 @@ export default function CohortTrackerPage() {
   }, []);
 
   useEffect(() => {
-    fetchMetrics();
-    fetchLiveData();
+    const controller = new AbortController();
+    fetchMetrics(controller.signal);
+    fetchLiveData(controller.signal);
+    return () => controller.abort();
   }, [fetchMetrics, fetchLiveData]);
 
   // Auto-sync if stale > 6 hours
@@ -364,7 +374,7 @@ export default function CohortTrackerPage() {
   const triggerSync = async () => {
     setSyncing(true);
     try {
-      const res = await fetch("/api/analytics/cohort-sync", {
+      const res = await apiFetch("/api/analytics/cohort-sync", {
         method: "POST",
         headers: { "x-cron-secret": "manual-trigger" },
       });

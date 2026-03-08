@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Plus, Trash2, Edit3, Check, X, Shield } from "lucide-react";
 import type { Role } from "@/types";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface RoleWithCount extends Role {
   user_count: number;
@@ -24,7 +25,7 @@ export default function RolesPage() {
 
   const fetchRoles = useCallback(async () => {
     try {
-      const res = await fetch("/api/admin/roles");
+      const res = await apiFetch("/api/admin/roles");
       const data = await res.json();
       setRoles(data.roles || []);
     } catch {
@@ -43,7 +44,7 @@ export default function RolesPage() {
     if (!newName.trim()) return;
     setSaving(true);
     setError("");
-    const res = await fetch("/api/admin/roles", {
+    const res = await apiFetch("/api/admin/roles", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: newName, description: newDesc, is_admin: newIsAdmin }),
@@ -63,7 +64,7 @@ export default function RolesPage() {
 
   async function handleSave(id: string) {
     setError("");
-    const res = await fetch("/api/admin/roles", {
+    const res = await apiFetch("/api/admin/roles", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, name: editName, description: editDesc, is_admin: editIsAdmin }),
@@ -80,7 +81,7 @@ export default function RolesPage() {
   async function handleDelete(id: string, name: string) {
     if (!confirm(`Delete "${name}" role? Users assigned to it will lose access.`)) return;
     setError("");
-    const res = await fetch(`/api/admin/roles?id=${id}`, { method: "DELETE" });
+    const res = await apiFetch(`/api/admin/roles?id=${id}`, { method: "DELETE" });
     const data = await res.json();
     if (!res.ok) {
       setError(data.error);

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import type { Role } from "@/types";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface InviteUserModalProps {
   open: boolean;
@@ -37,7 +38,7 @@ export default function InviteUserModal({ open, onClose, onSuccess, roles }: Inv
     setError("");
 
     try {
-      const res = await fetch("/api/admin/users", {
+      const res = await apiFetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ full_name: fullName, email, password, role_id: roleId }),

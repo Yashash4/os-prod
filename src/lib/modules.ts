@@ -274,6 +274,46 @@ export const MODULE_REGISTRY: Omit<Module, "id" | "created_at">[] = [
     order: 6,
     is_active: true,
   },
+  {
+    name: "Failed Payments",
+    slug: "payments-failed",
+    description: "Track and follow up on failed payments",
+    icon: "AlertTriangle",
+    parent_slug: "payments",
+    path: "/m/payments/failed-payments",
+    order: 7,
+    is_active: true,
+  },
+  {
+    name: "Send Links",
+    slug: "payments-send-links",
+    description: "Quick-send payment links to customers",
+    icon: "Send",
+    parent_slug: "payments",
+    path: "/m/payments/send-links",
+    order: 8,
+    is_active: true,
+  },
+  {
+    name: "Collection Log",
+    slug: "payments-collection-log",
+    description: "Daily collection reconciliation sheet",
+    icon: "ClipboardList",
+    parent_slug: "payments",
+    path: "/m/payments/collection-log",
+    order: 9,
+    is_active: true,
+  },
+  {
+    name: "Outstanding",
+    slug: "payments-outstanding",
+    description: "Outstanding and overdue invoices follow-up",
+    icon: "AlertCircle",
+    parent_slug: "payments",
+    path: "/m/payments/outstanding",
+    order: 10,
+    is_active: true,
+  },
   // ── Marketing ─────────────────────────────────────
   {
     name: "Marketing",
@@ -648,6 +688,9 @@ export const ICON_MAP: Record<string, string> = {
   ScrollText: "ScrollText",
   Shield: "Shield",
   Key: "Key",
+  AlertTriangle: "AlertTriangle",
+  Send: "Send",
+  AlertCircle: "AlertCircle",
 };
 
 export function getModuleBySlug(slug: string) {

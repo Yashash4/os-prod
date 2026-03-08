@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRefunds } from "@/lib/razorpay";
+import { authenticateRequest } from "@/lib/api-auth";
 
 let cache: { data: unknown[]; ts: number; key: string } | null = null;
 let inflight: { promise: Promise<unknown[]>; key: string } | null = null;
 const CACHE_TTL = 120_000;
 
 export async function GET(req: NextRequest) {
+  const auth = await authenticateRequest(req);
+  if ("error" in auth) return auth.error;
   try {
     const from = req.nextUrl.searchParams.get("from") || undefined;
     const to = req.nextUrl.searchParams.get("to") || undefined;

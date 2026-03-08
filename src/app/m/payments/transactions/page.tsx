@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { PaymentsTableSkeleton } from "@/components/Skeleton";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -144,7 +145,7 @@ export default function TransactionsPage() {
         if (from) params.set("from", String(from));
         if (to) params.set("to", String(to));
 
-        const res = await fetch(`/api/razorpay/payments?${params}`);
+        const res = await apiFetch(`/api/razorpay/payments?${params}`);
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         setAllPayments(data.payments || []);
@@ -161,7 +162,7 @@ export default function TransactionsPage() {
 
   const fetchGroups = useCallback(async () => {
     try {
-      const res = await fetch("/api/razorpay/amount-groups");
+      const res = await apiFetch("/api/razorpay/amount-groups");
       const data = await res.json();
       setGroups(data.groups || []);
     } catch { /* ignore */ }
@@ -192,7 +193,7 @@ export default function TransactionsPage() {
     if (min == null && max == null) return;
 
     try {
-      await fetch("/api/razorpay/amount-groups", {
+      await apiFetch("/api/razorpay/amount-groups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, min_amount: min, max_amount: max }),
@@ -205,7 +206,7 @@ export default function TransactionsPage() {
 
   async function deleteGroup(id: string) {
     try {
-      await fetch(`/api/razorpay/amount-groups?id=${id}`, { method: "DELETE" });
+      await apiFetch(`/api/razorpay/amount-groups?id=${id}`, { method: "DELETE" });
       if (activeGroupId === id) {
         setActiveGroupId(null);
         setMinAmount("");

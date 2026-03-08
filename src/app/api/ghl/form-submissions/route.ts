@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFormSubmissionsByContact } from "@/lib/ghl";
+import { authenticateRequest } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
+  const auth = await authenticateRequest(req);
+  if ("error" in auth) return auth.error;
   try {
     const contactId = req.nextUrl.searchParams.get("contactId");
 

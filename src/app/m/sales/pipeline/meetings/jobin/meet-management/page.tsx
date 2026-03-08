@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { DataTableSkeleton } from "@/components/Skeleton";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -113,9 +114,9 @@ export default function JobinMeetManagementPage() {
     async function init() {
       try {
         const [usersRes, recordsRes, calRes] = await Promise.all([
-          fetch("/api/ghl/users"),
-          fetch("/api/sales/jobin-meet-tracking"),
-          fetch("/api/ghl/calendars"),
+          apiFetch("/api/ghl/users"),
+          apiFetch("/api/sales/jobin-meet-tracking"),
+          apiFetch("/api/ghl/calendars"),
         ]);
         const usersData = await usersRes.json();
         const recordsData = await recordsRes.json();
@@ -146,7 +147,7 @@ export default function JobinMeetManagementPage() {
             const allEvents: CalendarEvent[] = [];
             const results = await Promise.all(
               jobinCals.map((cal) =>
-                fetch(
+                apiFetch(
                   `/api/ghl/calendar-events?calendarId=${cal.id}&startTime=${start.toISOString()}&endTime=${end.toISOString()}`
                 ).then((r) => r.json())
               )
@@ -192,7 +193,7 @@ export default function JobinMeetManagementPage() {
       return;
     }
     try {
-      const res = await fetch("/api/ghl/opportunities", {
+      const res = await apiFetch("/api/ghl/opportunities", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -209,7 +210,7 @@ export default function JobinMeetManagementPage() {
           r.opportunity_id === record.opportunity_id ? { ...r, ghl_status: newStatus } : r
         )
       );
-      await fetch("/api/sales/call-booked-tracking", {
+      await apiFetch("/api/sales/call-booked-tracking", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ opportunity_id: record.opportunity_id, ghl_status: newStatus }),
@@ -221,7 +222,7 @@ export default function JobinMeetManagementPage() {
 
   const updateMeetRecord = async (oppId: string, updates: Record<string, unknown>) => {
     try {
-      const res = await fetch("/api/sales/jobin-meet-tracking", {
+      const res = await apiFetch("/api/sales/jobin-meet-tracking", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ opportunity_id: oppId, ...updates }),

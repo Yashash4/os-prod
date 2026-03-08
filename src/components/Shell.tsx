@@ -7,6 +7,7 @@ import Breadcrumb from "./Breadcrumb";
 import { buildBreadcrumbFromPath } from "@/lib/modules";
 import { useAuth } from "@/contexts/AuthContext";
 import { LogOut, Bell } from "lucide-react";
+import NavTree from "./NavTree";
 
 export default function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -28,6 +29,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-50 bg-surface border-b border-border">
         <div className="flex items-center justify-between px-4 h-12">
           <div className="flex items-center gap-3">
+            <NavTree />
             <Link href="/" className="flex-shrink-0 -my-1">
               <Image
                 src="/logo.png"

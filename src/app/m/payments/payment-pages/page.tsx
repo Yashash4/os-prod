@@ -15,6 +15,7 @@ import {
   Check,
 } from "lucide-react";
 import { PaymentsTableSkeleton } from "@/components/Skeleton";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -293,7 +294,7 @@ export default function PaymentPagesPage() {
       setLoading(true);
       setError("");
       try {
-        const res = await fetch("/api/razorpay/payment-pages");
+        const res = await apiFetch("/api/razorpay/payment-pages");
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         setPages(data.pages || []);

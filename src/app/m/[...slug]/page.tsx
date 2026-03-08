@@ -1,12 +1,13 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useState, useMemo } from "react";
 import Shell from "@/components/Shell";
 import AuthGuard from "@/components/AuthGuard";
 import ModuleCard from "@/components/ModuleCard";
 import { getChildrenByParentSlug, MODULE_REGISTRY } from "@/lib/modules";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Module } from "@/types";
+import { apiFetch } from "@/lib/api-fetch";
 
 type ModuleLike = Omit<Module, "id" | "created_at"> | Module;
 
@@ -22,12 +23,13 @@ export default function ModulePage({ params }: ModulePageProps) {
   const [loaded, setLoaded] = useState(false);
 
   const currentModule = MODULE_REGISTRY.find((m) => m.slug === currentSlug);
-  const allChildren = getChildrenByParentSlug(currentSlug);
+  const allChildren = useMemo(() => getChildrenByParentSlug(currentSlug), [currentSlug]);
 
   useEffect(() => {
     async function load() {
       if (!role || !user) {
-        setFilteredChildren(allChildren);
+        // No auth context yet — show nothing (deny by default)
+        setFilteredChildren([]);
         setLoaded(true);
         return;
       }
@@ -39,20 +41,22 @@ export default function ModulePage({ params }: ModulePageProps) {
       }
 
       try {
-        const res = await fetch(`/api/modules/effective?role_id=${role.id}&user_id=${user.id}`);
+        const res = await apiFetch(`/api/modules/effective?role_id=${role.id}&user_id=${user.id}`);
+        if (!res.ok) throw new Error("Failed to fetch modules");
         const data = await res.json();
         const effective: Module[] = data.modules || [];
         const effectiveSlugs = new Set(effective.map((m: Module) => m.slug));
         const allowed = allChildren.filter((child) => effectiveSlugs.has(child.slug));
         setFilteredChildren(allowed);
       } catch {
-        setFilteredChildren(allChildren);
+        // Deny by default on error — don't show all modules
+        setFilteredChildren([]);
       } finally {
         setLoaded(true);
       }
     }
     load();
-  }, [user, role, isAdmin, currentSlug]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, role, isAdmin, currentSlug, allChildren]);
 
   return (
     <AuthGuard>

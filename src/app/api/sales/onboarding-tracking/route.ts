@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { authenticateRequest } from "@/lib/api-auth";
 
 const DEFAULT_CHECKLIST = [
   { id: "intro", label: "Introduction call completed", done: false },
@@ -12,7 +13,9 @@ const DEFAULT_CHECKLIST = [
 ];
 
 // GET: Auto-sync onboarding with won deals, then return merged records
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const auth = await authenticateRequest(req);
+  if ("error" in auth) return auth.error;
   try {
     // 1. Fetch all won deals from call_booked_tracking
     const { data: wonDeals, error: wonErr } = await supabaseAdmin
@@ -57,7 +60,7 @@ export async function GET() {
       const { error: insertErr } = await supabaseAdmin
         .from("onboarding_tracking")
         .upsert(newRecords, { onConflict: "opportunity_id" });
-      if (insertErr) console.error("Auto-insert error:", insertErr);
+      if (insertErr) throw insertErr;
     }
 
     // 4. Remove onboarding records for deals no longer won
@@ -70,7 +73,7 @@ export async function GET() {
         .from("onboarding_tracking")
         .delete()
         .in("opportunity_id", staleIds);
-      if (delErr) console.error("Auto-delete error:", delErr);
+      if (delErr) throw delErr;
     }
 
     // 5. Re-fetch the final merged state
@@ -126,6 +129,8 @@ export async function GET() {
 
 // PUT: Update an onboarding record
 export async function PUT(req: NextRequest) {
+  const auth = await authenticateRequest(req);
+  if ("error" in auth) return auth.error;
   try {
     const body = await req.json();
     const { opportunity_id, ...updates } = body;

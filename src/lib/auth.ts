@@ -32,7 +32,9 @@ export async function getCurrentUser() {
     email: user.email!,
     full_name: profile?.full_name ?? null,
     avatar_url: profile?.avatar_url ?? undefined,
-    role: (profile?.role as unknown as Role) ?? null,
+    role: profile?.role && typeof profile.role === "object" && !Array.isArray(profile.role) && "id" in profile.role
+      ? (profile.role as unknown as Role)
+      : null,
   };
 }
 

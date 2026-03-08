@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { authenticateRequest } from "@/lib/api-auth";
 
 // GET: Fetch won leads from call_booked_tracking joined with sales tracking data
 // Only shows leads with ghl_status='won' — sales data persists because
 // sync no longer deletes records when leads move stages in GHL
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const auth = await authenticateRequest(req);
+  if ("error" in auth) return auth.error;
   try {
     // Fetch call_booked_tracking records with ghl_status = 'won'
     const { data: callBooked, error: cbError } = await supabaseAdmin
@@ -51,6 +54,8 @@ export async function GET() {
 
 // PUT: Upsert a sales tracking record
 export async function PUT(req: NextRequest) {
+  const auth = await authenticateRequest(req);
+  if ("error" in auth) return auth.error;
   try {
     const body = await req.json();
     const { opportunity_id, ...updates } = body;
