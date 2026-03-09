@@ -6,7 +6,7 @@ import {
 } from "recharts";
 import {
   Loader2, FileCheck, AlertTriangle, Globe,
-  CheckCircle, XCircle, Clock, Smartphone, Zap,
+  CheckCircle, XCircle, Clock, Smartphone, Zap, Download,
 } from "lucide-react";
 import { IndexingSkeleton } from "@/components/Skeleton";
 import { apiFetch } from "@/lib/api-fetch";
@@ -17,6 +17,17 @@ const COLORS = ["#10b981", "#ef4444", "#f59e0b", "#6366f1", "#8b5cf6"];
 const TOOLTIP_STYLE = { contentStyle: { background: "#1e1e2e", border: "1px solid #333", borderRadius: 8 }, itemStyle: { color: "#e2e8f0" }, labelStyle: { color: "#94a3b8" } };
 
 function num(n: number) { return n.toLocaleString("en-IN"); }
+
+function downloadCSV(filename: string, headers: string[], rows: string[][]) {
+  const csv = [headers.join(","), ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 /* ── Types ───────────────────────────────────────── */
 
@@ -181,7 +192,34 @@ export default function IndexingPage() {
 
   return (
     <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
-      <h1 className="text-2xl font-bold">Pages & Indexing</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold">Pages & Indexing</h1>
+        <button
+          onClick={() => {
+            if (inspections.length > 0) {
+              const headers = ["URL", "Index State", "Last Crawl", "Crawl Status", "Verdict", "Mobile Usability"];
+              const rows = inspections.map((r) => [
+                r.url, r.indexingState, r.lastCrawlTime ? new Date(r.lastCrawlTime).toLocaleDateString() : "-",
+                r.crawlStatus || "-", r.verdict || "-", r.mobileUsability || "-",
+              ]);
+              downloadCSV("seo-indexing-inspections.csv", headers, rows);
+            } else {
+              const headers = ["Sitemap", "Submitted", "Indexed", "Rate", "Last Submitted", "Last Downloaded", "Warnings", "Errors"];
+              const rows = sitemaps.map((s) => {
+                const sub = (s.contents || []).reduce((a, c) => a + (Number(c.submitted) || 0), 0);
+                const idx = (s.contents || []).reduce((a, c) => a + (Number(c.indexed) || 0), 0);
+                return [s.path, String(sub), String(idx), sub > 0 ? ((idx / sub) * 100).toFixed(1) + "%" : "-",
+                  s.lastSubmitted || "-", s.lastDownloaded || "-", s.warnings, s.errors];
+              });
+              downloadCSV("seo-indexing-sitemaps.csv", headers, rows);
+            }
+          }}
+          className="flex items-center gap-1.5 px-3 py-2 bg-accent/10 text-accent border border-accent/20 rounded-lg text-sm hover:bg-accent/20 transition-colors"
+        >
+          <Download className="w-4 h-4" />
+          Export CSV
+        </button>
+      </div>
 
       {error && <div className="bg-red-500/10 text-red-400 px-4 py-2 rounded-lg text-sm">{error}</div>}
 

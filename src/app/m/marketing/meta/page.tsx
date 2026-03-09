@@ -13,6 +13,11 @@ import {
   Target,
   BarChart3,
   ImageIcon,
+  ArrowUpRight,
+  ArrowDownRight,
+  AlertTriangle,
+  Trophy,
+  Wallet,
 } from "lucide-react";
 import { MetaDashboardSkeleton } from "@/components/Skeleton";
 import { apiFetch } from "@/lib/api-fetch";
@@ -135,16 +140,33 @@ function getConversions(actions?: { action_type: string; value: string }[]) {
 
 /* ── Reusable Components ──────────────────────────── */
 
+function DeltaIndicator({ current, previous, invert = false }: { current: number; previous: number; invert?: boolean }) {
+  if (!previous || previous === 0) return null;
+  const pct = ((current - previous) / previous) * 100;
+  const isPositive = invert ? pct < 0 : pct > 0;
+  return (
+    <span className={`flex items-center gap-0.5 text-[10px] font-medium ${isPositive ? "text-green-400" : "text-red-400"}`}>
+      {pct > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+      {Math.abs(pct).toFixed(1)}%
+    </span>
+  );
+}
+
 function StatCard({
   label,
   value,
   icon: Icon,
   color = "text-accent",
+  prevValue,
+  invert,
 }: {
   label: string;
   value: string | number;
   icon?: React.ElementType;
   color?: string;
+  prevValue?: number;
+  currentNum?: number;
+  invert?: boolean;
 }) {
   return (
     <div className="card rounded-xl p-4 transition-all">
@@ -153,6 +175,9 @@ function StatCard({
         <span className="text-[10px] text-muted uppercase tracking-wider">{label}</span>
       </div>
       <span className="text-xl font-bold text-foreground">{value}</span>
+      {prevValue !== undefined && typeof value === "string" && (
+        <DeltaIndicator current={parseFloat(value.replace(/[₹,%x]/g, "").replace(/,/g, ""))} previous={prevValue} invert={invert} />
+      )}
     </div>
   );
 }
@@ -190,6 +215,12 @@ export default function MetaDashboard() {
   const [deviceData, setDeviceData] = useState<InsightRow[]>([]);
   const [adsMeta, setAdsMeta] = useState<AdMeta[]>([]);
   const [adInsightsBulk, setAdInsightsBulk] = useState<BulkAdInsight[]>([]);
+  const [compareData, setCompareData] = useState<{ current: InsightRow[]; previous: InsightRow[] }>({ current: [], previous: [] });
+  const [anomalies, setAnomalies] = useState<{ campaign_name: string; metric: string; value: number; mean: number; direction: string }[]>([]);
+  const [topBottom, setTopBottom] = useState<{ top: InsightRow[]; bottom: InsightRow[]; metric: string }>({ top: [], bottom: [], metric: "spend" });
+  const [forecast, setForecast] = useState<{ avg_daily_spend: number; projected_monthly_spend: number; days_remaining: number } | null>(null);
+  const [budgetPlans, setBudgetPlans] = useState<{ planned_budget: number; actual_spend: number }[]>([]);
+  const [tbMetric, setTbMetric] = useState("spend");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -231,6 +262,21 @@ export default function MetaDashboard() {
         setDeviceData(devD.data || []);
         setAdsMeta(adsMetaData.ads || []);
         setAdInsightsBulk(adBulkData.insights || []);
+
+        // Fetch enhanced widgets (non-blocking)
+        Promise.all([
+          apiFetch(`/api/meta/account-insights-compare?date_preset=${datePreset}&compare_preset=yesterday`).then(r => r.json()).catch(() => null),
+          apiFetch(`/api/meta/anomaly-detection`).then(r => r.json()).catch(() => null),
+          apiFetch(`/api/meta/top-bottom?metric=${tbMetric}&date_preset=${datePreset}`).then(r => r.json()).catch(() => null),
+          apiFetch(`/api/meta/spend-forecast`).then(r => r.json()).catch(() => null),
+          apiFetch(`/api/meta/budget-plans`).then(r => r.json()).catch(() => null),
+        ]).then(([cmp, anom, tb, fc, bp]) => {
+          if (cmp) setCompareData({ current: cmp.current || [], previous: cmp.previous || [] });
+          if (anom) setAnomalies(anom.anomalies || []);
+          if (tb) setTopBottom({ top: tb.top || [], bottom: tb.bottom || [], metric: tb.metric || "spend" });
+          if (fc) setForecast(fc);
+          if (bp) setBudgetPlans(bp.plans || []);
+        });
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load");
       } finally {
@@ -238,7 +284,17 @@ export default function MetaDashboard() {
       }
     }
     fetchAll();
-  }, [datePreset]);
+  }, [datePreset]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ── Re-fetch top/bottom when metric changes ── */
+  useEffect(() => {
+    apiFetch(`/api/meta/top-bottom?metric=${tbMetric}&date_preset=${datePreset}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data) setTopBottom({ top: data.top || [], bottom: data.bottom || [], metric: data.metric || tbMetric });
+      })
+      .catch(() => {});
+  }, [tbMetric, datePreset]);
 
   /* ── Campaign list for filter ────────────────── */
   const campaignList = useMemo(() => {
@@ -285,6 +341,23 @@ export default function MetaDashboard() {
 
     return { spend, impressions, clicks, reach, ctr, cpc, cpm, roas, frequency, purchases, purchaseValue, leads };
   }, [insights, filteredCampaignBulk, selectedCampaign]);
+
+  /* ── Previous period totals for comparison ──── */
+  const prevTotals = useMemo(() => {
+    const source = compareData.previous;
+    if (!source.length) return null;
+    let spend = 0, impressions = 0, clicks = 0, reach = 0;
+    source.forEach((row) => {
+      spend += num(row.spend);
+      impressions += num(row.impressions);
+      clicks += num(row.clicks);
+      reach += num(row.reach);
+    });
+    const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
+    const cpc = clicks > 0 ? spend / clicks : 0;
+    const cpm = impressions > 0 ? (spend / impressions) * 1000 : 0;
+    return { spend, impressions, clicks, reach, ctr, cpc, cpm };
+  }, [compareData.previous]);
 
   /* ── Daily trend data ──────────────────────────── */
   const dailyData = useMemo(() => {
@@ -459,16 +532,112 @@ export default function MetaDashboard() {
         <div className="text-red-400 text-sm bg-red-500/10 p-3 rounded-lg">{error}</div>
       )}
 
-      {/* ── KPI Cards ────────────────────────────── */}
+      {/* ── KPI Cards with comparison ────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-        <StatCard label="Total Spend" value={currency(totals.spend)} icon={IndianRupee} color="text-green-400" />
-        <StatCard label="Impressions" value={compact(totals.impressions)} icon={Eye} color="text-blue-400" />
-        <StatCard label="Clicks" value={compact(totals.clicks)} icon={MousePointer} color="text-blue-400" />
-        <StatCard label="Reach" value={compact(totals.reach)} icon={Users} color="text-purple-400" />
-        <StatCard label="CTR" value={`${totals.ctr.toFixed(2)}%`} icon={TrendingUp} color="text-amber-400" />
-        <StatCard label="CPC" value={currency(totals.cpc)} icon={Target} color="text-red-400" />
-        <StatCard label="CPM" value={currency(totals.cpm)} icon={BarChart3} color="text-pink-400" />
+        <StatCard label="Total Spend" value={currency(totals.spend)} icon={IndianRupee} color="text-green-400" prevValue={prevTotals?.spend} invert />
+        <StatCard label="Impressions" value={compact(totals.impressions)} icon={Eye} color="text-blue-400" prevValue={prevTotals?.impressions} />
+        <StatCard label="Clicks" value={compact(totals.clicks)} icon={MousePointer} color="text-blue-400" prevValue={prevTotals?.clicks} />
+        <StatCard label="Reach" value={compact(totals.reach)} icon={Users} color="text-purple-400" prevValue={prevTotals?.reach} />
+        <StatCard label="CTR" value={`${totals.ctr.toFixed(2)}%`} icon={TrendingUp} color="text-amber-400" prevValue={prevTotals?.ctr} />
+        <StatCard label="CPC" value={currency(totals.cpc)} icon={Target} color="text-red-400" prevValue={prevTotals?.cpc} invert />
+        <StatCard label="CPM" value={currency(totals.cpm)} icon={BarChart3} color="text-pink-400" prevValue={prevTotals?.cpm} invert />
         <StatCard label="ROAS" value={`${totals.roas.toFixed(2)}x`} icon={Repeat} color="text-emerald-400" />
+      </div>
+
+      {/* ── Budget Burn + Anomalies + Top/Bottom ── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Budget Burn Tracker */}
+        <WidgetCard title="Monthly Budget" right={<Wallet className="w-4 h-4 text-accent" />}>
+          {(() => {
+            const totalPlanned = budgetPlans.reduce((s, p) => s + Number(p.planned_budget || 0), 0);
+            const totalSpent = budgetPlans.reduce((s, p) => s + Number(p.actual_spend || 0), 0) || totals.spend;
+            const projected = forecast?.projected_monthly_spend || 0;
+            const pct = totalPlanned > 0 ? (totalSpent / totalPlanned) * 100 : 0;
+            const barColor = pct > 120 ? "bg-red-500" : pct > 80 ? "bg-amber-500" : "bg-green-500";
+            return (
+              <div className="space-y-3">
+                <div className="flex justify-between text-xs text-muted">
+                  <span>Spent: {currency(totalSpent)}</span>
+                  <span>Planned: {totalPlanned > 0 ? currency(totalPlanned) : "Not set"}</span>
+                </div>
+                {totalPlanned > 0 && (
+                  <div className="h-2 bg-background/50 rounded-full overflow-hidden">
+                    <div className={`h-full ${barColor} rounded-full transition-all`} style={{ width: `${Math.min(pct, 100)}%` }} />
+                  </div>
+                )}
+                {projected > 0 && (
+                  <p className="text-[10px] text-muted">
+                    Projected: {currency(projected)} ({forecast?.days_remaining} days left)
+                  </p>
+                )}
+              </div>
+            );
+          })()}
+        </WidgetCard>
+
+        {/* Anomaly Alerts */}
+        <WidgetCard title="Anomaly Alerts" right={<AlertTriangle className="w-4 h-4 text-amber-400" />}>
+          {anomalies.length === 0 ? (
+            <p className="text-xs text-muted">No anomalies detected</p>
+          ) : (
+            <div className="space-y-2 max-h-[180px] overflow-y-auto">
+              {anomalies.slice(0, 5).map((a, i) => (
+                <div key={i} className="flex items-start gap-2 text-xs">
+                  <span className={`mt-0.5 w-1.5 h-1.5 rounded-full flex-shrink-0 ${a.direction === "above" ? "bg-red-400" : "bg-amber-400"}`} />
+                  <div>
+                    <p className="text-foreground font-medium">{a.campaign_name}</p>
+                    <p className="text-muted">
+                      {a.metric.toUpperCase()}: {typeof a.value === "number" ? a.value.toFixed(2) : a.value} (avg: {a.mean.toFixed(2)})
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </WidgetCard>
+
+        {/* Top/Bottom Performers */}
+        <WidgetCard
+          title="Top & Bottom"
+          right={
+            <select
+              value={tbMetric}
+              onChange={(e) => setTbMetric(e.target.value)}
+              className="text-xs bg-background/50 border border-border rounded px-2 py-1 text-foreground"
+            >
+              <option value="spend">Spend</option>
+              <option value="ctr">CTR</option>
+              <option value="cpc">CPC</option>
+              <option value="roas">ROAS</option>
+            </select>
+          }
+        >
+          <div className="space-y-1 max-h-[180px] overflow-y-auto">
+            {topBottom.top.slice(0, 3).map((item, i) => (
+              <div key={`t-${i}`} className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-1.5">
+                  <Trophy className="w-3 h-3 text-green-400" />
+                  <span className="text-foreground truncate max-w-[120px]">{(item as Record<string, string>).campaign_name || (item as Record<string, string>).ad_name || "Unknown"}</span>
+                </div>
+                <span className="text-green-400 font-medium">
+                  {tbMetric === "spend" ? currency(num((item as Record<string, string>).spend)) : num((item as Record<string, string>)[tbMetric]).toFixed(2)}
+                </span>
+              </div>
+            ))}
+            {topBottom.bottom.slice(0, 3).map((item, i) => (
+              <div key={`b-${i}`} className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-1.5">
+                  <ArrowDownRight className="w-3 h-3 text-red-400" />
+                  <span className="text-foreground truncate max-w-[120px]">{(item as Record<string, string>).campaign_name || (item as Record<string, string>).ad_name || "Unknown"}</span>
+                </div>
+                <span className="text-red-400 font-medium">
+                  {tbMetric === "spend" ? currency(num((item as Record<string, string>).spend)) : num((item as Record<string, string>)[tbMetric]).toFixed(2)}
+                </span>
+              </div>
+            ))}
+            {topBottom.top.length === 0 && <p className="text-xs text-muted">No data</p>}
+          </div>
+        </WidgetCard>
       </div>
 
       {/* ── Top Performing Creatives ─────────────── */}

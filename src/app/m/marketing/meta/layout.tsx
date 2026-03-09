@@ -9,14 +9,37 @@ import {
   Layers,
   ImageIcon,
   PieChart,
+  ClipboardList,
+  Palette,
+  Wallet,
+  UserCheck,
+  BarChart3,
+  Users,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-const META_NAV = [
+interface NavItem {
+  name: string;
+  href: string;
+  icon: LucideIcon | null;
+  separator?: boolean;
+}
+
+const META_NAV: NavItem[] = [
+  { name: "Meta Data", href: "", icon: null, separator: true },
   { name: "Dashboard", href: "/m/marketing/meta", icon: LayoutDashboard },
   { name: "Campaigns", href: "/m/marketing/meta/campaigns", icon: Megaphone },
   { name: "Ad Sets", href: "/m/marketing/meta/adsets", icon: Layers },
   { name: "Ads", href: "/m/marketing/meta/ads", icon: ImageIcon },
+  { name: "Sheets", href: "", icon: null, separator: true },
+  { name: "Campaign Tracker", href: "/m/marketing/meta/campaign-tracker", icon: ClipboardList },
+  { name: "Creative Tracker", href: "/m/marketing/meta/creative-tracker", icon: Palette },
+  { name: "Budget Planner", href: "/m/marketing/meta/budget-planner", icon: Wallet },
+  { name: "Conversion Log", href: "/m/marketing/meta/conversion-log", icon: UserCheck },
+  { name: "Insights", href: "", icon: null, separator: true },
   { name: "Analytics", href: "/m/marketing/meta/analytics", icon: PieChart },
+  { name: "Creative Analysis", href: "/m/marketing/meta/creative-analysis", icon: BarChart3 },
+  { name: "Audience Insights", href: "/m/marketing/meta/audience-insights", icon: Users },
 ];
 
 export default function MetaLayout({ children }: { children: React.ReactNode }) {
@@ -32,11 +55,23 @@ export default function MetaLayout({ children }: { children: React.ReactNode }) 
               Meta Ads
             </p>
             <nav className="space-y-0.5">
-              {META_NAV.map((item) => {
+              {META_NAV.map((item, idx) => {
+                if (item.separator) {
+                  return (
+                    <div key={`sep-${idx}`} className="pt-3 pb-1 px-3">
+                      <div className="border-t border-border" />
+                      <p className="text-[10px] text-muted/50 uppercase tracking-widest mt-2">
+                        {item.name}
+                      </p>
+                    </div>
+                  );
+                }
+
                 const isActive =
                   item.href === "/m/marketing/meta"
                     ? pathname === "/m/marketing/meta"
-                    : pathname === item.href || pathname.startsWith(item.href + "/") || pathname.startsWith(item.href + "?");
+                    : pathname === item.href || pathname.startsWith(item.href + "/");
+                const Icon = item.icon;
                 return (
                   <Link
                     key={item.href}
@@ -47,7 +82,7 @@ export default function MetaLayout({ children }: { children: React.ReactNode }) 
                         : "text-muted hover:text-foreground hover:bg-surface-hover"
                     }`}
                   >
-                    <item.icon className="w-4 h-4" />
+                    {Icon && <Icon className="w-4 h-4" />}
                     {item.name}
                   </Link>
                 );

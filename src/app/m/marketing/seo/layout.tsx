@@ -10,14 +10,37 @@ import {
   Tag,
   Map as MapIcon,
   MapPin,
+  Crosshair,
+  CheckSquare,
+  Swords,
+  FileEdit,
+  LineChart,
+  HeartPulse,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-const SEO_NAV = [
+interface NavItem {
+  name: string;
+  href: string;
+  icon: LucideIcon | null;
+  separator?: boolean;
+}
+
+const SEO_NAV: NavItem[] = [
+  { name: "Search Console", href: "", icon: null, separator: true },
   { name: "Dashboard", href: "/m/marketing/seo", icon: LayoutDashboard },
   { name: "Search Performance", href: "/m/marketing/seo/performance", icon: TrendingUp },
-  { name: "Pages & Indexing", href: "/m/marketing/seo/indexing", icon: FileSearch },
   { name: "Keywords", href: "/m/marketing/seo/keywords", icon: Tag },
+  { name: "Pages & Indexing", href: "/m/marketing/seo/indexing", icon: FileSearch },
   { name: "Sitemap", href: "/m/marketing/seo/sitemap", icon: MapIcon },
+  { name: "Sheets", href: "", icon: null, separator: true },
+  { name: "Keyword Tracker", href: "/m/marketing/seo/keyword-tracker", icon: Crosshair },
+  { name: "Task Log", href: "/m/marketing/seo/task-log", icon: CheckSquare },
+  { name: "Competitor Tracker", href: "/m/marketing/seo/competitor-tracker", icon: Swords },
+  { name: "Content Briefs", href: "/m/marketing/seo/content-briefs", icon: FileEdit },
+  { name: "Insights", href: "", icon: null, separator: true },
+  { name: "Rank Analysis", href: "/m/marketing/seo/rank-analysis", icon: LineChart },
+  { name: "Page Health", href: "/m/marketing/seo/page-health", icon: HeartPulse },
   { name: "Google Business", href: "/m/marketing/seo/business", icon: MapPin },
 ];
 
@@ -33,11 +56,23 @@ export default function SeoLayout({ children }: { children: React.ReactNode }) {
               SEO
             </p>
             <nav className="space-y-0.5">
-              {SEO_NAV.map((item) => {
+              {SEO_NAV.map((item, idx) => {
+                if (item.separator) {
+                  return (
+                    <div key={`sep-${idx}`} className="pt-3 pb-1 px-3">
+                      <div className="border-t border-border" />
+                      <p className="text-[10px] text-muted/50 uppercase tracking-widest mt-2">
+                        {item.name}
+                      </p>
+                    </div>
+                  );
+                }
+
                 const isActive =
                   item.href === "/m/marketing/seo"
                     ? pathname === "/m/marketing/seo"
-                    : pathname === item.href || pathname.startsWith(item.href + "/") || pathname.startsWith(item.href + "?");
+                    : pathname === item.href || pathname.startsWith(item.href + "/");
+                const Icon = item.icon;
                 return (
                   <Link
                     key={item.href}
@@ -48,7 +83,7 @@ export default function SeoLayout({ children }: { children: React.ReactNode }) {
                         : "text-muted hover:text-foreground hover:bg-surface-hover"
                     }`}
                   >
-                    <item.icon className="w-4 h-4" />
+                    {Icon && <Icon className="w-4 h-4" />}
                     {item.name}
                   </Link>
                 );

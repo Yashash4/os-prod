@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { Loader2, Layers, Search } from "lucide-react";
+import { Loader2, Layers, Search, Download } from "lucide-react";
 import { MetaTableSkeleton } from "@/components/Skeleton";
 import { apiFetch } from "@/lib/api-fetch";
 
@@ -31,6 +31,19 @@ interface AdSetMeta {
 interface BulkCampaignRow {
   campaign_id?: string;
   campaign_name?: string;
+}
+
+/* ── CSV Export ────────────────────────────────────── */
+
+function downloadCSV(filename: string, headers: string[], rows: string[][]) {
+  const csv = [headers.join(","), ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 /* ── Constants ─────────────────────────────────────── */
@@ -178,6 +191,28 @@ export default function AdSetsPage() {
           <p className="text-muted text-sm mt-1">{filteredRows.length} ad sets</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => {
+              const headers = ["Ad Set", "Status", "Campaign", "Spend", "Impressions", "Reach", "Clicks", "CTR", "CPC", "CPM"];
+              const csvRows = filteredRows.map((row) => [
+                row.adset_name || row.adset_id || "",
+                row.status || "",
+                campaignMap[row.campaign_id || ""] || "",
+                String(num(row.spend)),
+                String(num(row.impressions)),
+                String(num(row.reach)),
+                String(num(row.clicks)),
+                `${num(row.ctr).toFixed(2)}%`,
+                String(num(row.cpc)),
+                String(num(row.cpm)),
+              ]);
+              downloadCSV("adsets.csv", headers, csvRows);
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 bg-accent/10 text-accent border border-accent/20 rounded-lg text-sm hover:bg-accent/20 transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Export CSV
+          </button>
           <span className="text-[10px] px-2 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
             Read Only
           </span>

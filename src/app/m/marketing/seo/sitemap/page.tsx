@@ -6,7 +6,7 @@ import {
 } from "recharts";
 import {
   Loader2, Map as MapIcon, Globe, FileCheck, Percent,
-  CheckCircle, AlertTriangle, XCircle, Shield,
+  CheckCircle, AlertTriangle, XCircle, Shield, Download,
 } from "lucide-react";
 import { SitemapSkeleton } from "@/components/Skeleton";
 import { apiFetch } from "@/lib/api-fetch";
@@ -16,6 +16,17 @@ import { apiFetch } from "@/lib/api-fetch";
 const TOOLTIP_STYLE = { contentStyle: { background: "#1e1e2e", border: "1px solid #333", borderRadius: 8 }, itemStyle: { color: "#e2e8f0" }, labelStyle: { color: "#94a3b8" } };
 
 function num(n: number) { return n.toLocaleString("en-IN"); }
+
+function downloadCSV(filename: string, headers: string[], rows: string[][]) {
+  const csv = [headers.join(","), ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 /* ── Types ───────────────────────────────────────── */
 
@@ -150,7 +161,26 @@ export default function SitemapPage() {
 
   return (
     <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
-      <h1 className="text-2xl font-bold">Sitemap</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold">Sitemap</h1>
+        <button
+          onClick={() => {
+            const headers = ["Sitemap URL", "Type", "Submitted", "Indexed", "Rate", "Health", "Last Submitted", "Last Downloaded", "Warnings", "Errors"];
+            const rows = sitemaps.map((s) => {
+              const sub = (s.contents || []).reduce((a, c) => a + (Number(c.submitted) || 0), 0);
+              const idx = (s.contents || []).reduce((a, c) => a + (Number(c.indexed) || 0), 0);
+              return [s.path, s.isSitemapsIndex ? "Index" : "Sitemap", String(sub), String(idx),
+                sub > 0 ? ((idx / sub) * 100).toFixed(1) + "%" : "-", String(healthScore(s)),
+                s.lastSubmitted || "-", s.lastDownloaded || "-", s.warnings, s.errors];
+            });
+            downloadCSV("seo-sitemaps.csv", headers, rows);
+          }}
+          className="flex items-center gap-1.5 px-3 py-2 bg-accent/10 text-accent border border-accent/20 rounded-lg text-sm hover:bg-accent/20 transition-colors"
+        >
+          <Download className="w-4 h-4" />
+          Export CSV
+        </button>
+      </div>
 
       {error && <div className="bg-red-500/10 text-red-400 px-4 py-2 rounded-lg text-sm">{error}</div>}
 

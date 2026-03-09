@@ -7,7 +7,7 @@ import {
 } from "recharts";
 import {
   Loader2, MousePointerClick, Eye, TrendingUp, Hash, Search,
-  ArrowUp, ArrowDown, ChevronDown, ChevronUp, Table2,
+  ArrowUp, ArrowDown, ChevronDown, ChevronUp, Table2, Download,
 } from "lucide-react";
 import DateRangeFilter, { type DateRange } from "@/components/seo/DateRangeFilter";
 import { PerformanceSkeleton } from "@/components/Skeleton";
@@ -21,6 +21,17 @@ const TOOLTIP_STYLE = { contentStyle: { background: "#1e1e2e", border: "1px soli
 function num(n: number) { return n.toLocaleString("en-IN"); }
 function pct(n: number) { return (n * 100).toFixed(2) + "%"; }
 function pos(n: number) { return n.toFixed(1); }
+
+function downloadCSV(filename: string, headers: string[], rows: string[][]) {
+  const csv = [headers.join(","), ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 /* -- Types ---------------------------------------------------- */
 
@@ -264,11 +275,30 @@ export default function SearchPerformancePage() {
           <h1 className="text-2xl font-bold">Search Performance</h1>
           {loading && <Loader2 className="w-5 h-5 animate-spin text-accent" />}
         </div>
-        <select value={searchType} onChange={(e) => setSearchType(e.target.value)} className="bg-surface border border-border rounded-lg px-3 py-1.5 text-sm">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              const headers = tab === "queries" || tab === "pages"
+                ? ["Name", "Clicks", "Impressions", "CTR", "Position", ...(comparing ? ["Click Change", "Position Change"] : [])]
+                : ["Name", "Clicks", "Impressions", "CTR", "Position"];
+              const rows = (activeRows as (MergedRow | SARow)[]).map((r) => {
+                const base = [r.keys[0], String(r.clicks), String(r.impressions), pct(r.ctr), pos(r.position)];
+                if (comparing && "clickChange" in r) base.push(String(r.clickChange), pos(r.posChange));
+                return base;
+              });
+              downloadCSV(`seo-performance-${tab}.csv`, headers, rows);
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 bg-accent/10 text-accent border border-accent/20 rounded-lg text-sm hover:bg-accent/20 transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Export CSV
+          </button>
+          <select value={searchType} onChange={(e) => setSearchType(e.target.value)} className="bg-surface border border-border rounded-lg px-3 py-1.5 text-sm">
           <option value="web">Web</option>
           <option value="image">Image</option>
           <option value="video">Video</option>
         </select>
+        </div>
       </div>
 
       {/* Date Range Filter */}

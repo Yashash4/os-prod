@@ -7,6 +7,7 @@ import {
   ChevronUp,
   IndianRupee,
   Search,
+  Download,
 } from "lucide-react";
 import { MetaTableSkeleton } from "@/components/Skeleton";
 import { apiFetch } from "@/lib/api-fetch";
@@ -61,6 +62,19 @@ const TOOLTIP_STYLE = {
   borderRadius: "8px",
   color: "#F5F5F5",
 };
+
+/* ── CSV Export ────────────────────────────────────── */
+
+function downloadCSV(filename: string, headers: string[], rows: string[][]) {
+  const csv = [headers.join(","), ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 /* ── Helpers ───────────────────────────────────────── */
 
@@ -208,6 +222,36 @@ export default function CampaignsPage() {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => {
+              const headers = ["Campaign Name", "Status", "Objective", "Budget", "Spend", "Impressions", "Clicks", "CTR", "CPC", "ROAS"];
+              const csvRows = sortedCampaigns.map((camp) => {
+                const ins = campaignInsights[camp.id]?.[0];
+                const budget = camp.daily_budget
+                  ? `${num(camp.daily_budget) / 100}/day`
+                  : camp.lifetime_budget
+                    ? `${num(camp.lifetime_budget) / 100} LT`
+                    : "";
+                return [
+                  camp.name,
+                  camp.status,
+                  camp.objective?.replace(/_/g, " ") || "",
+                  budget,
+                  ins ? String(num(ins.spend)) : "",
+                  ins ? String(num(ins.impressions)) : "",
+                  ins ? String(num(ins.clicks)) : "",
+                  ins ? `${num(ins.ctr).toFixed(2)}%` : "",
+                  ins ? String(num(ins.cpc)) : "",
+                  ins ? `${getRoas(ins).toFixed(2)}x` : "",
+                ];
+              });
+              downloadCSV("campaigns.csv", headers, csvRows);
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 bg-accent/10 text-accent border border-accent/20 rounded-lg text-sm hover:bg-accent/20 transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Export CSV
+          </button>
           <span className="text-[10px] px-2 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
             Read Only
           </span>

@@ -16,6 +16,7 @@ import {
   ImageIcon,
   Layers,
   Megaphone,
+  Download,
 } from "lucide-react";
 import {
   PieChart,
@@ -139,6 +140,19 @@ interface AggRow {
   convRate: number;
   costPerConv: number;
   frequency: number;
+}
+
+/* ── CSV Export ────────────────────────────────────── */
+
+function downloadCSV(filename: string, headers: string[], rows: string[][]) {
+  const csv = [headers.join(","), ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 /* ── Constants ─────────────────────────────────────── */
@@ -659,6 +673,64 @@ function AnalyticsPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              if (topTab === "adset") {
+                const headers = ["Ad Set", "Status", "Campaign", "Spend", "Impressions", "Reach", "Clicks", "CTR", "CPC", "CPM", "Conversions"];
+                const csvRows = filteredAdsets.map((r) => [
+                  r.adset_name || r.adset_id || "",
+                  r.status || "",
+                  campaignNameMap[r.campaign_id || ""] || "",
+                  String(num(r.spend)),
+                  String(num(r.impressions)),
+                  String(num(r.reach)),
+                  String(num(r.clicks)),
+                  `${num(r.ctr).toFixed(2)}%`,
+                  String(num(r.cpc)),
+                  String(num(r.cpm)),
+                  String(getConversions(r.actions)),
+                ]);
+                downloadCSV("analytics-adsets.csv", headers, csvRows);
+              } else if (topTab === "ad") {
+                const headers = ["Ad Name", "Status", "Campaign", "Spend", "Impressions", "Reach", "Clicks", "CTR", "CPC", "CPM", "Conversions"];
+                const csvRows = filteredAds.map((r) => [
+                  r.ad_name || r.ad_id || "",
+                  r.status || "",
+                  campaignNameMap[r.campaign_id || ""] || "",
+                  String(num(r.spend)),
+                  String(num(r.impressions)),
+                  String(num(r.reach)),
+                  String(num(r.clicks)),
+                  `${num(r.ctr).toFixed(2)}%`,
+                  String(num(r.cpc)),
+                  String(num(r.cpm)),
+                  String(getConversions(r.actions)),
+                ]);
+                downloadCSV("analytics-ads.csv", headers, csvRows);
+              } else {
+                const headers = ["Segment", "Spend", "Impressions", "Clicks", "Reach", "Conversions", "CTR", "CPC", "CPM", "Conv Rate", "Cost/Conv", "Frequency"];
+                const csvRows = aggregated.map((r) => [
+                  r.name,
+                  String(r.spend),
+                  String(r.impressions),
+                  String(r.clicks),
+                  String(r.reach),
+                  String(r.conversions),
+                  `${r.ctr}%`,
+                  String(r.cpc),
+                  String(r.cpm),
+                  `${r.convRate}%`,
+                  String(r.costPerConv),
+                  String(r.frequency),
+                ]);
+                downloadCSV("analytics-overview.csv", headers, csvRows);
+              }
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 bg-accent/10 text-accent border border-accent/20 rounded-lg text-sm hover:bg-accent/20 transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Export CSV
+          </button>
           <span className="text-[10px] px-2 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
             Read Only
           </span>

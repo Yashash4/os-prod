@@ -10,7 +10,9 @@ import {
   Loader2, MousePointerClick, Eye, TrendingUp, TrendingDown, Hash,
   FileCheck, MapPin, ExternalLink, Phone, ArrowUp, ArrowDown,
   Lightbulb, AlertTriangle, Target, Zap,
+  ArrowUpRight, ArrowDownRight, Crosshair, CheckSquare, LineChart as LineChartIcon,
 } from "lucide-react";
+import Link from "next/link";
 import DateRangeFilter, { type DateRange, aggregateByGranularity } from "@/components/seo/DateRangeFilter";
 import { DashboardSkeleton } from "@/components/Skeleton";
 import { apiFetch } from "@/lib/api-fetch";
@@ -34,6 +36,18 @@ interface SARow { keys: string[]; clicks: number; impressions: number; ctr: numb
 interface GBPMetric { date: string; metric: string; value: number }
 
 /* ── Components ──────────────────────────────────── */
+
+function DeltaIndicator({ current, previous, invert = false }: { current: number; previous: number; invert?: boolean }) {
+  if (!previous || previous === 0) return null;
+  const pct = ((current - previous) / previous) * 100;
+  const isPositive = invert ? pct < 0 : pct > 0;
+  return (
+    <span className={`flex items-center gap-0.5 text-[10px] font-medium ${isPositive ? "text-green-400" : "text-red-400"}`}>
+      {pct > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+      {Math.abs(pct).toFixed(1)}%
+    </span>
+  );
+}
 
 function TrendStatCard({ label, value, icon: Icon, color, change, invertChange, sparkData }: {
   label: string; value: string; icon: React.ElementType; color: string;
@@ -312,18 +326,55 @@ export default function SeoDashboard() {
       {!loading && <>
       {/* KPI Cards with trends */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-        <TrendStatCard label="Total Clicks" value={num(totals.clicks)} icon={MousePointerClick} color="text-blue-400"
-          change={range?.compare ? delta(totals.clicks, prevTotals.clicks) : undefined} sparkData={sparkClicks} />
-        <TrendStatCard label="Impressions" value={num(totals.impressions)} icon={Eye} color="text-purple-400"
-          change={range?.compare ? delta(totals.impressions, prevTotals.impressions) : undefined} sparkData={sparkImpressions} />
-        <TrendStatCard label="Avg CTR" value={pct(totals.avgCtr)} icon={TrendingUp} color="text-green-400"
-          change={range?.compare ? delta(totals.avgCtr, prevTotals.avgCtr) : undefined} sparkData={sparkCtr} />
-        <TrendStatCard label="Avg Position" value={pos(totals.avgPos)} icon={Hash} color="text-amber-400"
-          change={range?.compare ? delta(totals.avgPos, prevTotals.avgPos) : undefined} invertChange sparkData={sparkPos} />
+        <div>
+          <TrendStatCard label="Total Clicks" value={num(totals.clicks)} icon={MousePointerClick} color="text-blue-400"
+            change={range?.compare ? delta(totals.clicks, prevTotals.clicks) : undefined} sparkData={sparkClicks} />
+          {range?.compare && <DeltaIndicator current={totals.clicks} previous={prevTotals.clicks} />}
+        </div>
+        <div>
+          <TrendStatCard label="Impressions" value={num(totals.impressions)} icon={Eye} color="text-purple-400"
+            change={range?.compare ? delta(totals.impressions, prevTotals.impressions) : undefined} sparkData={sparkImpressions} />
+          {range?.compare && <DeltaIndicator current={totals.impressions} previous={prevTotals.impressions} />}
+        </div>
+        <div>
+          <TrendStatCard label="Avg CTR" value={pct(totals.avgCtr)} icon={TrendingUp} color="text-green-400"
+            change={range?.compare ? delta(totals.avgCtr, prevTotals.avgCtr) : undefined} sparkData={sparkCtr} />
+          {range?.compare && <DeltaIndicator current={totals.avgCtr} previous={prevTotals.avgCtr} />}
+        </div>
+        <div>
+          <TrendStatCard label="Avg Position" value={pos(totals.avgPos)} icon={Hash} color="text-amber-400"
+            change={range?.compare ? delta(totals.avgPos, prevTotals.avgPos) : undefined} invertChange sparkData={sparkPos} />
+          {range?.compare && <DeltaIndicator current={totals.avgPos} previous={prevTotals.avgPos} invert />}
+        </div>
         <TrendStatCard label="Indexed Pages" value="-" icon={FileCheck} color="text-emerald-400" />
         <TrendStatCard label="GBP Views" value={num(gbpTotals.views)} icon={MapPin} color="text-cyan-400" />
         <TrendStatCard label="Website Clicks" value={num(gbpTotals.websiteClicks)} icon={ExternalLink} color="text-blue-400" />
         <TrendStatCard label="GBP Calls" value={num(gbpTotals.calls)} icon={Phone} color="text-green-400" />
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Link href="/m/marketing/seo/keyword-tracker" className="card rounded-xl p-4 hover:bg-surface-hover transition-colors">
+          <div className="flex items-center gap-2 mb-2">
+            <Crosshair className="w-4 h-4 text-accent" />
+            <span className="text-sm font-medium text-foreground">Keyword Tracker</span>
+          </div>
+          <p className="text-xs text-muted">Track target keywords and monitor position progress</p>
+        </Link>
+        <Link href="/m/marketing/seo/task-log" className="card rounded-xl p-4 hover:bg-surface-hover transition-colors">
+          <div className="flex items-center gap-2 mb-2">
+            <CheckSquare className="w-4 h-4 text-accent" />
+            <span className="text-sm font-medium text-foreground">SEO Task Log</span>
+          </div>
+          <p className="text-xs text-muted">Manage on-page, technical, and content tasks</p>
+        </Link>
+        <Link href="/m/marketing/seo/rank-analysis" className="card rounded-xl p-4 hover:bg-surface-hover transition-colors">
+          <div className="flex items-center gap-2 mb-2">
+            <LineChartIcon className="w-4 h-4 text-accent" />
+            <span className="text-sm font-medium text-foreground">Rank Analysis</span>
+          </div>
+          <p className="text-xs text-muted">View position changes, quick wins, and movers</p>
+        </Link>
       </div>
 
       {/* Insight Cards */}

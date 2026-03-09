@@ -376,7 +376,6 @@ export default function CohortTrackerPage() {
     try {
       const res = await apiFetch("/api/analytics/cohort-sync", {
         method: "POST",
-        headers: { "x-cron-secret": "manual-trigger" },
       });
       const json = await res.json();
       if (json.success) {

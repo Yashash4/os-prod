@@ -1,16 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { authenticateRequest } from "@/lib/api-auth";
 import { getAccountInsightsByRange } from "@/lib/meta";
 
 /**
  * Cohort Sync — Nightly cron + manual trigger endpoint
  *
- * Fetches daily Meta Ads spend, optins, meetings, payments and sales pipeline
- * data for the campaign period (Mar 1 – May 16, 2026) and upserts into
- * cohort_daily_metrics.
- *
  * Vercel Cron: GET /api/analytics/cohort-sync?secret=CRON_SECRET
- * Manual:      POST /api/analytics/cohort-sync (x-cron-secret header)
+ * Manual:      POST /api/analytics/cohort-sync (authenticated user)
  * Optionally pass ?date=YYYY-MM-DD to sync a specific date only.
  */
 
@@ -31,15 +28,12 @@ interface MeetRecord {
   outcome?: string;
 }
 
-function authorize(req: NextRequest): boolean {
+function authorizeCron(req: NextRequest): boolean {
   const secret = req.headers.get("x-cron-secret") || req.nextUrl.searchParams.get("secret");
   return !!secret && secret === process.env.CRON_SECRET;
 }
 
 async function runSync(req: NextRequest) {
-  if (!authorize(req)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
 
   try {
     const specificDate = req.nextUrl.searchParams.get("date");
@@ -221,13 +215,18 @@ async function runSync(req: NextRequest) {
   }
 }
 
-// Vercel Cron uses GET
+// Vercel Cron uses GET — requires CRON_SECRET
 export async function GET(req: NextRequest) {
+  if (!authorizeCron(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   return runSync(req);
 }
 
-// Manual trigger from UI uses POST
+// Manual trigger from UI uses POST — requires authenticated user
 export async function POST(req: NextRequest) {
+  const auth = await authenticateRequest(req);
+  if ("error" in auth) return auth.error;
   return runSync(req);
 }
 

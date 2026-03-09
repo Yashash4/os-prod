@@ -114,6 +114,120 @@ export interface DailyCollectionEntry {
   updated_at: string;
 }
 
+/* ── Meta Module ─────────────────────────────────── */
+
+export interface MetaCampaignTracker {
+  id: string;
+  campaign_id: string;
+  campaign_name: string;
+  log_date: string;
+  action: "scale_up" | "scale_down" | "pause" | "restart" | "adjust_audience" | "adjust_creative" | "no_change" | "kill";
+  notes: string | null;
+  decided_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MetaCreativeTracker {
+  id: string;
+  ad_id: string;
+  ad_name: string;
+  campaign_name: string | null;
+  status: "active" | "watch" | "fatigued" | "retired" | "top_performer";
+  fatigue_score: number;
+  notes: string | null;
+  reviewed_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MetaBudgetPlan {
+  id: string;
+  campaign_id: string;
+  campaign_name: string;
+  period_start: string;
+  period_end: string;
+  planned_budget: number;
+  actual_spend: number;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MetaConversionLog {
+  id: string;
+  date: string;
+  campaign_id: string | null;
+  campaign_name: string | null;
+  lead_name: string;
+  lead_phone: string | null;
+  lead_quality: "hot" | "warm" | "cold" | "junk";
+  conversion_status: "new" | "contacted" | "qualified" | "converted" | "lost";
+  revenue_amount: number;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/* ── SEO Module ──────────────────────────────────── */
+
+export interface SEOKeywordTracker {
+  id: string;
+  keyword: string;
+  current_position: number | null;
+  target_position: number;
+  status: "tracking" | "improving" | "achieved" | "declined" | "paused";
+  priority: "high" | "medium" | "low";
+  notes: string | null;
+  assigned_to: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SEOTaskLog {
+  id: string;
+  title: string;
+  task_type: "on_page" | "technical" | "content" | "backlink" | "local_seo" | "other";
+  status: "todo" | "in_progress" | "done" | "blocked";
+  page_url: string | null;
+  keyword: string | null;
+  due_date: string | null;
+  assigned_to: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SEOCompetitorTracker {
+  id: string;
+  competitor_domain: string;
+  keyword: string;
+  our_position: number | null;
+  competitor_position: number | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SEOContentBrief {
+  id: string;
+  title: string;
+  target_keyword: string | null;
+  target_url: string | null;
+  status: "draft" | "writing" | "review" | "published" | "archived";
+  word_count_target: number | null;
+  assigned_to: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface InvoiceFollowUp {
   id: string;
   razorpay_invoice_id: string;
