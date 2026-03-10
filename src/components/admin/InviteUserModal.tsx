@@ -15,7 +15,6 @@ interface InviteUserModalProps {
 export default function InviteUserModal({ open, onClose, onSuccess, roles }: InviteUserModalProps) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [roleId, setRoleId] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -24,7 +23,6 @@ export default function InviteUserModal({ open, onClose, onSuccess, roles }: Inv
     if (open) {
       setFullName("");
       setEmail("");
-      setPassword("");
       setRoleId(roles[0]?.id || "");
       setError("");
     }
@@ -41,7 +39,7 @@ export default function InviteUserModal({ open, onClose, onSuccess, roles }: Inv
       const res = await apiFetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ full_name: fullName, email, password, role_id: roleId }),
+        body: JSON.stringify({ full_name: fullName, email, role_id: roleId }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to invite user");
@@ -90,17 +88,9 @@ export default function InviteUserModal({ open, onClose, onSuccess, roles }: Inv
               className="w-full px-3 py-2 rounded-lg bg-background border border-border text-foreground text-sm focus:outline-none focus:border-accent"
             />
           </div>
-          <div>
-            <label className="block text-sm text-muted mb-1">Temporary Password</label>
-            <input
-              type="text"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-              className="w-full px-3 py-2 rounded-lg bg-background border border-border text-foreground text-sm focus:outline-none focus:border-accent"
-            />
-          </div>
+          <p className="text-xs text-muted bg-surface-hover/50 rounded-lg px-3 py-2 border border-border/50">
+            An invite email will be sent to the user to set their own password.
+          </p>
           <div>
             <label className="block text-sm text-muted mb-1">Role</label>
             <select

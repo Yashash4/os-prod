@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import {
   DollarSign,
   TrendingUp,
@@ -21,6 +21,7 @@ import {
   ArrowDownRight,
   BarChart3,
   CreditCard,
+  RefreshCw,
 } from "lucide-react";
 import {
   BarChart,
@@ -265,50 +266,51 @@ export default function SalesAnalyticsPage() {
   const [jobinSales, setJobinSales] = useState<SalesRecord[]>([]);
   const [maverickMeets, setMaverickMeets] = useState<MeetRecord[]>([]);
   const [jobinMeets, setJobinMeets] = useState<MeetRecord[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchAll = useCallback(async (signal?: AbortSignal, isRefresh = false) => {
+    if (isRefresh) setRefreshing(true); else setLoading(true);
+    setError("");
+    try {
+      const [mavSalesRes, jobSalesRes, mavMeetRes, jobMeetRes] = await Promise.all([
+        apiFetch("/api/sales/maverick-sales-tracking", { signal }).then((r) => r.json()).catch(() => ({ records: [] })),
+        apiFetch("/api/sales/jobin-sales-tracking", { signal }).then((r) => r.json()).catch(() => ({ records: [] })),
+        apiFetch("/api/sales/maverick-meet-tracking", { signal }).then((r) => r.json()).catch(() => ({ records: [] })),
+        apiFetch("/api/sales/jobin-meet-tracking", { signal }).then((r) => r.json()).catch(() => ({ records: [] })),
+      ]);
+
+      // Store raw unfiltered data
+      setRawMaverickSales(mavSalesRes.records || []);
+      setRawJobinSales(jobSalesRes.records || []);
+
+      const range = getDateRange(datePreset);
+      const filterByDate = (records: any[], dateField: string) => {
+        if (!range) return records;
+        return records.filter((r) => {
+          const d = r[dateField]?.slice(0, 10);
+          if (!d) return true;
+          return d >= range.start && d <= range.end;
+        });
+      };
+
+      setMaverickSales(filterByDate(mavSalesRes.records || [], "closed_date"));
+      setJobinSales(filterByDate(jobSalesRes.records || [], "closed_date"));
+      setMaverickMeets(filterByDate(mavMeetRes.records || [], "created_at"));
+      setJobinMeets(filterByDate(jobMeetRes.records || [], "created_at"));
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
+      setError(err instanceof Error ? err.message : "Failed to load sales analytics");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [datePreset]);
 
   useEffect(() => {
     const controller = new AbortController();
-
-    async function fetchAll() {
-      setLoading(true);
-      setError("");
-      try {
-        const [mavSalesRes, jobSalesRes, mavMeetRes, jobMeetRes] = await Promise.all([
-          apiFetch("/api/sales/maverick-sales-tracking", { signal: controller.signal }).then((r) => r.json()).catch(() => ({ records: [] })),
-          apiFetch("/api/sales/jobin-sales-tracking", { signal: controller.signal }).then((r) => r.json()).catch(() => ({ records: [] })),
-          apiFetch("/api/sales/maverick-meet-tracking", { signal: controller.signal }).then((r) => r.json()).catch(() => ({ records: [] })),
-          apiFetch("/api/sales/jobin-meet-tracking", { signal: controller.signal }).then((r) => r.json()).catch(() => ({ records: [] })),
-        ]);
-
-        // Store raw unfiltered data
-        setRawMaverickSales(mavSalesRes.records || []);
-        setRawJobinSales(jobSalesRes.records || []);
-
-        const range = getDateRange(datePreset);
-        const filterByDate = (records: any[], dateField: string) => {
-          if (!range) return records;
-          return records.filter((r) => {
-            const d = r[dateField]?.slice(0, 10);
-            if (!d) return true;
-            return d >= range.start && d <= range.end;
-          });
-        };
-
-        setMaverickSales(filterByDate(mavSalesRes.records || [], "closed_date"));
-        setJobinSales(filterByDate(jobSalesRes.records || [], "closed_date"));
-        setMaverickMeets(filterByDate(mavMeetRes.records || [], "created_at"));
-        setJobinMeets(filterByDate(jobMeetRes.records || [], "created_at"));
-      } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") return;
-        setError(err instanceof Error ? err.message : "Failed to load sales analytics");
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchAll();
-
+    fetchAll(controller.signal);
     return () => controller.abort();
-  }, [datePreset]);
+  }, [fetchAll]);
 
   /* ── Combined records with team tag ─────────────── */
 
@@ -682,14 +684,30 @@ export default function SalesAnalyticsPage() {
 
   /* ── Loading State ──────────────────────────────── */
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96 gap-2 text-muted">
-        <Loader2 className="w-5 h-5 animate-spin" />
-        <span className="text-sm">Loading sales analytics...</span>
+  if (loading) return (
+    <div className="p-6 space-y-4">
+      <div className="flex items-center gap-2">
+        <div className="w-1 h-6 bg-accent rounded-full" />
+        <div className="h-5 w-40 bg-border/50 rounded animate-pulse" />
       </div>
-    );
-  }
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} className="card rounded-xl p-4 space-y-2">
+            <div className="h-3 w-20 bg-border/50 rounded animate-pulse" />
+            <div className="h-6 w-16 bg-border/50 rounded animate-pulse" />
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="card rounded-xl p-4">
+            <div className="h-4 w-32 bg-border/50 rounded animate-pulse mb-4" />
+            <div className="h-[220px] bg-border/50 rounded animate-pulse" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   /* ── Render ─────────────────────────────────────── */
 
@@ -704,15 +722,25 @@ export default function SalesAnalyticsPage() {
             <p className="text-muted text-xs mt-0.5">Combined Maverick &amp; Jobin sales performance</p>
           </div>
         </div>
-        <select
-          value={datePreset}
-          onChange={(e) => setDatePreset(e.target.value)}
-          className="px-3 py-2 bg-background/50 border border-border rounded-lg text-foreground text-sm focus:outline-none focus:border-accent"
-        >
-          {DATE_PRESETS.map((p) => (
-            <option key={p.value} value={p.value}>{p.label}</option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => fetchAll(undefined, true)}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 bg-surface border border-border text-muted hover:text-foreground text-xs rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw size={12} className={refreshing ? "animate-spin" : ""} />
+            {refreshing ? "Refreshing..." : "Refresh"}
+          </button>
+          <select
+            value={datePreset}
+            onChange={(e) => setDatePreset(e.target.value)}
+            className="px-3 py-2 bg-background/50 border border-border rounded-lg text-foreground text-sm focus:outline-none focus:border-accent"
+          >
+            {DATE_PRESETS.map((p) => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {error && (

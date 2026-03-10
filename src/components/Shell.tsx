@@ -6,7 +6,7 @@ import Link from "next/link";
 import Breadcrumb from "./Breadcrumb";
 import { buildBreadcrumbFromPath } from "@/lib/modules";
 import { useAuth } from "@/contexts/AuthContext";
-import { LogOut, Bell } from "lucide-react";
+import { LogOut, Bell, Settings } from "lucide-react";
 import NavTree from "./NavTree";
 
 export default function Shell({ children }: { children: React.ReactNode }) {
@@ -49,7 +49,11 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-accent rounded-full" />
             </button>
             {displayName && (
-              <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg">
+              <Link
+                href="/settings/profile"
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-surface-hover transition-colors"
+                title="My Profile"
+              >
                 <div className="w-5 h-5 rounded-full bg-accent flex items-center justify-center">
                   <span className="text-[10px] font-semibold text-background">
                     {displayName.charAt(0).toUpperCase()}
@@ -58,8 +62,15 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                 <span className="text-xs text-muted hidden sm:block">
                   {displayName}
                 </span>
-              </div>
+              </Link>
             )}
+            <Link
+              href="/settings/profile"
+              className="p-2 rounded-lg text-muted hover:text-foreground hover:bg-surface-hover transition-colors"
+              title="Settings"
+            >
+              <Settings className="w-4 h-4" />
+            </Link>
             <button
               onClick={signOut}
               className="p-2 rounded-lg text-muted hover:text-foreground hover:bg-surface-hover transition-colors"

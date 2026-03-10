@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import {
   Loader2,
@@ -18,6 +18,7 @@ import {
   Target,
   Zap,
   BarChart3,
+  RefreshCw,
 } from "lucide-react";
 import {
   BarChart,
@@ -276,51 +277,52 @@ export default function MetaAdsAnalyticsPage() {
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
   const [dailyInsights, setDailyInsights] = useState<DailyInsight[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [datePreset, setDatePreset] = useState("last_30d");
 
+  const fetchData = useCallback(async (signal?: AbortSignal, isRefresh = false) => {
+    try {
+      if (isRefresh) setRefreshing(true); else setLoading(true);
+      setError(null);
+
+      const today = new Date().toISOString().slice(0, 10);
+      const untilDate = today <= COHORT_END ? today : COHORT_END;
+
+      const [acctRes, campRes, dailyRes] = await Promise.all([
+        apiFetch(`/api/meta/account-insights?date_preset=${datePreset}&time_increment=all_days`, { signal }),
+        apiFetch(`/api/meta/campaign-insights-bulk?date_preset=${datePreset}`, { signal }),
+        apiFetch(`/api/meta/account-insights-range?since=${COHORT_START}&until=${untilDate}&time_increment=1`, { signal })
+          .then((r) => r.json()).catch(() => ({ insights: [] })),
+      ]);
+
+      if (!acctRes.ok) throw new Error("Failed to fetch account insights");
+      if (!campRes.ok) throw new Error("Failed to fetch campaign insights");
+
+      const acctJson = await acctRes.json();
+      const campJson = await campRes.json();
+
+      const acctRaw = acctJson.insights;
+      const acct: AccountInsight = Array.isArray(acctRaw) ? acctRaw[0] || {} : acctRaw || {};
+      const camps: CampaignRow[] = campJson.insights || [];
+
+      setAccountData(acct);
+      setCampaigns(camps);
+      setDailyInsights(dailyRes.insights || []);
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === "AbortError") return;
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [datePreset]);
+
   useEffect(() => {
     const controller = new AbortController();
-
-    async function load() {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const today = new Date().toISOString().slice(0, 10);
-        const untilDate = today <= COHORT_END ? today : COHORT_END;
-
-        const [acctRes, campRes, dailyRes] = await Promise.all([
-          apiFetch(`/api/meta/account-insights?date_preset=${datePreset}&time_increment=all_days`, { signal: controller.signal }),
-          apiFetch(`/api/meta/campaign-insights-bulk?date_preset=${datePreset}`, { signal: controller.signal }),
-          apiFetch(`/api/meta/account-insights-range?since=${COHORT_START}&until=${untilDate}&time_increment=1`, { signal: controller.signal })
-            .then((r) => r.json()).catch(() => ({ insights: [] })),
-        ]);
-
-        if (!acctRes.ok) throw new Error("Failed to fetch account insights");
-        if (!campRes.ok) throw new Error("Failed to fetch campaign insights");
-
-        const acctJson = await acctRes.json();
-        const campJson = await campRes.json();
-
-        const acctRaw = acctJson.insights;
-        const acct: AccountInsight = Array.isArray(acctRaw) ? acctRaw[0] || {} : acctRaw || {};
-        const camps: CampaignRow[] = campJson.insights || [];
-
-        setAccountData(acct);
-        setCampaigns(camps);
-        setDailyInsights(dailyRes.insights || []);
-      } catch (err: unknown) {
-        if (err instanceof Error && err.name === "AbortError") return;
-        setError(err instanceof Error ? err.message : "Unknown error");
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-
+    fetchData(controller.signal);
     return () => controller.abort();
-  }, [datePreset]);
+  }, [fetchData]);
 
   /* ── Derived data ── */
 
@@ -566,13 +568,30 @@ export default function MetaAdsAnalyticsPage() {
 
   /* ── Render ── */
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-6 h-6 animate-spin text-muted" />
+  if (loading) return (
+    <div className="p-6 space-y-4">
+      <div className="flex items-center gap-2">
+        <div className="w-1 h-6 bg-accent rounded-full" />
+        <div className="h-5 w-40 bg-border/50 rounded animate-pulse" />
       </div>
-    );
-  }
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} className="card rounded-xl p-4 space-y-2">
+            <div className="h-3 w-20 bg-border/50 rounded animate-pulse" />
+            <div className="h-6 w-16 bg-border/50 rounded animate-pulse" />
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="card rounded-xl p-4">
+            <div className="h-4 w-32 bg-border/50 rounded animate-pulse mb-4" />
+            <div className="h-[220px] bg-border/50 rounded animate-pulse" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   if (error) {
     return (
@@ -592,20 +611,29 @@ export default function MetaAdsAnalyticsPage() {
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between">
-        <div>
-          <div className="h-1 w-10 rounded bg-accent mb-3" />
-          <h1 className="text-lg font-bold text-foreground tracking-wide">Meta Ads Analytics</h1>
-          <p className="text-xs text-muted mt-0.5">Facebook &amp; Instagram ad performance — Campaign period Mar 1 – May 16</p>
+        <div className="flex items-center gap-2">
+          <div className="w-1 h-6 bg-accent rounded-full" />
+          <div>
+            <h1 className="text-lg font-bold text-foreground tracking-wide">Meta Ads Analytics</h1>
+            <p className="text-xs text-muted mt-0.5">Facebook &amp; Instagram ad performance — Campaign period Mar 1 – May 16</p>
+          </div>
         </div>
-        <select
-          value={datePreset}
-          onChange={(e) => setDatePreset(e.target.value)}
-          className="px-3 py-2 bg-background/50 border border-border rounded-lg text-foreground text-sm focus:outline-none focus:border-accent"
-        >
-          {DATE_PRESETS.map((p) => (
-            <option key={p.value} value={p.value}>{p.label}</option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2">
+          <button onClick={() => fetchData(undefined, true)} disabled={refreshing}
+            className="flex items-center gap-1.5 bg-surface border border-border text-muted hover:text-foreground text-xs rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-50">
+            <RefreshCw size={12} className={refreshing ? "animate-spin" : ""} />
+            {refreshing ? "Refreshing..." : "Refresh"}
+          </button>
+          <select
+            value={datePreset}
+            onChange={(e) => setDatePreset(e.target.value)}
+            className="px-3 py-2 bg-background/50 border border-border rounded-lg text-foreground text-sm focus:outline-none focus:border-accent"
+          >
+            {DATE_PRESETS.map((p) => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* ── Insights ─────────────────────────────────── */}

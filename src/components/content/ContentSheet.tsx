@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { Plus, Trash2, Search, X, ChevronUp, ChevronDown } from "lucide-react";
 import { DataTableSkeleton } from "@/components/Skeleton";
+import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Types ───────────────────────────────────────── */
 
@@ -60,7 +61,7 @@ export default function ContentSheet({
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${apiPath}${qs}`);
+      const res = await apiFetch(`${apiPath}${qs}`);
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setRows(data.records || []);
@@ -77,7 +78,7 @@ export default function ContentSheet({
   const handleCreate = async () => {
     try {
       const newRow = { title: "Untitled", ...defaultNewRow, ...queryParams };
-      const res = await fetch(apiPath, {
+      const res = await apiFetch(apiPath, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newRow),
@@ -94,7 +95,7 @@ export default function ContentSheet({
   const handleUpdate = async (id: string, updates: Record<string, unknown>) => {
     setSaving(id);
     try {
-      const res = await fetch(apiPath, {
+      const res = await apiFetch(apiPath, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, ...updates }),
@@ -113,7 +114,7 @@ export default function ContentSheet({
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this row?")) return;
     try {
-      const res = await fetch(`${apiPath}?id=${id}`, { method: "DELETE" });
+      const res = await apiFetch(`${apiPath}?id=${id}`, { method: "DELETE" });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setRows((prev) => prev.filter((r) => r.id !== id));

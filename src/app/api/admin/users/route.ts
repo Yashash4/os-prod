@@ -38,22 +38,30 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { email, password, full_name, role_id } = body;
+    const { email, full_name, role_id } = body;
 
-    if (!email || !password) {
-      return NextResponse.json({ error: "Email and password required" }, { status: 400 });
+    if (!email) {
+      return NextResponse.json({ error: "Email is required" }, { status: 400 });
     }
 
-    // Create auth user
+    // Create user with a random password (account exists immediately)
+    const randomPassword = `Apex${crypto.randomUUID().slice(0, 12)}!`;
     const { data: authData, error: authError } =
       await supabaseAdmin.auth.admin.createUser({
         email,
-        password,
+        password: randomPassword,
         email_confirm: true,
+        user_metadata: { full_name: full_name || undefined },
       });
 
     if (authError) throw authError;
     const userId = authData.user.id;
+
+    // Send password reset email so user can set their own password
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin;
+    await supabaseAdmin.auth.resetPasswordForEmail(email, {
+      redirectTo: `${appUrl}/auth/reset-password`,
+    });
 
     // Create user profile row
     await supabaseAdmin.from("users").insert({

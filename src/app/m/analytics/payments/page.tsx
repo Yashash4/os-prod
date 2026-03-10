@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import {
   IndianRupee,
   Hash,
@@ -17,6 +17,7 @@ import {
   ArrowDownRight,
   Activity,
   Zap,
+  RefreshCw,
 } from "lucide-react";
 import {
   AreaChart,
@@ -298,43 +299,44 @@ export default function PaymentsAnalyticsPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [refunds, setRefunds] = useState<Refund[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [datePreset, setDatePreset] = useState("last_30d");
 
+  const fetchData = useCallback(async (signal?: AbortSignal, isRefresh = false) => {
+    if (isRefresh) setRefreshing(true); else setLoading(true);
+    setError("");
+    try {
+      const { from, to } = getDateRange(datePreset);
+      const params = new URLSearchParams();
+      if (from) params.set("from", String(from));
+      if (to) params.set("to", String(to));
+
+      const [paymentsRes, refundsRes] = await Promise.all([
+        apiFetch(`/api/razorpay/payments?${params}`, { signal }),
+        apiFetch(`/api/razorpay/refunds?${params}`, { signal }),
+      ]);
+      const [paymentsData, refundsData] = await Promise.all([
+        paymentsRes.json(),
+        refundsRes.json(),
+      ]);
+      if (paymentsData.error) throw new Error(paymentsData.error);
+      setPayments(paymentsData.payments || []);
+      setRefunds(refundsData.refunds || []);
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
+      setError(err instanceof Error ? err.message : "Failed to load");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [datePreset]);
+
   useEffect(() => {
     const controller = new AbortController();
-
-    async function fetchData() {
-      setLoading(true);
-      setError("");
-      try {
-        const { from, to } = getDateRange(datePreset);
-        const params = new URLSearchParams();
-        if (from) params.set("from", String(from));
-        if (to) params.set("to", String(to));
-
-        const [paymentsRes, refundsRes] = await Promise.all([
-          apiFetch(`/api/razorpay/payments?${params}`, { signal: controller.signal }),
-          apiFetch(`/api/razorpay/refunds?${params}`, { signal: controller.signal }),
-        ]);
-        const [paymentsData, refundsData] = await Promise.all([
-          paymentsRes.json(),
-          refundsRes.json(),
-        ]);
-        if (paymentsData.error) throw new Error(paymentsData.error);
-        setPayments(paymentsData.payments || []);
-        setRefunds(refundsData.refunds || []);
-      } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") return;
-        setError(err instanceof Error ? err.message : "Failed to load");
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-
+    fetchData(controller.signal);
     return () => controller.abort();
-  }, [datePreset]);
+  }, [fetchData]);
 
   /* ── KPI Calculations ───────────────────────────── */
   const totals = useMemo(() => computeKPIs(payments, refunds), [payments, refunds]);
@@ -639,15 +641,25 @@ export default function PaymentsAnalyticsPage() {
             <p className="text-muted text-xs mt-0.5">Revenue insights and payment trends</p>
           </div>
         </div>
-        <select
-          value={datePreset}
-          onChange={(e) => setDatePreset(e.target.value)}
-          className="px-3 py-2 bg-background/50 border border-border rounded-lg text-foreground text-sm focus:outline-none focus:border-accent"
-        >
-          {DATE_PRESETS.map((p) => (
-            <option key={p.value} value={p.value}>{p.label}</option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => fetchData(undefined, true)}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 bg-surface border border-border text-muted hover:text-foreground text-xs rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw size={12} className={refreshing ? "animate-spin" : ""} />
+            {refreshing ? "Refreshing..." : "Refresh"}
+          </button>
+          <select
+            value={datePreset}
+            onChange={(e) => setDatePreset(e.target.value)}
+            className="px-3 py-2 bg-background/50 border border-border rounded-lg text-foreground text-sm focus:outline-none focus:border-accent"
+          >
+            {DATE_PRESETS.map((p) => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {error && (

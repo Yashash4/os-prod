@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import {
-  Loader2,
   IndianRupee,
   Megaphone,
   MousePointer,
@@ -20,6 +19,7 @@ import {
   CreditCard,
   UserPlus,
   BarChart3,
+  RefreshCw,
 } from "lucide-react";
 import {
   PieChart,
@@ -309,7 +309,6 @@ function InsightCard({ insight, index }: { insight: Insight; index: number }) {
 /* ── Main Dashboard ────────────────────────────────── */
 
 export default function AnalyticsOverview() {
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [datePreset, setDatePreset] = useState("last_30d");
 
@@ -320,45 +319,60 @@ export default function AnalyticsOverview() {
   const [jobinRecords, setJobinRecords] = useState<SalesRecord[]>([]);
   const [opportunities, setOpportunities] = useState<GHLOpportunity[]>([]);
   const [cohortMetrics, setCohortMetrics] = useState<CohortMetric[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    const controller = new AbortController();
+  // Per-group loading states for progressive rendering
+  const [metaLoading, setMetaLoading] = useState(true);
+  const [salesLoading, setSalesLoading] = useState(true);
+  const [otherLoading, setOtherLoading] = useState(true);
 
-    async function fetchAll() {
-      setLoading(true);
-      setError("");
-      try {
-        const { startDate: sd, endDate: ed, fromUnix, toUnix, startIso, endIso } = getDateRange(datePreset);
-        const payParams = new URLSearchParams();
-        payParams.set("from", String(fromUnix));
-        payParams.set("to", String(toUnix));
+  const loading = metaLoading || salesLoading || otherLoading;
 
-        const [metaRes, seoRes, payRes, mavRes, jobRes, ghlRes, cohortRes] = await Promise.all([
-          apiFetch(`/api/meta/account-insights?date_preset=${datePreset}`, { signal: controller.signal }).then((r) => r.json()).catch(() => ({ insights: [] })),
-          apiFetch(`/api/seo/daily?startDate=${sd}&endDate=${ed}`, { signal: controller.signal }).then((r) => r.json()).catch(() => ({ rows: [] })),
-          apiFetch(`/api/razorpay/payments?${payParams}`, { signal: controller.signal }).then((r) => r.json()).catch(() => ({ payments: [] })),
-          apiFetch("/api/sales/maverick-sales-tracking", { signal: controller.signal }).then((r) => r.json()).catch(() => ({ records: [] })),
-          apiFetch("/api/sales/jobin-sales-tracking", { signal: controller.signal }).then((r) => r.json()).catch(() => ({ records: [] })),
-          apiFetch("/api/ghl/opportunities", { signal: controller.signal }).then((r) => r.json()).catch(() => ({ opportunities: [] })),
-          apiFetch("/api/analytics/cohort-metrics", { signal: controller.signal }).then((r) => r.json()).catch(() => ({ metrics: [] })),
-        ]);
+  const fetchAll = useCallback(async (signal?: AbortSignal, isRefresh = false) => {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setMetaLoading(true);
+      setSalesLoading(true);
+      setOtherLoading(true);
+    }
+    setError("");
 
+    const { startDate: sd, endDate: ed, fromUnix, toUnix, startIso, endIso } = getDateRange(datePreset);
+    const payParams = new URLSearchParams();
+    payParams.set("from", String(fromUnix));
+    payParams.set("to", String(toUnix));
+
+    const filterSales = (records: SalesRecord[]) =>
+      (records || []).filter((r) => {
+        const d = r.closed_date || r.created_at;
+        if (!d) return true;
+        const dateStr = d.slice(0, 10);
+        return dateStr >= startIso && dateStr <= endIso;
+      });
+
+    // Group 1: Meta insights
+    const metaPromise = apiFetch(`/api/meta/account-insights?date_preset=${datePreset}`, { signal })
+      .then((r) => r.json())
+      .catch(() => ({ insights: [] }))
+      .then((metaRes) => {
         const metaRaw = metaRes.insights;
         setMetaInsights(Array.isArray(metaRaw) ? metaRaw : metaRaw ? [metaRaw] : []);
-        setSeoRows(seoRes.rows || []);
-        setPayments(payRes.payments || []);
-        setCohortMetrics(cohortRes.metrics || []);
+      })
+      .catch((err) => {
+        if (err instanceof Error && err.name === "AbortError") return;
+      })
+      .finally(() => { setMetaLoading(false); });
 
-        const filterSales = (records: SalesRecord[]) =>
-          (records || []).filter((r) => {
-            const d = r.closed_date || r.created_at;
-            if (!d) return true;
-            const dateStr = d.slice(0, 10);
-            return dateStr >= startIso && dateStr <= endIso;
-          });
+    // Group 2: Sales + GHL data
+    const salesPromise = Promise.all([
+      apiFetch("/api/sales/maverick-sales-tracking", { signal }).then((r) => r.json()).catch(() => ({ records: [] })),
+      apiFetch("/api/sales/jobin-sales-tracking", { signal }).then((r) => r.json()).catch(() => ({ records: [] })),
+      apiFetch("/api/ghl/opportunities", { signal }).then((r) => r.json()).catch(() => ({ opportunities: [] })),
+    ])
+      .then(([mavRes, jobRes, ghlRes]) => {
         setMaverickRecords(filterSales(mavRes.records || []));
         setJobinRecords(filterSales(jobRes.records || []));
-
         const allOpps: GHLOpportunity[] = ghlRes.opportunities || [];
         setOpportunities(
           allOpps.filter((o) => {
@@ -367,17 +381,44 @@ export default function AnalyticsOverview() {
             return d >= startIso && d <= endIso;
           })
         );
-      } catch (err) {
+      })
+      .catch((err) => {
         if (err instanceof Error && err.name === "AbortError") return;
-        setError(err instanceof Error ? err.message : "Failed to load analytics data");
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchAll();
+      })
+      .finally(() => { setSalesLoading(false); });
 
-    return () => controller.abort();
+    // Group 3: SEO, Payments, Cohort
+    const otherPromise = Promise.all([
+      apiFetch(`/api/seo/daily?startDate=${sd}&endDate=${ed}`, { signal }).then((r) => r.json()).catch(() => ({ rows: [] })),
+      apiFetch(`/api/razorpay/payments?${payParams}`, { signal }).then((r) => r.json()).catch(() => ({ payments: [] })),
+      apiFetch("/api/analytics/cohort-metrics", { signal }).then((r) => r.json()).catch(() => ({ metrics: [] })),
+    ])
+      .then(([seoRes, payRes, cohortRes]) => {
+        setSeoRows(seoRes.rows || []);
+        setPayments(payRes.payments || []);
+        setCohortMetrics(cohortRes.metrics || []);
+      })
+      .catch((err) => {
+        if (err instanceof Error && err.name === "AbortError") return;
+      })
+      .finally(() => { setOtherLoading(false); });
+
+    // Wait for all groups to settle for error handling and refresh state
+    try {
+      await Promise.all([metaPromise, salesPromise, otherPromise]);
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
+      setError(err instanceof Error ? err.message : "Failed to load analytics data");
+    } finally {
+      setRefreshing(false);
+    }
   }, [datePreset]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchAll(controller.signal);
+    return () => controller.abort();
+  }, [fetchAll]);
 
   /* ── KPI Calculations ───────────────────────────── */
 
@@ -662,36 +703,61 @@ export default function AnalyticsOverview() {
 
   /* ── Render ─────────────────────────────────────── */
 
-  if (loading) {
-    return (
-      <div className="p-6 space-y-4">
-        <div className="flex items-center gap-2">
-          <div className="w-1 h-6 bg-accent rounded-full" />
-          <h1 className="text-xl font-bold text-foreground tracking-tight">Company Overview</h1>
-        </div>
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-6 h-6 text-accent animate-spin" />
-          <span className="ml-2 text-muted text-sm">Loading analytics data...</span>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="card rounded-xl p-4 animate-pulse">
-              <div className="h-3 w-20 bg-surface-hover rounded mb-3" />
-              <div className="h-6 w-16 bg-surface-hover rounded" />
+  /* ── Inline Skeleton Helpers ──────────────────────── */
+
+  const StatSkeleton = () => (
+    <div className="card rounded-xl p-4 animate-pulse">
+      <div className="h-3 w-20 bg-border/50 rounded mb-3" />
+      <div className="h-6 w-16 bg-border/50 rounded" />
+    </div>
+  );
+
+  const ChartSkeleton = () => (
+    <div className="card rounded-xl p-4">
+      <div className="h-4 w-32 bg-border/50 rounded animate-pulse mb-4" />
+      <div className="h-[220px] bg-border/50 rounded animate-pulse" />
+    </div>
+  );
+
+  const InsightsSkeleton = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div key={i} className="card rounded-xl p-4 animate-pulse">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 bg-border/50 rounded-lg shrink-0" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 w-36 bg-border/50 rounded" />
+              <div className="h-3 w-full bg-border/50 rounded" />
+              <div className="h-3 w-2/3 bg-border/50 rounded" />
             </div>
-          ))}
+          </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="card rounded-xl p-4 animate-pulse">
-              <div className="h-4 w-32 bg-surface-hover rounded mb-4" />
-              <div className="h-[220px] bg-surface-hover rounded" />
-            </div>
-          ))}
+      ))}
+    </div>
+  );
+
+  const CohortSkeleton = () => (
+    <div className="card rounded-xl p-5 animate-pulse">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4">
+        {Array.from({ length: 7 }).map((_, i) => (
+          <div key={i} className="space-y-2">
+            <div className="h-3 w-16 bg-border/50 rounded" />
+            <div className="h-6 w-12 bg-border/50 rounded" />
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+        <div className="space-y-1">
+          <div className="h-3 w-40 bg-border/50 rounded" />
+          <div className="h-2.5 w-full bg-border/50 rounded-full" />
+        </div>
+        <div className="space-y-1">
+          <div className="h-3 w-40 bg-border/50 rounded" />
+          <div className="h-2.5 w-full bg-border/50 rounded-full" />
         </div>
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
     <div className="p-6 space-y-6">
@@ -704,15 +770,25 @@ export default function AnalyticsOverview() {
             <p className="text-muted text-xs mt-0.5">Aggregated analytics across all departments</p>
           </div>
         </div>
-        <select
-          value={datePreset}
-          onChange={(e) => setDatePreset(e.target.value)}
-          className="bg-surface border border-border text-foreground text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-accent"
-        >
-          {DATE_PRESETS.map((p) => (
-            <option key={p.value} value={p.value}>{p.label}</option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => fetchAll(undefined, true)}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 bg-surface border border-border text-muted hover:text-foreground text-xs rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw size={12} className={refreshing ? "animate-spin" : ""} />
+            {refreshing ? "Refreshing..." : "Refresh"}
+          </button>
+          <select
+            value={datePreset}
+            onChange={(e) => setDatePreset(e.target.value)}
+            className="bg-surface border border-border text-foreground text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-accent"
+          >
+            {DATE_PRESETS.map((p) => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {error && (
@@ -727,11 +803,10 @@ export default function AnalyticsOverview() {
             <h2 className="text-sm font-bold text-foreground">Insights</h2>
           </div>
           <div className="h-px flex-1 bg-border/50" />
-          <span className="text-[10px] text-muted">{insights.filter((i) => i.type === "warning").length} alerts</span>
+          {!loading && <span className="text-[10px] text-muted">{insights.filter((i) => i.type === "warning").length} alerts</span>}
         </div>
 
-        {/* Warnings first, then info, then successes */}
-        {(() => {
+        {loading ? <InsightsSkeleton /> : (() => {
           const warnings = insights.filter((i) => i.type === "warning");
           const infos = insights.filter((i) => i.type === "info");
           const successes = insights.filter((i) => i.type === "success");
@@ -751,14 +826,15 @@ export default function AnalyticsOverview() {
       <section>
         <h2 className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Key Metrics</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-          <StatCard label="Revenue" value={currency(totalRevenue)} icon={IndianRupee} color="text-green-400" delta={periodDeltas.revenueDelta} deltaLabel="vs prev" />
-          <StatCard label="Ad Spend" value={currency(metaSpend)} icon={Megaphone} color="text-amber-400" delta={periodDeltas.spendDelta} deltaLabel="vs prev" />
-          <StatCard label="ROAS" value={roas > 0 ? `${roas.toFixed(1)}x` : "—"} icon={TrendingUp} color={roas >= 2 ? "text-green-400" : roas >= 1 ? "text-amber-400" : "text-red-400"} sub="Revenue / Ad Spend" />
-          <StatCard label="SEO Clicks" value={compact(seoClicks)} icon={MousePointer} color="text-blue-400" sub="Search console" />
-          <StatCard label="Leads" value={compact(totalLeads)} icon={Users} color="text-purple-400" sub="GHL opportunities" />
-          <StatCard label="Quoted" value={currency(salesQuoted)} icon={FileText} color="text-teal-400" />
-          <StatCard label="Collected" value={currency(salesCollected)} icon={Wallet} color="text-green-400" sub={`${collectionRate.toFixed(0)}% rate`} />
-          <StatCard label="Meta CTR" value={`${metaCTR.toFixed(2)}%`} icon={MousePointer} color={metaCTR >= 2 ? "text-green-400" : "text-amber-400"} sub={`${compact(metaClicks)} clicks`} />
+          {/* Revenue — needs otherLoading (payments) + metaLoading for deltas */}
+          {otherLoading ? <StatSkeleton /> : <StatCard label="Revenue" value={currency(totalRevenue)} icon={IndianRupee} color="text-green-400" delta={periodDeltas.revenueDelta} deltaLabel="vs prev" />}
+          {metaLoading ? <StatSkeleton /> : <StatCard label="Ad Spend" value={currency(metaSpend)} icon={Megaphone} color="text-amber-400" delta={periodDeltas.spendDelta} deltaLabel="vs prev" />}
+          {(metaLoading || otherLoading) ? <StatSkeleton /> : <StatCard label="ROAS" value={roas > 0 ? `${roas.toFixed(1)}x` : "—"} icon={TrendingUp} color={roas >= 2 ? "text-green-400" : roas >= 1 ? "text-amber-400" : "text-red-400"} sub="Revenue / Ad Spend" />}
+          {otherLoading ? <StatSkeleton /> : <StatCard label="SEO Clicks" value={compact(seoClicks)} icon={MousePointer} color="text-blue-400" sub="Search console" />}
+          {salesLoading ? <StatSkeleton /> : <StatCard label="Leads" value={compact(totalLeads)} icon={Users} color="text-purple-400" sub="GHL opportunities" />}
+          {salesLoading ? <StatSkeleton /> : <StatCard label="Quoted" value={currency(salesQuoted)} icon={FileText} color="text-teal-400" />}
+          {salesLoading ? <StatSkeleton /> : <StatCard label="Collected" value={currency(salesCollected)} icon={Wallet} color="text-green-400" sub={`${collectionRate.toFixed(0)}% rate`} />}
+          {metaLoading ? <StatSkeleton /> : <StatCard label="Meta CTR" value={`${metaCTR.toFixed(2)}%`} icon={MousePointer} color={metaCTR >= 2 ? "text-green-400" : "text-amber-400"} sub={`${compact(metaClicks)} clicks`} />}
         </div>
       </section>
 
@@ -770,6 +846,7 @@ export default function AnalyticsOverview() {
             Open Cohort Tracker <ArrowRight size={10} />
           </Link>
         </div>
+        {otherLoading ? <CohortSkeleton /> : (
         <div className="card rounded-xl p-5">
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4">
             <div>
@@ -838,11 +915,13 @@ export default function AnalyticsOverview() {
             </div>
           </div>
         </div>
+        )}
       </section>
 
       {/* ── Charts Row 1 ─────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Revenue vs Ad Spend */}
+        {(metaLoading || otherLoading) ? <ChartSkeleton /> : (
         <WidgetCard
           title="Revenue vs Ad Spend"
           action={<Link href="/m/analytics/payments" className="text-[10px] text-accent hover:underline">Details →</Link>}
@@ -862,8 +941,10 @@ export default function AnalyticsOverview() {
             <div className="h-[220px] flex items-center justify-center text-muted text-sm">No data available</div>
           )}
         </WidgetCard>
+        )}
 
         {/* Cumulative Revenue & Profit */}
+        {(metaLoading || otherLoading) ? <ChartSkeleton /> : (
         <WidgetCard title="Cumulative Revenue & Profit">
           {cumulativeRevenue.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
@@ -887,11 +968,13 @@ export default function AnalyticsOverview() {
             <div className="h-[220px] flex items-center justify-center text-muted text-sm">No data available</div>
           )}
         </WidgetCard>
+        )}
       </div>
 
       {/* ── Charts Row 2 ─────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Sales Pipeline */}
+        {salesLoading ? <ChartSkeleton /> : (
         <WidgetCard
           title="Sales Pipeline"
           action={<Link href="/m/analytics/sales" className="text-[10px] text-accent hover:underline">Details →</Link>}
@@ -911,8 +994,10 @@ export default function AnalyticsOverview() {
             <div className="h-[220px] flex items-center justify-center text-muted text-sm">No data available</div>
           )}
         </WidgetCard>
+        )}
 
         {/* SEO Performance */}
+        {otherLoading ? <ChartSkeleton /> : (
         <WidgetCard
           title="SEO Performance"
           action={<Link href="/m/analytics/seo" className="text-[10px] text-accent hover:underline">Details →</Link>}
@@ -933,11 +1018,13 @@ export default function AnalyticsOverview() {
             <div className="h-[220px] flex items-center justify-center text-muted text-sm">No data available</div>
           )}
         </WidgetCard>
+        )}
       </div>
 
       {/* ── Charts Row 3 ─────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Department Revenue Split */}
+        {(otherLoading || salesLoading) ? <ChartSkeleton /> : (
         <WidgetCard title="Revenue Breakdown">
           {revenueSplit.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
@@ -964,6 +1051,7 @@ export default function AnalyticsOverview() {
             <div className="h-[220px] flex items-center justify-center text-muted text-sm">No data available</div>
           )}
         </WidgetCard>
+        )}
 
         {/* Quick Links */}
         <WidgetCard title="Quick Actions">

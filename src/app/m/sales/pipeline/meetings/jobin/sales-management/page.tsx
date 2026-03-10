@@ -12,9 +12,11 @@ import {
   Clock,
   AlertCircle,
   IndianRupee,
+  FileText,
 } from "lucide-react";
 import { SalesManagementSkeleton } from "@/components/Skeleton";
 import PaymentLinkModal from "@/components/PaymentLinkModal";
+import InvoiceSendModal from "@/components/InvoiceSendModal";
 import { apiFetch } from "@/lib/api-fetch";
 
 /* ── Types ─────────────────────────────────────────── */
@@ -92,6 +94,9 @@ export default function SalesManagementPage() {
 
   // Payment Link Modal
   const [paymentLinkRecord, setPaymentLinkRecord] = useState<SalesRecord | null>(null);
+
+  // Invoice Modal
+  const [invoiceRecord, setInvoiceRecord] = useState<SalesRecord | null>(null);
 
   useEffect(() => {
     async function init() {
@@ -431,6 +436,13 @@ export default function SalesManagementPage() {
                     >
                       <IndianRupee className="w-3.5 h-3.5" />
                     </button>
+                    <button
+                      onClick={() => setInvoiceRecord(record)}
+                      className={`p-1 rounded hover:bg-amber-500/10 transition-colors ${record.invoice_number ? "text-amber-400" : "text-muted hover:text-amber-400"}`}
+                      title={record.invoice_number ? `Invoice: ${record.invoice_number}` : "Send Invoice"}
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -454,6 +466,24 @@ export default function SalesManagementPage() {
               payment_link_id: data.id,
               payment_link_url: data.short_url,
               payment_link_sent_at: new Date().toISOString(),
+            });
+          }}
+        />
+      )}
+
+      {/* Invoice Send Modal */}
+      {invoiceRecord && (
+        <InvoiceSendModal
+          open={!!invoiceRecord}
+          onClose={() => setInvoiceRecord(null)}
+          customerName={invoiceRecord.contact_name}
+          customerEmail={invoiceRecord.contact_email}
+          amount={invoiceRecord.pending_amount > 0 ? invoiceRecord.pending_amount : invoiceRecord.fees_quoted}
+          opportunityId={invoiceRecord.opportunity_id}
+          salesSource="jobin"
+          onSuccess={(data) => {
+            updateSalesRecord(invoiceRecord.opportunity_id, {
+              invoice_number: data.invoice_number,
             });
           }}
         />

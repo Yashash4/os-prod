@@ -11,9 +11,10 @@ import {
   TrendingUp,
   Zap,
   Target,
+  ClipboardList,
 } from "lucide-react";
 
-const ANALYTICS_NAV = [
+const ANALYTICS_NAV: ({ name: string; href: string; icon: typeof LayoutDashboard } | { separator: true; label: string })[] = [
   { name: "Overview", href: "/m/analytics/overview", icon: LayoutDashboard },
   { name: "Meta Ads", href: "/m/analytics/meta-ads", icon: Share2 },
   { name: "SEO", href: "/m/analytics/seo", icon: Search },
@@ -21,6 +22,8 @@ const ANALYTICS_NAV = [
   { name: "Sales", href: "/m/analytics/sales", icon: TrendingUp },
   { name: "GHL Dashboard", href: "/m/analytics/ghl", icon: Zap },
   { name: "Cohort Tracker", href: "/m/analytics/cohort-tracker", icon: Target },
+  { separator: true, label: "Sheets" },
+  { name: "Daily Sheet", href: "/m/analytics/daily-sheet", icon: ClipboardList },
 ];
 
 export default function AnalyticsLayout({ children }: { children: React.ReactNode }) {
@@ -41,7 +44,14 @@ export default function AnalyticsLayout({ children }: { children: React.ReactNod
               Analytics
             </p>
             <nav className="space-y-0.5">
-              {ANALYTICS_NAV.map((item) => {
+              {ANALYTICS_NAV.map((item, idx) => {
+                if ("separator" in item) {
+                  return (
+                    <div key={`sep-${idx}`} className="pt-3 pb-1">
+                      <p className="text-xs text-muted uppercase tracking-wider px-3">{item.label}</p>
+                    </div>
+                  );
+                }
                 const isActive =
                   pathname === item.href || pathname.startsWith(item.href + "/");
                 return (

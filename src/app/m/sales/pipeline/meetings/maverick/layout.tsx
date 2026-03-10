@@ -3,13 +3,24 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Shell from "@/components/Shell";
-import { ClipboardList, Calendar, DollarSign, BarChart3 } from "lucide-react";
+import { ClipboardList, Calendar, DollarSign, BarChart3, FileSpreadsheet } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-const MAVERICK_NAV = [
+interface NavItem {
+  name: string;
+  href: string;
+  icon: LucideIcon | null;
+  separator?: boolean;
+}
+
+const MAVERICK_NAV: NavItem[] = [
   { name: "Meet Management", href: "/m/sales/pipeline/meetings/maverick/meet-management", icon: ClipboardList },
   { name: "Sales Management", href: "/m/sales/pipeline/meetings/maverick/sales-management", icon: DollarSign },
-  { name: "Analytics", href: "/m/sales/pipeline/meetings/maverick/analytics", icon: BarChart3 },
   { name: "Calendar", href: "/m/sales/pipeline/meetings/maverick/calendar", icon: Calendar },
+  { name: "Sheets", href: "", icon: null, separator: true },
+  { name: "Meeting Sheet", href: "/m/sales/pipeline/meetings/maverick/meeting-sheet", icon: FileSpreadsheet },
+  { name: "Insights", href: "", icon: null, separator: true },
+  { name: "Analytics", href: "/m/sales/pipeline/meetings/maverick/analytics", icon: BarChart3 },
 ];
 
 export default function MaverickLayout({ children }: { children: React.ReactNode }) {
@@ -23,27 +34,33 @@ export default function MaverickLayout({ children }: { children: React.ReactNode
             <p className="text-xs text-muted uppercase tracking-wider px-3 mb-2">
               Maverick
             </p>
-            <div className="h-px bg-border mb-2" />
             <nav className="space-y-0.5">
-              {MAVERICK_NAV.map((item) => {
+              {MAVERICK_NAV.map((item, idx) => {
+                if (item.separator) {
+                  return (
+                    <div key={`sep-${idx}`} className="pt-3 pb-1 px-3">
+                      <div className="border-t border-border" />
+                      <p className="text-[10px] text-muted/50 uppercase tracking-widest mt-2">
+                        {item.name}
+                      </p>
+                    </div>
+                  );
+                }
+
                 const isActive =
-                  item.href === "/m/sales/pipeline/meetings/maverick"
-                    ? pathname === "/m/sales/pipeline/meetings/maverick"
-                    : pathname.startsWith(item.href);
+                  pathname === item.href || pathname.startsWith(item.href + "/");
+                const Icon = item.icon;
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`group flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors relative ${
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
                       isActive
                         ? "bg-accent/10 text-accent"
                         : "text-muted hover:text-foreground hover:bg-surface-hover"
                     }`}
                   >
-                    {isActive && (
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-accent rounded-full" />
-                    )}
-                    <item.icon className="w-4 h-4" />
+                    {Icon && <Icon className="w-4 h-4" />}
                     {item.name}
                   </Link>
                 );

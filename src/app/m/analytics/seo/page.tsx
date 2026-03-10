@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import {
   LineChart,
@@ -31,6 +31,7 @@ import {
   ArrowRight,
   Zap,
   Globe,
+  RefreshCw,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 
@@ -173,38 +174,39 @@ export default function SEOAnalyticsPage() {
   const [queryRows, setQueryRows] = useState<SARow[]>([]);
   const [pageRows, setPageRows] = useState<SARow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [datePreset, setDatePreset] = useState("28d");
 
+  const fetchData = useCallback(async (signal?: AbortSignal, isRefresh = false) => {
+    if (isRefresh) setRefreshing(true); else setLoading(true);
+    setError("");
+    try {
+      const { startDate, endDate } = getDateRange(datePreset);
+      const [dailyRes, queryRes, pageRes] = await Promise.all([
+        apiFetch(`/api/seo/daily?startDate=${startDate}&endDate=${endDate}`, { signal }),
+        apiFetch(`/api/seo/search-analytics?dimensions=query&rowLimit=20&startDate=${startDate}&endDate=${endDate}`, { signal }),
+        apiFetch(`/api/seo/search-analytics?dimensions=page&rowLimit=20&startDate=${startDate}&endDate=${endDate}`, { signal }),
+      ]);
+      const [dailyData, queryData, pageData] = await Promise.all([dailyRes.json(), queryRes.json(), pageRes.json()]);
+      if (!dailyRes.ok) throw new Error(dailyData.error || "Failed to load daily data");
+      setDailyRows(dailyData.rows || []);
+      setQueryRows(queryData.rows || []);
+      setPageRows(pageData.rows || []);
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
+      setError(err instanceof Error ? err.message : "Failed to load");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [datePreset]);
+
   useEffect(() => {
     const controller = new AbortController();
-
-    async function fetchData() {
-      setLoading(true);
-      setError("");
-      try {
-        const { startDate, endDate } = getDateRange(datePreset);
-        const [dailyRes, queryRes, pageRes] = await Promise.all([
-          apiFetch(`/api/seo/daily?startDate=${startDate}&endDate=${endDate}`, { signal: controller.signal }),
-          apiFetch(`/api/seo/search-analytics?dimensions=query&rowLimit=20&startDate=${startDate}&endDate=${endDate}`, { signal: controller.signal }),
-          apiFetch(`/api/seo/search-analytics?dimensions=page&rowLimit=20&startDate=${startDate}&endDate=${endDate}`, { signal: controller.signal }),
-        ]);
-        const [dailyData, queryData, pageData] = await Promise.all([dailyRes.json(), queryRes.json(), pageRes.json()]);
-        if (!dailyRes.ok) throw new Error(dailyData.error || "Failed to load daily data");
-        setDailyRows(dailyData.rows || []);
-        setQueryRows(queryData.rows || []);
-        setPageRows(pageData.rows || []);
-      } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") return;
-        setError(err instanceof Error ? err.message : "Failed to load");
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-
+    fetchData(controller.signal);
     return () => controller.abort();
-  }, [datePreset]);
+  }, [fetchData]);
 
   /* -- Derived data ------------------------------------------- */
 
@@ -342,19 +344,30 @@ export default function SEOAnalyticsPage() {
 
   /* -- Render ------------------------------------------------- */
 
-  if (loading) {
-    return (
-      <div className="p-6 space-y-4">
-        <div className="flex items-center gap-2">
-          <div className="w-1 h-6 bg-accent rounded-full" />
-          <h1 className="text-xl font-bold text-foreground tracking-tight">SEO Analytics</h1>
-        </div>
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-6 h-6 animate-spin text-accent" />
-        </div>
+  if (loading) return (
+    <div className="p-6 space-y-4">
+      <div className="flex items-center gap-2">
+        <div className="w-1 h-6 bg-accent rounded-full" />
+        <div className="h-5 w-40 bg-border/50 rounded animate-pulse" />
       </div>
-    );
-  }
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} className="card rounded-xl p-4 space-y-2">
+            <div className="h-3 w-20 bg-border/50 rounded animate-pulse" />
+            <div className="h-6 w-16 bg-border/50 rounded animate-pulse" />
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="card rounded-xl p-4">
+            <div className="h-4 w-32 bg-border/50 rounded animate-pulse mb-4" />
+            <div className="h-[220px] bg-border/50 rounded animate-pulse" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   const sortedInsights = [...insights.filter((i) => i.type === "warning"), ...insights.filter((i) => i.type === "info"), ...insights.filter((i) => i.type === "success")];
 
@@ -362,14 +375,23 @@ export default function SEOAnalyticsPage() {
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <div className="h-1 w-10 rounded bg-accent mb-3" />
-          <h1 className="text-xl font-bold text-foreground tracking-tight">SEO Analytics</h1>
-          <p className="text-muted text-xs mt-0.5">Search Console performance overview (2-day data lag)</p>
+        <div className="flex items-center gap-2">
+          <div className="w-1 h-6 bg-accent rounded-full" />
+          <div>
+            <h1 className="text-xl font-bold text-foreground tracking-tight">SEO Analytics</h1>
+            <p className="text-muted text-xs mt-0.5">Search Console performance overview (2-day data lag)</p>
+          </div>
         </div>
-        <select value={datePreset} onChange={(e) => setDatePreset(e.target.value)} className="px-3 py-2 bg-background/50 border border-border rounded-lg text-foreground text-sm focus:outline-none focus:border-accent">
-          {DATE_PRESETS.map((p) => (<option key={p.value} value={p.value}>{p.label}</option>))}
-        </select>
+        <div className="flex items-center gap-2">
+          <button onClick={() => fetchData(undefined, true)} disabled={refreshing}
+            className="flex items-center gap-1.5 bg-surface border border-border text-muted hover:text-foreground text-xs rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-50">
+            <RefreshCw size={12} className={refreshing ? "animate-spin" : ""} />
+            {refreshing ? "Refreshing..." : "Refresh"}
+          </button>
+          <select value={datePreset} onChange={(e) => setDatePreset(e.target.value)} className="px-3 py-2 bg-background/50 border border-border rounded-lg text-foreground text-sm focus:outline-none focus:border-accent">
+            {DATE_PRESETS.map((p) => (<option key={p.value} value={p.value}>{p.label}</option>))}
+          </select>
+        </div>
       </div>
 
       {error && <div className="text-red-400 text-sm bg-red-500/10 p-3 rounded-lg">{error}</div>}

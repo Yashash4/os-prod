@@ -8,7 +8,6 @@ import {
   Phone,
   Users,
   TrendingUp,
-  Loader2,
   RefreshCw,
   Filter,
   ChevronDown,
@@ -651,8 +650,27 @@ export default function CohortTrackerPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="animate-spin text-muted" size={32} />
+      <div className="p-6 space-y-4">
+        <div className="flex items-center gap-2">
+          <div className="w-1 h-6 bg-accent rounded-full" />
+          <div className="h-5 w-48 bg-border/50 rounded animate-pulse" />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="card rounded-xl p-4 space-y-2">
+              <div className="h-3 w-20 bg-border/50 rounded animate-pulse" />
+              <div className="h-6 w-16 bg-border/50 rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="card rounded-xl p-4">
+              <div className="h-4 w-32 bg-border/50 rounded animate-pulse mb-4" />
+              <div className="h-[220px] bg-border/50 rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

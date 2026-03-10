@@ -228,6 +228,136 @@ export interface SEOContentBrief {
   updated_at: string;
 }
 
+/* ── HR Module ──────────────────────────────────── */
+
+export interface HRDepartment {
+  id: string;
+  name: string;
+  description: string | null;
+  head_employee_id: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HRDesignation {
+  id: string;
+  title: string;
+  level: "intern" | "junior" | "mid" | "senior" | "lead" | "manager" | "head" | "director";
+  department_id: string | null;
+  role_id: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface HREmployee {
+  id: string;
+  user_id: string | null;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  department_id: string | null;
+  designation_id: string | null;
+  employment_type: "full_time" | "part_time" | "contract" | "intern";
+  join_date: string | null;
+  status: "active" | "on_leave" | "notice_period" | "exited";
+  exit_date: string | null;
+  reporting_to: string | null;
+  avatar_url: string | null;
+  created_at: string;
+  updated_at: string;
+  department?: HRDepartment;
+  designation?: HRDesignation;
+  manager?: { id: string; full_name: string } | null;
+}
+
+export interface HRSalary {
+  id: string;
+  employee_id: string;
+  base_salary: number; // paise
+  effective_from: string;
+  effective_to: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface HRCommissionRule {
+  id: string;
+  employee_id: string | null;
+  designation_id: string | null;
+  rule_name: string;
+  type: "percentage" | "flat_per_unit" | "slab";
+  value: number | null;
+  slab_config: { min: number; max: number; rate: number }[] | null;
+  metric: string;
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HRSalaryCycle {
+  id: string;
+  employee_id: string;
+  cycle_month: string;
+  base_amount: number; // paise
+  commission_amount: number; // paise
+  deductions: number; // paise
+  net_amount: number; // paise
+  status: "pending" | "calculated" | "approved" | "paid";
+  paid_date: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  employee?: { id: string; full_name: string };
+}
+
+export interface HRKPI {
+  id: string;
+  name: string;
+  description: string | null;
+  department_id: string | null;
+  designation_id: string | null;
+  unit: "count" | "currency_paise" | "percentage" | "hours";
+  target_value: number;
+  frequency: "daily" | "weekly" | "monthly" | "quarterly";
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface HRKPIEntry {
+  id: string;
+  kpi_id: string;
+  employee_id: string;
+  period: string;
+  actual_value: number;
+  target_value: number;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  kpi?: HRKPI;
+  employee?: { id: string; full_name: string };
+}
+
+export interface HRKRA {
+  id: string;
+  employee_id: string;
+  title: string;
+  description: string | null;
+  weightage: number;
+  review_period: string;
+  self_rating: number | null;
+  manager_rating: number | null;
+  status: "active" | "review_pending" | "reviewed" | "archived";
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface InvoiceFollowUp {
   id: string;
   razorpay_invoice_id: string;

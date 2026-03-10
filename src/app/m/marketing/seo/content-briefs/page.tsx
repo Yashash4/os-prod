@@ -74,7 +74,7 @@ export default function ContentBriefsPage() {
     try {
       const res = await apiFetch("/api/seo/content-briefs");
       const data = await res.json();
-      setRows(data.rows ?? data ?? []);
+      setRows(Array.isArray(data.rows) ? data.rows : Array.isArray(data) ? data : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load briefs");
     } finally {

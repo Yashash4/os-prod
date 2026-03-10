@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Shell from "@/components/Shell";
 import { useAuth } from "@/contexts/AuthContext";
-import { Users, Key, Shield, ScrollText } from "lucide-react";
+import { Users, Key, Shield, ScrollText, Mail } from "lucide-react";
 import { useEffect } from "react";
 
 const ADMIN_NAV = [
@@ -12,6 +12,7 @@ const ADMIN_NAV = [
   { name: "Roles", href: "/m/admin/roles", icon: Key },
   { name: "Permissions", href: "/m/admin/permissions", icon: Shield },
   { name: "Audit Log", href: "/m/admin/audit-log", icon: ScrollText },
+  { name: "Email Templates", href: "/m/admin/email-templates", icon: Mail },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

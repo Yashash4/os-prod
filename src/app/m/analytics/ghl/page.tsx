@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import {
   Target,
@@ -19,6 +19,7 @@ import {
   UserPlus,
   Clock,
   BarChart3,
+  RefreshCw,
 } from "lucide-react";
 import {
   BarChart,
@@ -173,61 +174,62 @@ export default function GHLDashboardPage() {
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [datePreset, setDatePreset] = useState("all");
 
-  useEffect(() => {
-    const controller = new AbortController();
+  const fetchData = useCallback(async (signal?: AbortSignal, isRefresh = false) => {
+    try {
+      if (isRefresh) setRefreshing(true); else setLoading(true);
+      setError(null);
+      // Fetch pipelines and calendars in parallel
+      const [pipRes, calRes] = await Promise.all([
+        apiFetch("/api/ghl/pipelines", { signal }),
+        apiFetch("/api/ghl/calendars", { signal }),
+      ]);
+      if (!pipRes.ok) throw new Error("Failed to fetch pipelines");
+      const pipJson = await pipRes.json();
+      const fetchedPipelines: Pipeline[] = pipJson.pipelines || [];
+      setPipelines(fetchedPipelines);
 
-    async function load() {
-      try {
-        setLoading(true); setError(null);
-        // Fetch pipelines and calendars in parallel
-        const [pipRes, calRes] = await Promise.all([
-          apiFetch("/api/ghl/pipelines", { signal: controller.signal }),
-          apiFetch("/api/ghl/calendars", { signal: controller.signal }),
-        ]);
-        if (!pipRes.ok) throw new Error("Failed to fetch pipelines");
-        const pipJson = await pipRes.json();
-        const fetchedPipelines: Pipeline[] = pipJson.pipelines || [];
-        setPipelines(fetchedPipelines);
+      // Fetch opportunities for EACH pipeline, then combine
+      const oppResults = await Promise.all(
+        fetchedPipelines.map((p) =>
+          apiFetch(`/api/ghl/opportunities?pipeline_id=${p.id}`, { signal }).then((r) => r.json())
+        )
+      );
+      const allOpportunities = oppResults.flatMap((r) => r.opportunities || []);
+      setOpportunities(allOpportunities);
 
-        // Fetch opportunities for EACH pipeline, then combine
-        const oppResults = await Promise.all(
-          fetchedPipelines.map((p) =>
-            apiFetch(`/api/ghl/opportunities?pipeline_id=${p.id}`, { signal: controller.signal }).then((r) => r.json())
+      // Fetch calendar events: need calendarId + date range per calendar
+      const calJson = calRes.ok ? await calRes.json() : { calendars: [] };
+      const calendars: { id: string }[] = calJson.calendars || [];
+      if (calendars.length > 0) {
+        const now = new Date();
+        const start = new Date(now);
+        start.setMonth(start.getMonth() - 6); // fetch 6 months of events
+        const allEvents: CalendarEvent[] = [];
+        const evtResults = await Promise.all(
+          calendars.map((cal) =>
+            apiFetch(`/api/ghl/calendar-events?calendarId=${cal.id}&startTime=${start.toISOString()}&endTime=${now.toISOString()}`, { signal })
+              .then((r) => r.json())
+              .catch(() => ({ events: [] }))
           )
         );
-        const allOpportunities = oppResults.flatMap((r) => r.opportunities || []);
-        setOpportunities(allOpportunities);
+        evtResults.forEach((data) => { if (data.events) allEvents.push(...data.events); });
+        setEvents(allEvents);
+      }
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === "AbortError") return;
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally { setLoading(false); setRefreshing(false); }
+  }, []);
 
-        // Fetch calendar events: need calendarId + date range per calendar
-        const calJson = calRes.ok ? await calRes.json() : { calendars: [] };
-        const calendars: { id: string }[] = calJson.calendars || [];
-        if (calendars.length > 0) {
-          const now = new Date();
-          const start = new Date(now);
-          start.setMonth(start.getMonth() - 6); // fetch 6 months of events
-          const allEvents: CalendarEvent[] = [];
-          const evtResults = await Promise.all(
-            calendars.map((cal) =>
-              apiFetch(`/api/ghl/calendar-events?calendarId=${cal.id}&startTime=${start.toISOString()}&endTime=${now.toISOString()}`, { signal: controller.signal })
-                .then((r) => r.json())
-                .catch(() => ({ events: [] }))
-            )
-          );
-          evtResults.forEach((data) => { if (data.events) allEvents.push(...data.events); });
-          setEvents(allEvents);
-        }
-      } catch (err: unknown) {
-        if (err instanceof Error && err.name === "AbortError") return;
-        setError(err instanceof Error ? err.message : "Unknown error");
-      } finally { setLoading(false); }
-    }
-    load();
-
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchData(controller.signal);
     return () => controller.abort();
-  }, [datePreset]);
+  }, [datePreset, fetchData]);
 
   const stageMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -452,19 +454,35 @@ export default function GHLDashboardPage() {
 
   /* ── Render ── */
 
-  if (loading) {
-    return (
-      <div className="p-6 space-y-6">
-        <div><div className="h-1 w-10 rounded bg-accent mb-3" /><h1 className="text-lg font-bold text-foreground tracking-wide">GHL Dashboard</h1><p className="text-xs text-muted mt-0.5">GoHighLevel pipeline and opportunity analytics</p></div>
-        <div className="flex items-center justify-center h-64"><Loader2 className="w-6 h-6 text-muted animate-spin" /></div>
+  if (loading) return (
+    <div className="p-6 space-y-4">
+      <div className="flex items-center gap-2">
+        <div className="w-1 h-6 bg-accent rounded-full" />
+        <div className="h-5 w-40 bg-border/50 rounded animate-pulse" />
       </div>
-    );
-  }
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} className="card rounded-xl p-4 space-y-2">
+            <div className="h-3 w-20 bg-border/50 rounded animate-pulse" />
+            <div className="h-6 w-16 bg-border/50 rounded animate-pulse" />
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="card rounded-xl p-4">
+            <div className="h-4 w-32 bg-border/50 rounded animate-pulse mb-4" />
+            <div className="h-[220px] bg-border/50 rounded animate-pulse" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   if (error) {
     return (
       <div className="p-6 space-y-6">
-        <div><div className="h-1 w-10 rounded bg-accent mb-3" /><h1 className="text-lg font-bold text-foreground tracking-wide">GHL Dashboard</h1></div>
+        <div className="flex items-center gap-2"><div className="w-1 h-6 bg-accent rounded-full" /><h1 className="text-lg font-bold text-foreground tracking-wide">GHL Dashboard</h1></div>
         <div className="flex items-center justify-center h-64"><p className="text-red-400 text-sm">{error}</p></div>
       </div>
     );
@@ -477,13 +495,22 @@ export default function GHLDashboardPage() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <div className="h-1 w-10 rounded bg-accent mb-3" />
-          <h1 className="text-lg font-bold text-foreground tracking-wide">GHL Dashboard</h1>
-          <p className="text-xs text-muted mt-0.5">GoHighLevel pipeline and opportunity analytics</p>
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-1 h-6 bg-accent rounded-full" />
+            <h1 className="text-lg font-bold text-foreground tracking-wide">GHL Dashboard</h1>
+          </div>
+          <p className="text-xs text-muted mt-0.5 ml-3">GoHighLevel pipeline and opportunity analytics</p>
         </div>
-        <select value={datePreset} onChange={(e) => setDatePreset(e.target.value)} className="px-3 py-2 bg-background/50 border border-border rounded-lg text-foreground text-sm focus:outline-none focus:border-accent">
-          {DATE_PRESETS.map((p) => (<option key={p.value} value={p.value}>{p.label}</option>))}
-        </select>
+        <div className="flex items-center gap-2">
+          <button onClick={() => fetchData(undefined, true)} disabled={refreshing}
+            className="flex items-center gap-1.5 bg-surface border border-border text-muted hover:text-foreground text-xs rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-50">
+            <RefreshCw size={12} className={refreshing ? "animate-spin" : ""} />
+            {refreshing ? "Refreshing..." : "Refresh"}
+          </button>
+          <select value={datePreset} onChange={(e) => setDatePreset(e.target.value)} className="px-3 py-2 bg-background/50 border border-border rounded-lg text-foreground text-sm focus:outline-none focus:border-accent">
+            {DATE_PRESETS.map((p) => (<option key={p.value} value={p.value}>{p.label}</option>))}
+          </select>
+        </div>
       </div>
 
       {/* Insights */}

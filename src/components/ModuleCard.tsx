@@ -33,6 +33,13 @@ import {
   ScrollText,
   Shield,
   KeyRound,
+  Briefcase,
+  Building2,
+  BadgeCheck,
+  IndianRupee,
+  Wallet,
+  Search,
+  LayoutDashboard,
 } from "lucide-react";
 
 const iconComponents: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -65,6 +72,13 @@ const iconComponents: Record<string, React.ComponentType<{ className?: string }>
   ScrollText,
   Shield,
   Key: KeyRound,
+  Briefcase,
+  Building2,
+  BadgeCheck,
+  IndianRupee,
+  Wallet,
+  Search,
+  LayoutDashboard,
 };
 
 interface ModuleCardProps {
