@@ -34,8 +34,28 @@ export async function GET(req: NextRequest) {
     const { data, count, error } = await query;
     if (error) throw error;
 
+    // Batch-fetch user names for the log entries
+    const userIds = [...new Set((data || []).map((l: { user_id: string }) => l.user_id).filter(Boolean))];
+    let userMap: Record<string, string> = {};
+    if (userIds.length > 0) {
+      const { data: users } = await supabaseAdmin
+        .from("users")
+        .select("id, full_name, email")
+        .in("id", userIds);
+      if (users) {
+        userMap = Object.fromEntries(
+          users.map((u: { id: string; full_name: string | null; email: string }) => [u.id, u.full_name || u.email])
+        );
+      }
+    }
+
+    const logs = (data || []).map((log: { user_id: string } & Record<string, unknown>) => ({
+      ...log,
+      user_name: userMap[log.user_id] || null,
+    }));
+
     return NextResponse.json({
-      logs: data || [],
+      logs,
       total: count || 0,
       page,
       limit,

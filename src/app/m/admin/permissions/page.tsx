@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { ChevronRight, ChevronDown, Search } from "lucide-react";
+import { ChevronRight, ChevronDown, Search, ChevronsUpDown, Loader2 } from "lucide-react";
 import type { Role, Module } from "@/types";
 import { apiFetch } from "@/lib/api-fetch";
 
@@ -93,6 +93,7 @@ export default function PermissionsPage() {
   const [saving, setSaving] = useState<Set<string>>(new Set());
   const [expandedSlugs, setExpandedSlugs] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<string | null>(null);
+  const [bulkSaving, setBulkSaving] = useState(false);
 
   const [users, setUsers] = useState<UserForOverride[]>([]);
   const [selectedUserId, setSelectedUserId] = useState("");
@@ -173,6 +174,80 @@ export default function PermissionsPage() {
   function showToast(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(null), 2000);
+  }
+
+  function collectExpandableSlugs(nodes: ModuleNode[]): string[] {
+    const result: string[] = [];
+    for (const node of nodes) {
+      if (node.children.length > 0) {
+        result.push(node.module.slug);
+        result.push(...collectExpandableSlugs(node.children));
+      }
+    }
+    return result;
+  }
+
+  function expandAll() {
+    setExpandedSlugs(new Set(collectExpandableSlugs(tree)));
+  }
+
+  function collapseAll() {
+    setExpandedSlugs(new Set());
+  }
+
+  async function bulkToggleAll(action: "grant" | "revoke") {
+    if (!selectedRoleId || bulkSaving) return;
+
+    const modulesToChange = modules.filter((m) => {
+      const currentlyEnabled = hasAccess(m.id);
+      return action === "grant" ? !currentlyEnabled : currentlyEnabled;
+    });
+
+    if (modulesToChange.length === 0) {
+      showToast(action === "grant" ? "All modules already enabled" : "All modules already disabled");
+      return;
+    }
+
+    setBulkSaving(true);
+    const ids = new Set(modulesToChange.map((m) => m.id));
+    setSaving((prev) => new Set([...prev, ...ids]));
+
+    // Optimistic update
+    if (action === "grant") {
+      setRoleModules((prev) => [
+        ...prev,
+        ...modulesToChange.map((m) => ({ role_id: selectedRoleId, module_id: m.id })),
+      ]);
+    } else {
+      setRoleModules((prev) =>
+        prev.filter((rm) => !(rm.role_id === selectedRoleId && ids.has(rm.module_id)))
+      );
+    }
+
+    const results = await Promise.allSettled(
+      modulesToChange.map((m) =>
+        apiFetch("/api/admin/permissions", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role_id: selectedRoleId, module_id: m.id, action }),
+        })
+      )
+    );
+
+    const failed = results.filter((r) => r.status === "rejected" || (r.status === "fulfilled" && !r.value.ok));
+    if (failed.length > 0) {
+      showToast(`${failed.length} module(s) failed to update — refreshing`);
+      fetchPermissions();
+    } else {
+      showToast(action === "grant" ? "All modules enabled" : "All modules disabled");
+    }
+
+    setSaving((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) next.delete(id);
+      return next;
+    });
+    setBulkSaving(false);
   }
 
   async function toggleRoleModule(moduleId: string) {
@@ -287,8 +362,10 @@ export default function PermissionsPage() {
     let ring: "green" | "red" | null = null;
     let onToggle: () => void;
 
+    const isAdminRole = mode === "role" && selectedRole?.is_admin === true;
+
     if (mode === "role") {
-      enabled = hasAccess(node.module.id);
+      enabled = isAdminRole ? true : hasAccess(node.module.id);
       onToggle = () => toggleRoleModule(node.module.id);
     } else {
       const override = getOverride(node.module.id);
@@ -326,7 +403,7 @@ export default function PermissionsPage() {
           <Toggle
             enabled={enabled}
             onToggle={onToggle}
-            disabled={isSaving}
+            disabled={isSaving || isAdminRole}
             ring={ring}
           />
 
@@ -436,13 +513,59 @@ export default function PermissionsPage() {
 
           {selectedRole && (
             <div className="border border-border rounded-lg overflow-hidden">
-              <div className="bg-surface px-4 py-3 border-b border-border flex items-center justify-between">
-                <span className="text-sm font-medium text-foreground">
+              {selectedRole.is_admin && (
+                <div className="bg-accent/10 border-b border-accent/20 px-4 py-2.5 flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent flex-shrink-0" />
+                  <span className="text-xs text-accent">
+                    Admin roles have access to all modules by default
+                  </span>
+                </div>
+              )}
+              <div className="bg-surface px-4 py-3 border-b border-border flex items-center justify-between gap-3">
+                <span className="text-sm font-medium text-foreground flex-shrink-0">
                   Modules for {selectedRole.name}
                 </span>
-                <span className="text-xs text-muted">
-                  {enabledCount} of {modules.length} enabled
-                </span>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={expandAll}
+                    className="text-xs text-muted hover:text-foreground transition-colors flex items-center gap-1"
+                  >
+                    <ChevronsUpDown className="w-3 h-3" />
+                    Expand All
+                  </button>
+                  <button
+                    onClick={collapseAll}
+                    className="text-xs text-muted hover:text-foreground transition-colors flex items-center gap-1"
+                  >
+                    <ChevronsUpDown className="w-3 h-3 rotate-90" />
+                    Collapse All
+                  </button>
+                  <span className="text-border">|</span>
+                  {!selectedRole.is_admin && (
+                    <>
+                      <button
+                        onClick={() => bulkToggleAll("grant")}
+                        disabled={bulkSaving}
+                        className="text-xs text-muted hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                      >
+                        {bulkSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                        Enable All
+                      </button>
+                      <button
+                        onClick={() => bulkToggleAll("revoke")}
+                        disabled={bulkSaving}
+                        className="text-xs text-muted hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                      >
+                        {bulkSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                        Disable All
+                      </button>
+                      <span className="text-border">|</span>
+                    </>
+                  )}
+                  <span className="text-xs text-muted">
+                    {selectedRole.is_admin ? modules.length : enabledCount} of {modules.length} enabled
+                  </span>
+                </div>
               </div>
               <div className="max-h-[60vh] overflow-y-auto">
                 {tree.map((node) => renderModuleRow(node, 0, "role"))}

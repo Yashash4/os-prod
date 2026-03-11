@@ -13,7 +13,13 @@ export async function GET(req: NextRequest) {
     .select("*")
     .order("created_at", { ascending: false });
 
-  if (month) query = query.eq("month", month);
+  if (month) {
+    // month column is date type (e.g. 2026-03-01), filter by range for the given YYYY-MM
+    const start = `${month}-01`;
+    const [y, m] = month.split("-").map(Number);
+    const nextMonth = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`;
+    query = query.gte("month", start).lt("month", nextMonth);
+  }
 
   const { data, error } = await query;
 
