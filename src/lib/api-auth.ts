@@ -173,3 +173,57 @@ export async function requireModuleAccess(
     ),
   };
 }
+
+/**
+ * Returns the set of sub-module slugs the user can access under a given parent.
+ * Call this after requireModuleAccess has already verified the user is authenticated.
+ *
+ * Returns a Set of accessible sub-module slugs.
+ * Admins get a Set containing "__admin__" which signals full access.
+ */
+export async function getAccessibleSubModules(
+  auth: AuthResult,
+  parentSlug: string
+): Promise<Set<string>> {
+  if (auth.isAdmin) return new Set(["__admin__"]);
+
+  const { userId, roleId } = auth;
+
+  const { data: allSubModules } = await supabaseAdmin
+    .from("modules")
+    .select("id, slug")
+    .eq("parent_slug", parentSlug)
+    .eq("is_active", true);
+
+  if (!allSubModules?.length) return new Set();
+
+  const subModuleIds = allSubModules.map((m: { id: string; slug: string }) => m.id);
+  const subModuleById = new Map(allSubModules.map((m: { id: string; slug: string }) => [m.id, m.slug]));
+  const accessibleIds = new Set<string>();
+
+  if (roleId) {
+    const { data: roleAccess } = await supabaseAdmin
+      .from("role_modules")
+      .select("module_id")
+      .eq("role_id", roleId)
+      .in("module_id", subModuleIds);
+    for (const row of roleAccess || []) accessibleIds.add(row.module_id);
+  }
+
+  const { data: overrides } = await supabaseAdmin
+    .from("user_module_overrides")
+    .select("module_id, access_type")
+    .eq("user_id", userId)
+    .in("module_id", subModuleIds);
+  for (const o of overrides || []) {
+    if (o.access_type === "revoke") accessibleIds.delete(o.module_id);
+    else if (o.access_type === "grant") accessibleIds.add(o.module_id);
+  }
+
+  const slugSet = new Set<string>();
+  for (const id of accessibleIds) {
+    const slug = subModuleById.get(id);
+    if (slug) slugSet.add(slug);
+  }
+  return slugSet;
+}

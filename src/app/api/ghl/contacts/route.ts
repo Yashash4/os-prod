@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getContact } from "@/lib/ghl";
-import { authenticateRequest } from "@/lib/api-auth";
+import { requireModuleAccess } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
-  const auth = await authenticateRequest(req);
+  const auth = await requireModuleAccess(req, "ghl");
   if ("error" in auth) return auth.error;
   try {
     const contactId = req.nextUrl.searchParams.get("contactId");

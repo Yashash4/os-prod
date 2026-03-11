@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { authenticateRequest } from "@/lib/api-auth";
+import { requireModuleAccess } from "@/lib/api-auth";
 import { getAccountInsightsByRange } from "@/lib/meta";
 
 /**
@@ -225,7 +225,7 @@ export async function GET(req: NextRequest) {
 
 // Manual trigger from UI uses POST — requires authenticated user
 export async function POST(req: NextRequest) {
-  const auth = await authenticateRequest(req);
+  const auth = await requireModuleAccess(req, "analytics");
   if ("error" in auth) return auth.error;
   return runSync(req);
 }

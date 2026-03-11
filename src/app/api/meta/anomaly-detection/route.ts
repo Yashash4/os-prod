@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { metaFetch } from "@/lib/meta";
-import { authenticateRequest } from "@/lib/api-auth";
+import { requireModuleAccess } from "@/lib/api-auth";
 
 interface DayRow {
   campaign_id: string;
@@ -43,7 +43,7 @@ let inflight: { promise: Promise<unknown>; key: string } | null = null;
 const CACHE_TTL = 120_000; // 2 minutes
 
 export async function GET(req: NextRequest) {
-  const auth = await authenticateRequest(req);
+  const auth = await requireModuleAccess(req, "meta");
   if ("error" in auth) return auth.error;
 
   try {

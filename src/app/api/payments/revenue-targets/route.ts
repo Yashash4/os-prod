@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { authenticateRequest } from "@/lib/api-auth";
+import { requireModuleAccess } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
-  const auth = await authenticateRequest(req);
+  const auth = await requireModuleAccess(req, "payments");
   if ("error" in auth) return auth.error;
   try {
     const periodType = req.nextUrl.searchParams.get("period_type");
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await authenticateRequest(req);
+  const auth = await requireModuleAccess(req, "payments");
   if ("error" in auth) return auth.error;
   try {
     const body = await req.json();
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const auth = await authenticateRequest(req);
+  const auth = await requireModuleAccess(req, "payments");
   if ("error" in auth) return auth.error;
   try {
     const body = await req.json();
@@ -81,7 +81,7 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const auth = await authenticateRequest(req);
+  const auth = await requireModuleAccess(req, "payments");
   if ("error" in auth) return auth.error;
   try {
     const id = req.nextUrl.searchParams.get("id");

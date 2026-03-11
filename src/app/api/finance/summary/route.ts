@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticateRequest } from "@/lib/api-auth";
+import { requireModuleAccess } from "@/lib/api-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(req: NextRequest) {
-  const result = await authenticateRequest(req);
+  const result = await requireModuleAccess(req, "finance");
   if ("error" in result) return result.error;
 
   const url = req.nextUrl;

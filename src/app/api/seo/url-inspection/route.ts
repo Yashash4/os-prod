@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { inspectUrls } from "@/lib/gsc";
-import { authenticateRequest } from "@/lib/api-auth";
+import { requireModuleAccess } from "@/lib/api-auth";
 
 export async function POST(req: NextRequest) {
-  const auth = await authenticateRequest(req);
+  const auth = await requireModuleAccess(req, "seo");
   if ("error" in auth) return auth.error;
   try {
     const body = await req.json();

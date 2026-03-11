@@ -1,23 +1,76 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { authenticateRequest } from "@/lib/api-auth";
+import { requireModuleAccess, getAccessibleSubModules } from "@/lib/api-auth";
+
+type RawTask = Record<string, unknown> & { assigned_to: string | null };
+type PublicUser = { id: string; full_name: string | null; email: string; avatar_url: string | null };
+
+async function enrichTasksWithUsers(tasks: RawTask[]) {
+  const userIds = [...new Set(tasks.map((t) => t.assigned_to).filter(Boolean))] as string[];
+  let userMap: Record<string, PublicUser> = {};
+  if (userIds.length > 0) {
+    const { data: users } = await supabaseAdmin
+      .from("users")
+      .select("id, full_name, email, avatar_url")
+      .in("id", userIds);
+    if (users) {
+      userMap = Object.fromEntries(users.map((u: PublicUser) => [u.id, u]));
+    }
+  }
+  return tasks.map((t) => ({
+    ...t,
+    assigned_user: t.assigned_to ? (userMap[t.assigned_to] || null) : null,
+  }));
+}
 
 export async function GET(req: NextRequest) {
-  const auth = await authenticateRequest(req);
+  const auth = await requireModuleAccess(req, "tasks");
   if ("error" in auth) return auth.error;
+
+  const subModules = await getAccessibleSubModules(auth.auth, "tasks");
+  const isAdmin     = subModules.has("__admin__");
+  const canSeeBoard = isAdmin || subModules.has("tasks-board");
+  const canSeeTeam  = isAdmin || subModules.has("tasks-team");
+  const canSeeMy    = isAdmin || subModules.has("tasks-my");
 
   try {
     const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
     const projectId = searchParams.get("project_id");
     const assignedTo = searchParams.get("assigned_to");
     const status = searchParams.get("status");
 
+    // Single task fetch
+    if (id) {
+      const { data, error } = await supabaseAdmin
+        .from("tasks")
+        .select("*, project:projects!tasks_project_id_fkey(id, name)")
+        .eq("id", id)
+        .single();
+      if (error) throw error;
+      // If user can only see their own tasks, enforce ownership
+      if (!canSeeBoard && !canSeeTeam && canSeeMy && data.assigned_to !== auth.auth.userId) {
+        return NextResponse.json({ error: "Access denied" }, { status: 403 });
+      }
+      const [enriched] = await enrichTasksWithUsers([data as RawTask]);
+      return NextResponse.json({ task: enriched });
+    }
+
     let query = supabaseAdmin
       .from("tasks")
-      .select("*, assigned_user:users!tasks_assigned_to_fkey(id, full_name, email, avatar_url), project:projects!tasks_project_id_fkey(id, name)");
+      .select("*, project:projects!tasks_project_id_fkey(id, name)");
+
+    // Scope data: if user only has tasks-my (not board/team), force filter to assigned self
+    if (!canSeeBoard && !canSeeTeam) {
+      if (canSeeMy) {
+        query = query.eq("assigned_to", auth.auth.userId);
+      } else {
+        return NextResponse.json({ tasks: [] });
+      }
+    }
 
     if (projectId) query = query.eq("project_id", projectId);
-    if (assignedTo) query = query.eq("assigned_to", assignedTo);
+    if (assignedTo && (canSeeBoard || canSeeTeam)) query = query.eq("assigned_to", assignedTo);
     if (status) query = query.eq("status", status);
 
     query = query.order("order", { ascending: true }).order("created_at", { ascending: false });
@@ -25,7 +78,9 @@ export async function GET(req: NextRequest) {
     const { data, error } = await query;
     if (error) throw error;
 
-    return NextResponse.json({ tasks: data || [] });
+    const enriched = await enrichTasksWithUsers((data || []) as RawTask[]);
+
+    return NextResponse.json({ tasks: enriched });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to fetch tasks" },
@@ -35,12 +90,23 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await authenticateRequest(req);
+  const auth = await requireModuleAccess(req, "tasks");
   if ("error" in auth) return auth.error;
+
+  const subModules = await getAccessibleSubModules(auth.auth, "tasks");
+  const isAdmin     = subModules.has("__admin__");
+  const canSeeBoard = isAdmin || subModules.has("tasks-board");
+  const canSeeTeam  = isAdmin || subModules.has("tasks-team");
+  const canSeeMy    = isAdmin || subModules.has("tasks-my");
 
   try {
     const body = await req.json();
-    const { project_id, title, description, status, priority, assigned_to, due_date, label } = body;
+    const { project_id, title, description, status, priority, due_date, label } = body;
+    // If user only has tasks-my, they can only create tasks assigned to themselves
+    let assigned_to = body.assigned_to;
+    if (!canSeeBoard && !canSeeTeam && canSeeMy) {
+      assigned_to = auth.auth.userId;
+    }
 
     if (!title) {
       return NextResponse.json({ error: "Title is required" }, { status: 400 });
@@ -59,12 +125,14 @@ export async function POST(req: NextRequest) {
         label: label || null,
         created_by: auth.auth.userId,
       })
-      .select("*, assigned_user:users!tasks_assigned_to_fkey(id, full_name, email, avatar_url), project:projects!tasks_project_id_fkey(id, name)")
+      .select("*, project:projects!tasks_project_id_fkey(id, name)")
       .single();
 
     if (error) throw error;
 
-    return NextResponse.json({ task: data }, { status: 201 });
+    const [enriched] = await enrichTasksWithUsers([data as RawTask]);
+
+    return NextResponse.json({ task: enriched }, { status: 201 });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to create task" },
@@ -74,8 +142,14 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const auth = await authenticateRequest(req);
+  const auth = await requireModuleAccess(req, "tasks");
   if ("error" in auth) return auth.error;
+
+  const subModules = await getAccessibleSubModules(auth.auth, "tasks");
+  const isAdmin     = subModules.has("__admin__");
+  const canSeeBoard = isAdmin || subModules.has("tasks-board");
+  const canSeeTeam  = isAdmin || subModules.has("tasks-team");
+  const canSeeMy    = isAdmin || subModules.has("tasks-my");
 
   try {
     const body = await req.json();
@@ -83,6 +157,14 @@ export async function PUT(req: NextRequest) {
 
     if (!id) {
       return NextResponse.json({ error: "Task id is required" }, { status: 400 });
+    }
+
+    // If user only has tasks-my, verify task is assigned to them before updating
+    if (!canSeeBoard && !canSeeTeam && canSeeMy) {
+      const { data: existing } = await supabaseAdmin.from("tasks").select("assigned_to").eq("id", id).single();
+      if (!existing || existing.assigned_to !== auth.auth.userId) {
+        return NextResponse.json({ error: "Access denied" }, { status: 403 });
+      }
     }
 
     const allowed: Record<string, unknown> = {};
@@ -96,12 +178,14 @@ export async function PUT(req: NextRequest) {
       .from("tasks")
       .update(allowed)
       .eq("id", id)
-      .select("*, assigned_user:users!tasks_assigned_to_fkey(id, full_name, email, avatar_url), project:projects!tasks_project_id_fkey(id, name)")
+      .select("*, project:projects!tasks_project_id_fkey(id, name)")
       .single();
 
     if (error) throw error;
 
-    return NextResponse.json({ task: data });
+    const [enriched] = await enrichTasksWithUsers([data as RawTask]);
+
+    return NextResponse.json({ task: enriched });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to update task" },
@@ -111,8 +195,14 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const auth = await authenticateRequest(req);
+  const auth = await requireModuleAccess(req, "tasks");
   if ("error" in auth) return auth.error;
+
+  const subModules = await getAccessibleSubModules(auth.auth, "tasks");
+  const isAdmin     = subModules.has("__admin__");
+  const canSeeBoard = isAdmin || subModules.has("tasks-board");
+  const canSeeTeam  = isAdmin || subModules.has("tasks-team");
+  const canSeeMy    = isAdmin || subModules.has("tasks-my");
 
   try {
     const { searchParams } = new URL(req.url);
@@ -120,6 +210,13 @@ export async function DELETE(req: NextRequest) {
 
     if (!id) {
       return NextResponse.json({ error: "Task id is required" }, { status: 400 });
+    }
+
+    if (!canSeeBoard && !canSeeTeam && canSeeMy) {
+      const { data: existing } = await supabaseAdmin.from("tasks").select("assigned_to").eq("id", id).single();
+      if (!existing || existing.assigned_to !== auth.auth.userId) {
+        return NextResponse.json({ error: "Access denied" }, { status: 403 });
+      }
     }
 
     const { error } = await supabaseAdmin.from("tasks").delete().eq("id", id);

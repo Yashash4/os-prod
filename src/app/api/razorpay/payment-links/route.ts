@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createPaymentLink, getPaymentLinks } from "@/lib/razorpay";
-import { authenticateRequest } from "@/lib/api-auth";
+import { requireModuleAccess } from "@/lib/api-auth";
 
 // In-memory cache for payment links
 let cache: { data: unknown[]; ts: number } | null = null;
 const CACHE_TTL = 120_000;
 
 export async function GET(req: NextRequest) {
-  const auth = await authenticateRequest(req);
+  const auth = await requireModuleAccess(req, "payments");
   if ("error" in auth) return auth.error;
   try {
     if (cache && Date.now() - cache.ts < CACHE_TTL) {
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await authenticateRequest(req);
+  const auth = await requireModuleAccess(req, "payments");
   if ("error" in auth) return auth.error;
   try {
     const body = await req.json();

@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { authenticateRequest } from "@/lib/api-auth";
+import { requireModuleAccess, getAccessibleSubModules } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
-  const auth = await authenticateRequest(req);
+  const auth = await requireModuleAccess(req, "tasks");
   if ("error" in auth) return auth.error;
+
+  const subModules = await getAccessibleSubModules(auth.auth, "tasks");
+  const isAdmin     = subModules.has("__admin__");
+  const canSeeBoard = isAdmin || subModules.has("tasks-board");
+  const canSeeTeam  = isAdmin || subModules.has("tasks-team");
+  const canSeeMy    = isAdmin || subModules.has("tasks-my");
 
   try {
     const { searchParams } = new URL(req.url);
@@ -12,6 +18,14 @@ export async function GET(req: NextRequest) {
 
     if (!taskId) {
       return NextResponse.json({ error: "task_id is required" }, { status: 400 });
+    }
+
+    // If user only has tasks-my, verify the task is assigned to them
+    if (!canSeeBoard && !canSeeTeam && canSeeMy) {
+      const { data: task } = await supabaseAdmin.from("tasks").select("assigned_to").eq("id", taskId).single();
+      if (!task || task.assigned_to !== auth.auth.userId) {
+        return NextResponse.json({ error: "Access denied" }, { status: 403 });
+      }
     }
 
     const { data, error } = await supabaseAdmin
@@ -32,12 +46,26 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await authenticateRequest(req);
+  const auth = await requireModuleAccess(req, "tasks");
   if ("error" in auth) return auth.error;
+
+  const subModules = await getAccessibleSubModules(auth.auth, "tasks");
+  const isAdmin     = subModules.has("__admin__");
+  const canSeeBoard = isAdmin || subModules.has("tasks-board");
+  const canSeeTeam  = isAdmin || subModules.has("tasks-team");
+  const canSeeMy    = isAdmin || subModules.has("tasks-my");
 
   try {
     const body = await req.json();
     const { task_id, body: commentBody } = body;
+
+    // If user only has tasks-my, verify the task is assigned to them before commenting
+    if (!canSeeBoard && !canSeeTeam && canSeeMy) {
+      const { data: task } = await supabaseAdmin.from("tasks").select("assigned_to").eq("id", task_id).single();
+      if (!task || task.assigned_to !== auth.auth.userId) {
+        return NextResponse.json({ error: "Access denied" }, { status: 403 });
+      }
+    }
 
     if (!task_id || !commentBody) {
       return NextResponse.json(

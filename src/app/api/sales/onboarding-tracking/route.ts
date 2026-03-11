@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { authenticateRequest } from "@/lib/api-auth";
+import { requireModuleAccess } from "@/lib/api-auth";
 
 const DEFAULT_CHECKLIST = [
   { id: "intro", label: "Introduction call completed", done: false },
@@ -14,7 +14,7 @@ const DEFAULT_CHECKLIST = [
 
 // GET: Auto-sync onboarding with won deals, then return merged records
 export async function GET(req: NextRequest) {
-  const auth = await authenticateRequest(req);
+  const auth = await requireModuleAccess(req, "sales");
   if ("error" in auth) return auth.error;
   try {
     // 1. Fetch all won deals from call_booked_tracking
@@ -129,7 +129,7 @@ export async function GET(req: NextRequest) {
 
 // PUT: Update an onboarding record
 export async function PUT(req: NextRequest) {
-  const auth = await authenticateRequest(req);
+  const auth = await requireModuleAccess(req, "sales");
   if ("error" in auth) return auth.error;
   try {
     const body = await req.json();

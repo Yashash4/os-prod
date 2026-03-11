@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCampaignInsightsBulk } from "@/lib/meta";
-import { authenticateRequest } from "@/lib/api-auth";
+import { requireModuleAccess } from "@/lib/api-auth";
 
 // In-memory cache + in-flight dedup
 let cache: { data: unknown; ts: number; key: string } | null = null;
@@ -8,7 +8,7 @@ let inflight: { promise: Promise<unknown>; key: string } | null = null;
 const CACHE_TTL = 120_000; // 2 minutes
 
 export async function GET(req: NextRequest) {
-  const auth = await authenticateRequest(req);
+  const auth = await requireModuleAccess(req, "meta");
   if ("error" in auth) return auth.error;
   try {
     const datePreset = req.nextUrl.searchParams.get("date_preset") || "last_30d";

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { authenticateRequest } from "@/lib/api-auth";
+import { requireModuleAccess, getAccessibleSubModules } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
-  const auth = await authenticateRequest(req);
+  const auth = await requireModuleAccess(req, "tasks");
   if ("error" in auth) return auth.error;
 
   try {
@@ -31,8 +31,13 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await authenticateRequest(req);
+  const auth = await requireModuleAccess(req, "tasks");
   if ("error" in auth) return auth.error;
+
+  const subModules = await getAccessibleSubModules(auth.auth, "tasks");
+  if (!subModules.has("__admin__") && !subModules.has("tasks-projects")) {
+    return NextResponse.json({ error: "Module access required" }, { status: 403 });
+  }
 
   try {
     const body = await req.json();
@@ -65,8 +70,13 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const auth = await authenticateRequest(req);
+  const auth = await requireModuleAccess(req, "tasks");
   if ("error" in auth) return auth.error;
+
+  const subModules = await getAccessibleSubModules(auth.auth, "tasks");
+  if (!subModules.has("__admin__") && !subModules.has("tasks-projects")) {
+    return NextResponse.json({ error: "Module access required" }, { status: 403 });
+  }
 
   try {
     const body = await req.json();
@@ -101,8 +111,13 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const auth = await authenticateRequest(req);
+  const auth = await requireModuleAccess(req, "tasks");
   if ("error" in auth) return auth.error;
+
+  const subModules = await getAccessibleSubModules(auth.auth, "tasks");
+  if (!subModules.has("__admin__") && !subModules.has("tasks-projects")) {
+    return NextResponse.json({ error: "Module access required" }, { status: 403 });
+  }
 
   try {
     const { searchParams } = new URL(req.url);
