@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { authenticateRequest, requireAdmin } from "@/lib/api-auth";
+import { authenticateRequest, requireModuleAccess } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
   const auth = await authenticateRequest(req);
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const result = await requireAdmin(req);
+  const result = await requireModuleAccess(req, "automations");
   if ("error" in result) return result.error;
 
   try {
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const result = await requireAdmin(req);
+  const result = await requireModuleAccess(req, "automations");
   if ("error" in result) return result.error;
 
   try {
@@ -118,7 +118,7 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const result = await requireAdmin(req);
+  const result = await requireModuleAccess(req, "automations");
   if ("error" in result) return result.error;
 
   try {

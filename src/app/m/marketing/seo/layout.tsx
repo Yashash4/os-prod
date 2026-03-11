@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Shell from "@/components/Shell";
+import ModuleGuard from "@/components/ModuleGuard";
+import { useAllowedModules } from "@/hooks/useAllowedModules";
 import {
   LayoutDashboard,
   TrendingUp,
@@ -46,8 +48,24 @@ const SEO_NAV: NavItem[] = [
 
 export default function SeoLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { filterNav, canAccessPath, loaded } = useAllowedModules();
+
+  if (loaded && !canAccessPath(pathname)) {
+    return (
+      <ModuleGuard moduleSlug="marketing">
+        <Shell>
+          <div className="flex items-center justify-center h-[calc(100vh-48px)]">
+            <p className="text-muted text-sm">You don&apos;t have access to this page.</p>
+          </div>
+        </Shell>
+      </ModuleGuard>
+    );
+  }
+
+  const visibleNav = filterNav(SEO_NAV);
 
   return (
+    <ModuleGuard moduleSlug="marketing">
     <Shell>
       <div className="flex h-[calc(100vh-48px)] overflow-hidden">
         <aside className="w-52 border-r border-border bg-surface flex-shrink-0 overflow-y-auto">
@@ -56,7 +74,7 @@ export default function SeoLayout({ children }: { children: React.ReactNode }) {
               SEO
             </p>
             <nav className="space-y-0.5">
-              {SEO_NAV.map((item, idx) => {
+              {visibleNav.map((item, idx) => {
                 if (item.separator) {
                   return (
                     <div key={`sep-${idx}`} className="pt-3 pb-1 px-3">
@@ -95,5 +113,6 @@ export default function SeoLayout({ children }: { children: React.ReactNode }) {
         <div className="flex-1 min-w-0 overflow-auto">{children}</div>
       </div>
     </Shell>
+    </ModuleGuard>
   );
 }

@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Shell from "@/components/Shell";
+import ModuleGuard from "@/components/ModuleGuard";
+import { useAllowedModules } from "@/hooks/useAllowedModules";
 import { LayoutDashboard, Calendar, Target } from "lucide-react";
 
 const GHL_NAV = [
@@ -13,8 +15,24 @@ const GHL_NAV = [
 
 export default function GHLLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { filterNav, canAccessPath, loaded } = useAllowedModules();
+
+  if (loaded && !canAccessPath(pathname)) {
+    return (
+      <ModuleGuard moduleSlug="sales">
+        <Shell>
+          <div className="flex items-center justify-center h-[calc(100vh-48px)]">
+            <p className="text-muted text-sm">You don&apos;t have access to this page.</p>
+          </div>
+        </Shell>
+      </ModuleGuard>
+    );
+  }
+
+  const visibleNav = filterNav(GHL_NAV);
 
   return (
+    <ModuleGuard moduleSlug="sales">
     <Shell>
       <div className="flex h-[calc(100vh-48px)] overflow-hidden">
         {/* Sidebar */}
@@ -24,7 +42,7 @@ export default function GHLLayout({ children }: { children: React.ReactNode }) {
               GHL
             </p>
             <nav className="space-y-0.5">
-              {GHL_NAV.map((item) => {
+              {visibleNav.map((item) => {
                 const isActive =
                   item.href === "/m/sales/ghl"
                     ? pathname === "/m/sales/ghl"
@@ -52,5 +70,6 @@ export default function GHLLayout({ children }: { children: React.ReactNode }) {
         <div className="flex-1 min-w-0 overflow-auto">{children}</div>
       </div>
     </Shell>
+    </ModuleGuard>
   );
 }

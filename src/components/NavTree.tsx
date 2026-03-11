@@ -186,16 +186,27 @@ export default function NavTree() {
   const [expandedSlugs, setExpandedSlugs] = useState<Set<string>>(new Set());
   const pathname = usePathname();
   const router = useRouter();
-  const { user, role } = useAuth();
+  const { user, role, isAdmin } = useAuth();
   const panelRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
 
   // Fetch allowed modules
   useEffect(() => {
-    if (!user || !role) return;
+    if (!user) {
+      setAllowedSlugs(new Set());
+      return;
+    }
+    if (isAdmin) {
+      // Admins see everything
+      setAllowedSlugs(null);
+      return;
+    }
     const controller = new AbortController();
+    const params = new URLSearchParams();
+    if (role) params.set("role_id", role.id);
+    params.set("user_id", user.id);
 
-    apiFetch(`/api/modules/effective?role_id=${role.id}&user_id=${user.id}`, {
+    apiFetch(`/api/modules/effective?${params.toString()}`, {
       signal: controller.signal,
     })
       .then((res) => (res.ok ? res.json() : Promise.reject()))
@@ -205,8 +216,8 @@ export default function NavTree() {
       })
       .catch((err) => {
         if (err instanceof Error && err.name === "AbortError") return;
-        // Fallback: show all modules
-        setAllowedSlugs(null);
+        // Deny by default on error
+        setAllowedSlugs(new Set());
       });
 
     return () => controller.abort();

@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to fetch GBP keywords";
+    console.error("[GBP Keywords]", message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

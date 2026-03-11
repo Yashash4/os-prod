@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Shell from "@/components/Shell";
-import { Send, FileText, Mail, PenTool } from "lucide-react";
+import ModuleGuard from "@/components/ModuleGuard";
+import { useAllowedModules } from "@/hooks/useAllowedModules";
+import { Send, FileText, PenTool } from "lucide-react";
 
 const EMAIL_NAV = [
   { name: "Sent Invoices", href: "/m/automations/email", icon: Send },
@@ -13,8 +15,24 @@ const EMAIL_NAV = [
 
 export default function AutomationsLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { filterNav, canAccessPath, loaded } = useAllowedModules();
+
+  if (loaded && !canAccessPath(pathname)) {
+    return (
+      <ModuleGuard moduleSlug="automations">
+        <Shell>
+          <div className="flex items-center justify-center h-[calc(100vh-49px)]">
+            <p className="text-muted text-sm">You don&apos;t have access to this page.</p>
+          </div>
+        </Shell>
+      </ModuleGuard>
+    );
+  }
+
+  const visibleNav = filterNav(EMAIL_NAV);
 
   return (
+    <ModuleGuard moduleSlug="automations">
     <Shell>
       <div className="flex h-[calc(100vh-49px)] overflow-hidden">
         <aside className="w-52 border-r border-border bg-surface flex-shrink-0 overflow-y-auto">
@@ -24,7 +42,7 @@ export default function AutomationsLayout({ children }: { children: React.ReactN
             </p>
             <div className="h-px bg-border mb-2" />
             <nav className="space-y-0.5">
-              {EMAIL_NAV.map((item) => {
+              {visibleNav.map((item) => {
                 const isActive =
                   item.href === "/m/automations/email"
                     ? pathname === "/m/automations/email"
@@ -53,5 +71,6 @@ export default function AutomationsLayout({ children }: { children: React.ReactN
         <div className="flex-1 min-w-0 overflow-auto">{children}</div>
       </div>
     </Shell>
+    </ModuleGuard>
   );
 }

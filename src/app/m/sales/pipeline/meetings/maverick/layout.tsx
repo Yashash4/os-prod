@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import Shell from "@/components/Shell";
 import { ClipboardList, Calendar, DollarSign, BarChart3, FileSpreadsheet } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import ModuleGuard from "@/components/ModuleGuard";
+import { useAllowedModules } from "@/hooks/useAllowedModules";
 
 interface NavItem {
   name: string;
@@ -25,8 +27,24 @@ const MAVERICK_NAV: NavItem[] = [
 
 export default function MaverickLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { filterNav, canAccessPath, loaded } = useAllowedModules();
+
+  if (loaded && !canAccessPath(pathname)) {
+    return (
+      <ModuleGuard moduleSlug="sales">
+        <Shell>
+          <div className="flex items-center justify-center h-[calc(100vh-49px)]">
+            <p className="text-muted text-sm">You don&apos;t have access to this page.</p>
+          </div>
+        </Shell>
+      </ModuleGuard>
+    );
+  }
+
+  const visibleNav = filterNav(MAVERICK_NAV);
 
   return (
+    <ModuleGuard moduleSlug="sales">
     <Shell>
       <div className="flex h-[calc(100vh-49px)] overflow-hidden">
         <aside className="w-52 border-r border-border bg-surface flex-shrink-0 overflow-y-auto">
@@ -35,7 +53,7 @@ export default function MaverickLayout({ children }: { children: React.ReactNode
               Maverick
             </p>
             <nav className="space-y-0.5">
-              {MAVERICK_NAV.map((item, idx) => {
+              {visibleNav.map((item, idx) => {
                 if (item.separator) {
                   return (
                     <div key={`sep-${idx}`} className="pt-3 pb-1 px-3">
@@ -71,5 +89,6 @@ export default function MaverickLayout({ children }: { children: React.ReactNode
         <div className="flex-1 min-w-0 overflow-auto">{children}</div>
       </div>
     </Shell>
+    </ModuleGuard>
   );
 }

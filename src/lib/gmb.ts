@@ -166,7 +166,7 @@ export async function getReviews(
 
   let url =
     `https://mybusiness.googleapis.com/v4/${GBP_ACCOUNT_ID}/${GBP_LOCATION_ID}/reviews` +
-    `?pageSize=${pageSize}`;
+    `?pageSize=${pageSize}&orderBy=updateTime desc`;
   if (pageToken) url += `&pageToken=${pageToken}`;
 
   const data = await gbpFetch(url);

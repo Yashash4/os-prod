@@ -96,7 +96,7 @@ export default function TaskLogPage() {
     try {
       const res = await apiFetch("/api/seo/task-log");
       const data = await res.json();
-      setRows(Array.isArray(data.rows) ? data.rows : Array.isArray(data) ? data : []);
+      setRows(Array.isArray(data.entries) ? data.entries : Array.isArray(data) ? data : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load tasks");
     } finally {

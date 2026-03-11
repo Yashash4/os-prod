@@ -16,6 +16,8 @@ import {
   AlertCircle,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import ModuleGuard from "@/components/ModuleGuard";
+import { useAllowedModules } from "@/hooks/useAllowedModules";
 
 interface NavItem {
   name: string;
@@ -41,13 +43,28 @@ const PAYMENTS_NAV: NavItem[] = [
 
 export default function PaymentsLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { filterNav, canAccessPath, loaded } = useAllowedModules();
 
-  // Landing page (module card grid) renders without sidebar
   if (pathname === "/m/payments") {
     return <>{children}</>;
   }
 
+  if (loaded && !canAccessPath(pathname)) {
+    return (
+      <ModuleGuard moduleSlug="payments">
+        <Shell>
+          <div className="flex items-center justify-center h-[calc(100vh-48px)]">
+            <p className="text-muted text-sm">You don&apos;t have access to this page.</p>
+          </div>
+        </Shell>
+      </ModuleGuard>
+    );
+  }
+
+  const visibleNav = filterNav(PAYMENTS_NAV);
+
   return (
+    <ModuleGuard moduleSlug="payments">
     <Shell>
       <div className="flex h-[calc(100vh-48px)] overflow-hidden">
         {/* Sidebar */}
@@ -57,7 +74,7 @@ export default function PaymentsLayout({ children }: { children: React.ReactNode
               Payments
             </p>
             <nav className="space-y-0.5">
-              {PAYMENTS_NAV.map((item, idx) => {
+              {visibleNav.map((item, idx) => {
                 if (item.separator) {
                   return (
                     <div key={`sep-${idx}`} className="pt-3 pb-1 px-3">
@@ -95,5 +112,6 @@ export default function PaymentsLayout({ children }: { children: React.ReactNode
         <div className="flex-1 min-w-0 overflow-auto">{children}</div>
       </div>
     </Shell>
+    </ModuleGuard>
   );
 }

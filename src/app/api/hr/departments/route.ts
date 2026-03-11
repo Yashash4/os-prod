@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/api-auth";
+import { requireModuleAccess } from "@/lib/api-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(req: NextRequest) {
-  const result = await requireAdmin(req);
+  const result = await requireModuleAccess(req, "hr");
   if ("error" in result) return result.error;
 
   const { data, error } = await supabaseAdmin
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const result = await requireAdmin(req);
+  const result = await requireModuleAccess(req, "hr");
   if ("error" in result) return result.error;
 
   const body = await req.json();
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const result = await requireAdmin(req);
+  const result = await requireModuleAccess(req, "hr");
   if ("error" in result) return result.error;
 
   const body = await req.json();
@@ -85,7 +85,7 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const result = await requireAdmin(req);
+  const result = await requireModuleAccess(req, "hr");
   if ("error" in result) return result.error;
 
   const id = req.nextUrl.searchParams.get("id");

@@ -125,3 +125,50 @@ export async function requireAdmin(
 
   return result;
 }
+
+/**
+ * Require the user to have access to a specific module.
+ * Access is granted if: admin, role grants the module, or user has an override grant.
+ */
+export async function requireModuleAccess(
+  req: NextRequest,
+  moduleSlug: string
+): Promise<{ auth: AuthResult } | { error: NextResponse }> {
+  const result = await authenticateRequest(req);
+  if ("error" in result) return result;
+
+  // Admins always have access
+  if (result.auth.isAdmin) return result;
+
+  const { userId, roleId } = result.auth;
+
+  // Check role-based access
+  if (roleId) {
+    const { data: roleAccess } = await supabaseAdmin
+      .from("role_modules")
+      .select("id, module:modules!inner(slug)")
+      .eq("role_id", roleId)
+      .eq("modules.slug", moduleSlug)
+      .maybeSingle();
+
+    if (roleAccess) return result;
+  }
+
+  // Check user override grant
+  const { data: override } = await supabaseAdmin
+    .from("user_module_overrides")
+    .select("id, module:modules!inner(slug)")
+    .eq("user_id", userId)
+    .eq("access_type", "grant")
+    .eq("modules.slug", moduleSlug)
+    .maybeSingle();
+
+  if (override) return result;
+
+  return {
+    error: NextResponse.json(
+      { error: "Module access required" },
+      { status: 403 }
+    ),
+  };
+}

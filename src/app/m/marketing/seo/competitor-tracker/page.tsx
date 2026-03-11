@@ -79,7 +79,7 @@ export default function CompetitorTrackerPage() {
       ]);
       const trackerData = await trackerRes.json();
       const gscData = await gscRes.json();
-      setRows(Array.isArray(trackerData.rows) ? trackerData.rows : Array.isArray(trackerData) ? trackerData : []);
+      setRows(Array.isArray(trackerData.entries) ? trackerData.entries : Array.isArray(trackerData) ? trackerData : []);
       setGscRows(gscData.rows ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load data");

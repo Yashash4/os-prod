@@ -7,37 +7,36 @@ export async function GET(req: NextRequest) {
   if ("error" in authResult) return authResult.error;
 
   try {
-    // Use the authenticated user's identity — ignore query params for user_id
-    // role_id is still accepted because it comes from the user's own profile
     const { searchParams } = new URL(req.url);
     const roleId = searchParams.get("role_id");
 
-    if (!roleId) {
-      return NextResponse.json({ modules: [] });
+    // If a role_id is provided, verify it belongs to the authenticated user
+    if (roleId) {
+      const { data: userProfile } = await supabaseAdmin
+        .from("users")
+        .select("role_id")
+        .eq("id", authResult.auth.userId)
+        .single();
+
+      if (userProfile?.role_id !== roleId && !authResult.auth.isAdmin) {
+        return NextResponse.json({ modules: [] });
+      }
     }
 
-    // Verify the role_id belongs to the authenticated user
-    const { data: userProfile } = await supabaseAdmin
-      .from("users")
-      .select("role_id")
-      .eq("id", authResult.auth.userId)
-      .single();
+    // Get role-based modules (empty if no role)
+    let roleModules: Record<string, unknown>[] = [];
+    if (roleId) {
+      const { data: roleModuleRows } = await supabaseAdmin
+        .from("role_modules")
+        .select("module:modules(*)")
+        .eq("role_id", roleId);
 
-    if (userProfile?.role_id !== roleId && !authResult.auth.isAdmin) {
-      return NextResponse.json({ modules: [] });
+      roleModules = (roleModuleRows || [])
+        .map((rm: Record<string, unknown>) => rm.module)
+        .filter((m: unknown) => m && (m as { is_active: boolean }).is_active) as Record<string, unknown>[];
     }
 
-    // Get role modules
-    const { data: roleModuleRows } = await supabaseAdmin
-      .from("role_modules")
-      .select("module:modules(*)")
-      .eq("role_id", roleId);
-
-    const roleModules = (roleModuleRows || [])
-      .map((rm: Record<string, unknown>) => rm.module)
-      .filter((m: unknown) => m && (m as { is_active: boolean }).is_active);
-
-    // Get user overrides using the authenticated user's ID
+    // Get user overrides (works even without a role — supports override-only access)
     const { data: overrides } = await supabaseAdmin
       .from("user_module_overrides")
       .select("module_id, access_type")

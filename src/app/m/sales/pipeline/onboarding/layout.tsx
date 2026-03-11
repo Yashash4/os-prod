@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Shell from "@/components/Shell";
+import ModuleGuard from "@/components/ModuleGuard";
+import { useAllowedModules } from "@/hooks/useAllowedModules";
 import { ClipboardList, BarChart3 } from "lucide-react";
 
 const ONBOARDING_NAV = [
@@ -12,8 +14,24 @@ const ONBOARDING_NAV = [
 
 export default function OnboardingLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { filterNav, canAccessPath, loaded } = useAllowedModules();
+
+  if (loaded && !canAccessPath(pathname)) {
+    return (
+      <ModuleGuard moduleSlug="sales">
+        <Shell>
+          <div className="flex items-center justify-center h-[calc(100vh-49px)]">
+            <p className="text-muted text-sm">You don&apos;t have access to this page.</p>
+          </div>
+        </Shell>
+      </ModuleGuard>
+    );
+  }
+
+  const visibleNav = filterNav(ONBOARDING_NAV);
 
   return (
+    <ModuleGuard moduleSlug="sales">
     <Shell>
       <div className="flex h-[calc(100vh-49px)] overflow-hidden">
         <aside className="w-52 border-r border-border bg-surface flex-shrink-0 overflow-y-auto">
@@ -23,7 +41,7 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
             </p>
             <div className="h-px bg-border mb-2" />
             <nav className="space-y-0.5">
-              {ONBOARDING_NAV.map((item) => {
+              {visibleNav.map((item) => {
                 const isActive = pathname.startsWith(item.href);
                 return (
                   <Link
@@ -49,5 +67,6 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
         <div className="flex-1 min-w-0 overflow-auto">{children}</div>
       </div>
     </Shell>
+    </ModuleGuard>
   );
 }

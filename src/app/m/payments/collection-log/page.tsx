@@ -74,7 +74,7 @@ export default function CollectionLogPage() {
       const res = await apiFetch(`/api/payments/daily-collection?date=${date}`);
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      setEntries(data.entries || []);
+      setEntries(data.records || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load entries");
     } finally {
@@ -121,7 +121,7 @@ export default function CollectionLogPage() {
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      setEntries((prev) => [data.entry, ...prev]);
+      setEntries((prev) => [data.record, ...prev]);
       setNewRow(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save entry");

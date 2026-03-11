@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to fetch GBP performance";
+    console.error("[GBP Performance]", message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -27,8 +27,7 @@ export default function ModulePage({ params }: ModulePageProps) {
 
   useEffect(() => {
     async function load() {
-      if (!role || !user) {
-        // No auth context yet — show nothing (deny by default)
+      if (!user) {
         setFilteredChildren([]);
         setLoaded(true);
         return;
@@ -41,7 +40,10 @@ export default function ModulePage({ params }: ModulePageProps) {
       }
 
       try {
-        const res = await apiFetch(`/api/modules/effective?role_id=${role.id}&user_id=${user.id}`);
+        const params = new URLSearchParams();
+        if (role) params.set("role_id", role.id);
+        params.set("user_id", user.id);
+        const res = await apiFetch(`/api/modules/effective?${params.toString()}`);
         if (!res.ok) throw new Error("Failed to fetch modules");
         const data = await res.json();
         const effective: Module[] = data.modules || [];

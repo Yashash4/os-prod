@@ -17,6 +17,8 @@ import {
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import ModuleGuard from "@/components/ModuleGuard";
+import { useAllowedModules } from "@/hooks/useAllowedModules";
 
 interface NavItem {
   name: string;
@@ -44,8 +46,24 @@ const META_NAV: NavItem[] = [
 
 export default function MetaLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { filterNav, canAccessPath, loaded } = useAllowedModules();
+
+  if (loaded && !canAccessPath(pathname)) {
+    return (
+      <ModuleGuard moduleSlug="marketing">
+        <Shell>
+          <div className="flex items-center justify-center h-[calc(100vh-48px)]">
+            <p className="text-muted text-sm">You don&apos;t have access to this page.</p>
+          </div>
+        </Shell>
+      </ModuleGuard>
+    );
+  }
+
+  const visibleNav = filterNav(META_NAV);
 
   return (
+    <ModuleGuard moduleSlug="marketing">
     <Shell>
       <div className="flex h-[calc(100vh-48px)] overflow-hidden">
         {/* Sidebar */}
@@ -55,7 +73,7 @@ export default function MetaLayout({ children }: { children: React.ReactNode }) 
               Meta Ads
             </p>
             <nav className="space-y-0.5">
-              {META_NAV.map((item, idx) => {
+              {visibleNav.map((item, idx) => {
                 if (item.separator) {
                   return (
                     <div key={`sep-${idx}`} className="pt-3 pb-1 px-3">
@@ -95,5 +113,6 @@ export default function MetaLayout({ children }: { children: React.ReactNode }) 
         <div className="flex-1 min-w-0 overflow-auto">{children}</div>
       </div>
     </Shell>
+    </ModuleGuard>
   );
 }
