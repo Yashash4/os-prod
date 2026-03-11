@@ -163,25 +163,25 @@ CREATE POLICY "expense_categories_delete"
   USING (user_has_module_access('finance'));
 
 -- ── BUDGETS ──────────────────────────────────────────────────────
-DROP POLICY IF EXISTS "Authenticated users can view budgets" ON finance_budgets;
-DROP POLICY IF EXISTS "Authenticated users can insert budgets" ON finance_budgets;
-DROP POLICY IF EXISTS "Authenticated users can update budgets" ON finance_budgets;
-DROP POLICY IF EXISTS "Authenticated users can delete budgets" ON finance_budgets;
+DROP POLICY IF EXISTS "Authenticated users can view budgets" ON budgets;
+DROP POLICY IF EXISTS "Authenticated users can insert budgets" ON budgets;
+DROP POLICY IF EXISTS "Authenticated users can update budgets" ON budgets;
+DROP POLICY IF EXISTS "Authenticated users can delete budgets" ON budgets;
 
-CREATE POLICY "finance_budgets_select"
-  ON finance_budgets FOR SELECT TO authenticated
+CREATE POLICY "budgets_select"
+  ON budgets FOR SELECT TO authenticated
   USING (user_has_module_access('finance'));
 
-CREATE POLICY "finance_budgets_insert"
-  ON finance_budgets FOR INSERT TO authenticated
+CREATE POLICY "budgets_insert"
+  ON budgets FOR INSERT TO authenticated
   WITH CHECK (user_has_module_access('finance'));
 
-CREATE POLICY "finance_budgets_update"
-  ON finance_budgets FOR UPDATE TO authenticated
+CREATE POLICY "budgets_update"
+  ON budgets FOR UPDATE TO authenticated
   USING (user_has_module_access('finance'));
 
-CREATE POLICY "finance_budgets_delete"
-  ON finance_budgets FOR DELETE TO authenticated
+CREATE POLICY "budgets_delete"
+  ON budgets FOR DELETE TO authenticated
   USING (user_has_module_access('finance'));
 
 -- ── CHAT CHANNELS ────────────────────────────────────────────────

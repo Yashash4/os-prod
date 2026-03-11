@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   const month = req.nextUrl.searchParams.get("month"); // YYYY-MM
 
   let query = supabaseAdmin
-    .from("finance_budgets")
+    .from("budgets")
     .select("*")
     .order("created_at", { ascending: false });
 
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { data, error } = await supabaseAdmin
-    .from("finance_budgets")
+    .from("budgets")
     .insert({
       name,
       department: department || null,
@@ -70,7 +70,7 @@ export async function PUT(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "ID is required" }, { status: 400 });
 
   const { data, error } = await supabaseAdmin
-    .from("finance_budgets")
+    .from("budgets")
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq("id", id)
     .select()
