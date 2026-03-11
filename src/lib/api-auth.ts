@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "./supabase-admin";
 
 /**
@@ -31,23 +30,25 @@ export async function authenticateRequest(
       accessToken = authHeader.slice(7);
     }
 
-    // Try cookie-based session
+    // Try cookie-based session (only if cookies are present)
     if (!accessToken) {
-      const cookieHeader = req.headers.get("cookie") || "";
-      // Create a temporary client with cookies forwarded
-      const supabaseServer = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-          global: {
-            headers: { cookie: cookieHeader },
-          },
-        }
-      );
-      const {
-        data: { session },
-      } = await supabaseServer.auth.getSession();
-      accessToken = session?.access_token;
+      const cookieHeader = req.headers.get("cookie");
+      if (cookieHeader) {
+        const { createClient } = await import("@supabase/supabase-js");
+        const supabaseServer = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          {
+            global: {
+              headers: { cookie: cookieHeader },
+            },
+          }
+        );
+        const {
+          data: { session },
+        } = await supabaseServer.auth.getSession();
+        accessToken = session?.access_token;
+      }
     }
 
     if (!accessToken) {

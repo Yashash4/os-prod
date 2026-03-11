@@ -300,6 +300,8 @@ export default function NavTree() {
             : "text-muted hover:text-foreground hover:bg-surface-hover"
         }`}
         title="Navigate"
+        aria-label="Toggle navigation panel"
+        aria-expanded={open}
       >
         <PanelLeft className="w-4 h-4" />
       </button>

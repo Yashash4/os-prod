@@ -15,10 +15,11 @@ interface PaymentLinkModalProps {
   onSuccess: (data: { id: string; short_url: string }) => void;
 }
 
-function normalizePhone(phone: string): string {
+function normalizePhone(phone: string): string | null {
   const digits = phone.replace(/[^0-9]/g, "");
   if (digits.startsWith("91") && digits.length === 12) return `+${digits}`;
   if (digits.length === 10) return `+91${digits}`;
+  if (digits.length < 10) return null;
   return `+${digits}`;
 }
 
@@ -72,7 +73,7 @@ export default function PaymentLinkModal({
           description,
           customerName: name,
           customerEmail: email || undefined,
-          customerPhone: phone ? normalizePhone(phone) : undefined,
+          customerPhone: phone ? normalizePhone(phone) || undefined : undefined,
           notifySms,
           notifyEmail,
           expireByUnix,
@@ -109,7 +110,7 @@ export default function PaymentLinkModal({
             <IndianRupee className="w-4 h-4 text-accent" />
             <h2 className="text-sm font-semibold text-foreground">Send Payment Link</h2>
           </div>
-          <button onClick={onClose} disabled={status === "sending"} className="p-1 rounded hover:bg-surface-hover text-muted hover:text-foreground transition-colors">
+          <button onClick={onClose} disabled={status === "sending"} className="p-1 rounded hover:bg-surface-hover text-muted hover:text-foreground transition-colors" aria-label="Close">
             <X className="w-4 h-4" />
           </button>
         </div>

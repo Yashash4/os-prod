@@ -36,7 +36,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
-  if (!isAdmin) return null;
+  if (!isAdmin) {
+    return (
+      <Shell>
+        <div className="flex items-center justify-center h-[calc(100vh-49px)]">
+          <div className="text-center space-y-2">
+            <p className="text-foreground font-medium">Access Denied</p>
+            <p className="text-sm text-muted">You do not have admin privileges to view this page.</p>
+          </div>
+        </div>
+      </Shell>
+    );
+  }
 
   return (
     <Shell>

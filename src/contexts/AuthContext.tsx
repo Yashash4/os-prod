@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import type { Role } from "@/types";
@@ -17,6 +17,7 @@ interface AuthContextType {
   role: Role | null;
   loading: boolean;
   isAdmin: boolean;
+  authError: boolean;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -26,6 +27,7 @@ const AuthContext = createContext<AuthContextType>({
   role: null,
   loading: true,
   isAdmin: false,
+  authError: false,
   signOut: async () => {},
   refreshUser: async () => {},
 });
@@ -36,11 +38,16 @@ export function useAuth() {
 
 async function fetchUserData(userId: string, email: string): Promise<{ user: AuthUser; role: Role | null }> {
   // Fetch user profile with role (users table has direct role_id FK)
-  const { data: profile } = await supabase
+  const { data: profile, error } = await supabase
     .from("users")
     .select("full_name, avatar_url, role:roles(*)")
     .eq("id", userId)
     .single();
+
+  // If query failed (e.g. RLS blocked due to stale token), throw so caller can retry
+  if (error || !profile) {
+    throw new Error(error?.message || "Profile not found");
+  }
 
   const rawRole = profile?.role;
   const role: Role | null =
@@ -63,27 +70,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [role, setRole] = useState<Role | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState(false);
   const router = useRouter();
+  const handlingRef = useRef(false);
 
   const handleSession = useCallback(async (session: { user: { id: string; email?: string } } | null) => {
-    if (session?.user) {
-      try {
-        const data = await Promise.race([
-          fetchUserData(session.user.id, session.user.email!),
-          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 8000)),
-        ]);
-        setUser(data.user);
-        setRole(data.role);
-      } catch {
-        // Profile fetch failed/timed out — set basic user so we don't block the app
-        setUser({ id: session.user.id, email: session.user.email!, full_name: null });
+    // Prevent concurrent executions from overlapping onAuthStateChange events
+    if (handlingRef.current) return;
+    handlingRef.current = true;
+
+    try {
+      if (session?.user) {
+        const uid = session.user.id;
+        const email = session.user.email!;
+
+        // Try fetching profile data — retry once after 1.5s if first attempt fails
+        // (INITIAL_SESSION can fire with a stale token before Supabase refreshes it,
+        //  causing RLS-protected queries to fail on the first try)
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const data = await Promise.race([
+              fetchUserData(uid, email),
+              new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 8000)),
+            ]);
+            setUser(data.user);
+            setRole(data.role);
+            setAuthError(false);
+            setLoading(false);
+            return;
+          } catch {
+            if (attempt === 0) {
+              // Wait for token refresh before retrying
+              await new Promise((r) => setTimeout(r, 1500));
+            }
+          }
+        }
+
+        // Both attempts failed — set basic user but flag the error state
+        setUser({ id: uid, email, full_name: null });
         setRole(null);
+        setAuthError(true);
+      } else {
+        setUser(null);
+        setRole(null);
+        setAuthError(false);
       }
-    } else {
-      setUser(null);
-      setRole(null);
+      setLoading(false);
+    } finally {
+      handlingRef.current = false;
     }
-    setLoading(false);
   }, []);
 
   // refreshUser still available for manual refresh
@@ -141,6 +176,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         role,
         loading,
         isAdmin,
+        authError,
         signOut: handleSignOut,
         refreshUser,
       }}

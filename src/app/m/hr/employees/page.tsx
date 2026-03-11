@@ -77,28 +77,19 @@ export default function EmployeesPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
 
-    apiFetch("/api/hr/employees")
-      .then((r) => r.json())
-      .then((d) => setEmployees(d.employees || []))
-      .catch(() => {});
+    const [empRes, deptRes, desgRes, usersRes] = await Promise.allSettled([
+      apiFetch("/api/hr/employees").then((r) => r.json()),
+      apiFetch("/api/hr/departments").then((r) => r.json()),
+      apiFetch("/api/hr/designations").then((r) => r.json()),
+      apiFetch("/api/admin/users").then((r) => r.json()),
+    ]);
 
-    apiFetch("/api/hr/departments")
-      .then((r) => r.json())
-      .then((d) => setDepartments((d.departments || []).map((x: Dept & Record<string, unknown>) => ({ id: x.id, name: x.name }))))
-      .catch(() => {});
+    if (empRes.status === "fulfilled") setEmployees(empRes.value.employees || []);
+    if (deptRes.status === "fulfilled") setDepartments((deptRes.value.departments || []).map((x: Dept & Record<string, unknown>) => ({ id: x.id, name: x.name })));
+    if (desgRes.status === "fulfilled") setDesignations((desgRes.value.designations || []).map((x: Desg & Record<string, unknown>) => ({ id: x.id, title: x.title, level: x.level })));
+    if (usersRes.status === "fulfilled") setSystemUsers((usersRes.value.users || []).map((u: SystemUser & Record<string, unknown>) => ({ id: u.id, email: u.email, full_name: u.full_name })));
 
-    apiFetch("/api/hr/designations")
-      .then((r) => r.json())
-      .then((d) => {
-        setDesignations((d.designations || []).map((x: Desg & Record<string, unknown>) => ({ id: x.id, title: x.title, level: x.level })));
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-
-    apiFetch("/api/admin/users")
-      .then((r) => r.json())
-      .then((d) => setSystemUsers((d.users || []).map((u: SystemUser & Record<string, unknown>) => ({ id: u.id, email: u.email, full_name: u.full_name }))))
-      .catch(() => {});
+    setLoading(false);
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);

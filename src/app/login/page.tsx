@@ -54,8 +54,10 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: setupEmail }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Something went wrong");
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "Something went wrong");
+      }
       setSetupSent(true);
     } catch (err) {
       setSetupError(err instanceof Error ? err.message : "Something went wrong");

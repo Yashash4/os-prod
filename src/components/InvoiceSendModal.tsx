@@ -79,7 +79,7 @@ export default function InvoiceSendModal({
             <FileText className="w-4 h-4 text-[#B8860B]" />
             <h2 className="text-sm font-semibold text-foreground">Send Invoice</h2>
           </div>
-          <button onClick={onClose} disabled={status === "sending"} className="p-1 rounded hover:bg-surface-hover text-muted hover:text-foreground transition-colors">
+          <button onClick={onClose} disabled={status === "sending"} className="p-1 rounded hover:bg-surface-hover text-muted hover:text-foreground transition-colors" aria-label="Close">
             <X className="w-4 h-4" />
           </button>
         </div>

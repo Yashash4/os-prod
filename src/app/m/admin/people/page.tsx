@@ -18,12 +18,14 @@ export default function PeoplePage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState("");
   const [showInvite, setShowInvite] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editRole, setEditRole] = useState("");
   const [editName, setEditName] = useState("");
 
   const fetchData = useCallback(async () => {
+    setFetchError("");
     try {
       const [usersRes, rolesRes] = await Promise.all([
         apiFetch("/api/admin/users"),
@@ -34,7 +36,7 @@ export default function PeoplePage() {
       setUsers(usersData.users || []);
       setRoles(rolesData.roles || []);
     } catch {
-      // silently fail
+      setFetchError("Failed to load users. Please try refreshing the page.");
     } finally {
       setLoading(false);
     }
@@ -98,6 +100,12 @@ export default function PeoplePage() {
 
   return (
     <div className="p-6">
+      {fetchError && (
+        <div className="mb-4 text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg p-3 flex items-center justify-between">
+          {fetchError}
+          <button onClick={fetchData} className="text-xs text-accent hover:underline ml-4">Retry</button>
+        </div>
+      )}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-semibold text-foreground">People</h1>

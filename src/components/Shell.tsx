@@ -6,8 +6,9 @@ import Link from "next/link";
 import Breadcrumb from "./Breadcrumb";
 import { buildBreadcrumbFromPath } from "@/lib/modules";
 import { useAuth } from "@/contexts/AuthContext";
-import { LogOut, Bell, Settings } from "lucide-react";
+import { LogOut, Settings } from "lucide-react";
 import NavTree from "./NavTree";
+import NotificationDropdown from "./NotificationDropdown";
 
 export default function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -44,10 +45,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0 ml-4">
-            <button className="relative p-2 rounded-lg text-muted hover:text-foreground hover:bg-surface-hover transition-colors">
-              <Bell className="w-4 h-4" />
-              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-accent rounded-full" />
-            </button>
+            <NotificationDropdown />
             {displayName && (
               <Link
                 href="/settings/profile"
@@ -68,6 +66,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               href="/settings/profile"
               className="p-2 rounded-lg text-muted hover:text-foreground hover:bg-surface-hover transition-colors"
               title="Settings"
+              aria-label="Settings"
             >
               <Settings className="w-4 h-4" />
             </Link>

@@ -19,7 +19,10 @@ export async function GET(req: NextRequest) {
         .single();
 
       if (userProfile?.role_id !== roleId && !authResult.auth.isAdmin) {
-        return NextResponse.json({ modules: [] });
+        return NextResponse.json(
+          { error: "Not authorized to view modules for this role", modules: [] },
+          { status: 403 }
+        );
       }
     }
 

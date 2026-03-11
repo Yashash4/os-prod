@@ -10,8 +10,8 @@ export async function getModulesForRole(roleId: string): Promise<Module[]> {
   if (error) throw error;
 
   return (data || [])
-    .map((rm: Record<string, unknown>) => rm.module as Module)
-    .filter((m: Module) => m.is_active)
+    .map((rm: Record<string, unknown>) => rm.module)
+    .filter((m): m is Module => m != null && typeof m === "object" && "is_active" in m && (m as Module).is_active)
     .sort((a: Module, b: Module) => a.order - b.order);
 }
 

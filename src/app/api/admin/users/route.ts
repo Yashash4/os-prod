@@ -159,14 +159,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "user_id required" }, { status: 400 });
     }
 
-    // Delete from users table first (cascade should handle it, but be safe)
-    await supabaseAdmin.from("users").delete().eq("id", userId);
-
-    // Delete auth user
-    const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
-    if (error) throw error;
-
-    // Audit log
+    // Audit log first — capture the action before data is gone
     await supabaseAdmin.from("audit_logs").insert({
       user_id: authResult.auth.userId,
       action: "user_deleted",
@@ -176,6 +169,13 @@ export async function DELETE(req: NextRequest) {
       entity_type: "user",
       entity_id: userId,
     });
+
+    // Delete auth user first — if this fails, DB row stays intact (recoverable)
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
+    if (error) throw error;
+
+    // Then delete from users table (cascade handles related rows)
+    await supabaseAdmin.from("users").delete().eq("id", userId);
 
     return NextResponse.json({ success: true });
   } catch (err) {
