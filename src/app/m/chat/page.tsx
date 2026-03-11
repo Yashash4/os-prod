@@ -558,7 +558,7 @@ function DeleteConfirmDialog({
 /* ── Main Component ──────────────────────────────── */
 
 export default function ChatPage() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
 
   // Channel state
   const [channels, setChannels] = useState<ChatChannel[]>([]);
@@ -600,12 +600,29 @@ export default function ChatPage() {
   const [userSearch, setUserSearch] = useState("");
   const [creatingChannel, setCreatingChannel] = useState(false);
 
+  // Delete channel
+  const [deletingChannelId, setDeletingChannelId] = useState<string | null>(null);
+
+  // Add member to existing channel
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [addMemberSearch, setAddMemberSearch] = useState("");
+  const [addingMember, setAddingMember] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
 
   const activeChannel = useMemo(
     () => channels.find((c) => c.id === activeChannelId) || null,
     [channels, activeChannelId]
+  );
+
+  // Can current user manage a channel (create/delete/add-remove members)
+  const canManageChannel = useCallback(
+    (ch: ChatChannel | null) => {
+      if (!ch || !user) return false;
+      return isAdmin || ch.created_by === user.id;
+    },
+    [isAdmin, user]
   );
 
   const threadParent = useMemo(
@@ -971,6 +988,21 @@ export default function ChatPage() {
     setEditingMessageId(null);
   }, []);
 
+  /* ── Load all users (for new channel + add member) ── */
+
+  const loadAllUsers = useCallback(async () => {
+    if (allUsers.length > 0) return; // already loaded
+    try {
+      const res = await apiFetch("/api/admin/users");
+      const data = await res.json();
+      if (data.users) {
+        setAllUsers(data.users.filter((u: ChatUser) => u.id !== user?.id));
+      }
+    } catch {
+      // ignore
+    }
+  }, [allUsers.length, user?.id]);
+
   /* ── New channel modal ─────────────────────── */
 
   const openNewChannelModal = async () => {
@@ -979,18 +1011,7 @@ export default function ChatPage() {
     setNewChDesc("");
     setSelectedUserIds([]);
     setUserSearch("");
-
-    try {
-      const res = await apiFetch("/api/admin/users");
-      const data = await res.json();
-      if (data.users) {
-        setAllUsers(
-          data.users.filter((u: ChatUser) => u.id !== user?.id)
-        );
-      }
-    } catch {
-      // ignore
-    }
+    await loadAllUsers();
   };
 
   const createChannel = async () => {
@@ -1026,6 +1047,74 @@ export default function ChatPage() {
       prev.includes(uid) ? prev.filter((id) => id !== uid) : [...prev, uid]
     );
   };
+
+  /* ── Delete channel ────────────────────────── */
+
+  const handleDeleteChannel = useCallback(async (channelId: string) => {
+    try {
+      const res = await apiFetch(`/api/chat/channels?id=${channelId}`, { method: "DELETE" });
+      if (res.ok) {
+        setChannels((prev) => prev.filter((c) => c.id !== channelId));
+        if (activeChannelId === channelId) {
+          setActiveChannelId(null);
+          setMessages([]);
+          setMembers([]);
+          setRightPanel("none");
+        }
+      }
+    } catch {
+      // ignore
+    } finally {
+      setDeletingChannelId(null);
+    }
+  }, [activeChannelId]);
+
+  /* ── Add member to existing channel ───────── */
+
+  const handleAddMember = useCallback(async (userId: string) => {
+    if (!activeChannelId || addingMember) return;
+    setAddingMember(true);
+    try {
+      const res = await apiFetch("/api/chat/channels/members", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channel_id: activeChannelId, user_ids: [userId] }),
+      });
+      if (res.ok) {
+        await fetchMembers(activeChannelId);
+        setShowAddMember(false);
+        setAddMemberSearch("");
+      }
+    } catch {
+      // ignore
+    } finally {
+      setAddingMember(false);
+    }
+  }, [activeChannelId, addingMember, fetchMembers]);
+
+  /* ── Remove member from channel ────────────── */
+
+  const handleRemoveMember = useCallback(async (memberId: string) => {
+    if (!activeChannelId) return;
+    try {
+      const res = await apiFetch(
+        `/api/chat/channels/members?channel_id=${activeChannelId}&user_id=${memberId}`,
+        { method: "DELETE" }
+      );
+      if (res.ok) {
+        setMembers((prev) => prev.filter((m) => m.user_id !== memberId));
+        // If removing self, leave the channel
+        if (memberId === user?.id) {
+          setChannels((prev) => prev.filter((c) => c.id !== activeChannelId));
+          setActiveChannelId(null);
+          setMessages([]);
+          setRightPanel("none");
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [activeChannelId, user?.id]);
 
   const filteredUsers = allUsers.filter((u) => {
     const q = userSearch.toLowerCase();
@@ -1178,13 +1267,15 @@ export default function ChatPage() {
               <span className="text-sm font-semibold text-foreground">
                 Chat
               </span>
-              <button
-                onClick={openNewChannelModal}
-                className="p-1.5 rounded hover:bg-surface-hover text-muted hover:text-foreground transition-colors"
-                title="New Channel"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
+              {isAdmin && (
+                <button
+                  onClick={openNewChannelModal}
+                  className="p-1.5 rounded hover:bg-surface-hover text-muted hover:text-foreground transition-colors"
+                  title="New Channel (Admin only)"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto">
@@ -1204,25 +1295,38 @@ export default function ChatPage() {
                         Channels
                       </div>
                       {channelList.map((ch) => (
-                        <button
-                          key={ch.id}
-                          onClick={() => selectChannel(ch.id)}
-                          className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-surface-hover transition-colors ${
-                            activeChannelId === ch.id
-                              ? "bg-surface-hover text-foreground"
-                              : "text-muted"
-                          }`}
-                        >
-                          <Hash className="w-4 h-4 shrink-0" />
-                          <span className="truncate flex-1 text-left">
-                            {ch.name}
-                          </span>
-                          {ch.unread_count > 0 && (
-                            <span className="bg-accent text-white text-xs rounded-full px-1.5 py-0.5 min-w-[20px] text-center">
-                              {ch.unread_count}
+                        <div key={ch.id} className="group/ch relative">
+                          <button
+                            onClick={() => selectChannel(ch.id)}
+                            className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-surface-hover transition-colors ${
+                              activeChannelId === ch.id
+                                ? "bg-surface-hover text-foreground"
+                                : "text-muted"
+                            }`}
+                          >
+                            <Hash className="w-4 h-4 shrink-0" />
+                            <span className="truncate flex-1 text-left">
+                              {ch.name}
                             </span>
+                            {ch.unread_count > 0 && (
+                              <span className="bg-accent text-white text-xs rounded-full px-1.5 py-0.5 min-w-[20px] text-center">
+                                {ch.unread_count}
+                              </span>
+                            )}
+                          </button>
+                          {canManageChannel(ch) && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeletingChannelId(ch.id);
+                              }}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-muted hover:text-red-400 opacity-0 group-hover/ch:opacity-100 transition-all"
+                              title="Delete channel"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           )}
-                        </button>
+                        </div>
                       ))}
                     </div>
                   )}
@@ -1295,6 +1399,15 @@ export default function ChatPage() {
                     <Users className="w-3.5 h-3.5" />
                     <span>{members.length}</span>
                   </button>
+                  {canManageChannel(activeChannel) && activeChannel?.type === "channel" && (
+                    <button
+                      onClick={() => setDeletingChannelId(activeChannel.id)}
+                      className="p-1.5 rounded text-muted hover:text-red-400 hover:bg-surface-hover transition-colors"
+                      title="Delete channel"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
 
                 {/* Messages */}
@@ -1440,20 +1553,82 @@ export default function ChatPage() {
                 <span className="text-sm font-semibold text-foreground">
                   Members ({members.length})
                 </span>
-                <button
-                  onClick={closeRightPanel}
-                  className="p-1 rounded hover:bg-surface-hover text-muted hover:text-foreground transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-1">
+                  {canManageChannel(activeChannel) && (
+                    <button
+                      onClick={() => {
+                        setShowAddMember(true);
+                        setAddMemberSearch("");
+                        loadAllUsers();
+                      }}
+                      className="p-1 rounded hover:bg-surface-hover text-muted hover:text-accent transition-colors"
+                      title="Add member"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  )}
+                  <button
+                    onClick={closeRightPanel}
+                    className="p-1 rounded hover:bg-surface-hover text-muted hover:text-foreground transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
+
+              {/* Add member search (inline dropdown) */}
+              {showAddMember && (
+                <div className="p-3 border-b border-border bg-background/50">
+                  <div className="relative mb-2">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted" />
+                    <input
+                      type="text"
+                      value={addMemberSearch}
+                      onChange={(e) => setAddMemberSearch(e.target.value)}
+                      placeholder="Search users to add..."
+                      autoFocus
+                      className="w-full bg-background border border-border rounded px-3 py-1.5 pl-8 text-sm text-foreground placeholder:text-muted outline-none focus:border-accent"
+                    />
+                  </div>
+                  <div className="max-h-32 overflow-y-auto">
+                    {allUsers
+                      .filter((u) => {
+                        if (members.some((m) => m.user_id === u.id)) return false;
+                        const q = addMemberSearch.toLowerCase();
+                        return (
+                          (u.full_name || "").toLowerCase().includes(q) ||
+                          u.email.toLowerCase().includes(q)
+                        );
+                      })
+                      .map((u) => (
+                        <button
+                          key={u.id}
+                          onClick={() => handleAddMember(u.id)}
+                          disabled={addingMember}
+                          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-surface-hover rounded transition-colors text-left disabled:opacity-50"
+                        >
+                          <span className="w-6 h-6 rounded-full bg-surface-hover text-muted flex items-center justify-center text-[10px] font-bold shrink-0">
+                            {initials(u.full_name, u.email)}
+                          </span>
+                          <span className="truncate text-foreground">{u.full_name || u.email}</span>
+                        </button>
+                      ))}
+                  </div>
+                  <button
+                    onClick={() => setShowAddMember(false)}
+                    className="text-xs text-muted hover:text-foreground mt-1 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
 
               {/* Members list */}
               <div className="flex-1 overflow-y-auto">
                 {members.map((m) => (
                   <div
                     key={m.user_id}
-                    className="flex items-center gap-3 px-4 py-2.5 hover:bg-surface-hover transition-colors"
+                    className="group/member flex items-center gap-3 px-4 py-2.5 hover:bg-surface-hover transition-colors"
                   >
                     <div className="relative">
                       <Avatar
@@ -1468,18 +1643,36 @@ export default function ChatPage() {
                       <div className="text-sm text-foreground truncate">
                         {m.user?.full_name || "Unknown"}
                         {m.user_id === user?.id && (
-                          <span className="text-xs text-muted ml-1">
-                            (you)
-                          </span>
+                          <span className="text-xs text-muted ml-1">(you)</span>
                         )}
                       </div>
-                      <div className="text-xs text-muted truncate">
-                        {m.user?.email}
-                      </div>
+                      <div className="text-xs text-muted truncate">{m.user?.email}</div>
                     </div>
+                    {/* Remove button: admin/creator can remove anyone; member can leave (remove self) */}
+                    {(canManageChannel(activeChannel) || m.user_id === user?.id) && (
+                      <button
+                        onClick={() => handleRemoveMember(m.user_id)}
+                        className="opacity-0 group-hover/member:opacity-100 p-1 rounded text-muted hover:text-red-400 transition-all shrink-0"
+                        title={m.user_id === user?.id ? "Leave channel" : "Remove member"}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
+
+              {/* Leave channel button for non-admin non-creator */}
+              {activeChannel && !canManageChannel(activeChannel) && (
+                <div className="px-4 py-3 border-t border-border">
+                  <button
+                    onClick={() => handleRemoveMember(user!.id)}
+                    className="w-full text-xs text-muted hover:text-red-400 transition-colors text-center"
+                  >
+                    Leave channel
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1490,6 +1683,36 @@ export default function ChatPage() {
             onConfirm={handleDeleteConfirm}
             onCancel={() => setDeletingMessageId(null)}
           />
+        )}
+
+        {/* ── Delete Channel Confirmation ────────── */}
+        {deletingChannelId && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="bg-surface border border-border rounded-lg w-full max-w-sm mx-4 shadow-xl p-5">
+              <h3 className="text-sm font-semibold text-foreground mb-2">Delete channel</h3>
+              <p className="text-sm text-muted mb-4">
+                Are you sure you want to delete{" "}
+                <span className="font-medium text-foreground">
+                  #{channels.find((c) => c.id === deletingChannelId)?.name}
+                </span>
+                ? All messages will be permanently removed.
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setDeletingChannelId(null)}
+                  className="px-3 py-1.5 rounded text-sm text-muted hover:text-foreground hover:bg-surface-hover transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleDeleteChannel(deletingChannelId)}
+                  className="px-3 py-1.5 rounded text-sm bg-red-600 hover:bg-red-700 text-white transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* ── New Channel Modal ──────────────────── */}

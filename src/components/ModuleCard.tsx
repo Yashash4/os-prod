@@ -87,6 +87,7 @@ interface ModuleCardProps {
   icon: string;
   href: string;
   index?: number;
+  badge?: number;
 }
 
 export default function ModuleCard({
@@ -95,6 +96,7 @@ export default function ModuleCard({
   icon,
   href,
   index = 0,
+  badge = 0,
 }: ModuleCardProps) {
   const IconComponent = iconComponents[icon] || Folder;
 
@@ -108,8 +110,13 @@ export default function ModuleCard({
         href={href}
         className="group flex flex-col items-center justify-center gap-3 p-6 rounded-xl bg-surface border border-border hover:border-accent/30 hover:bg-surface-hover transition-all min-h-[160px]"
       >
-        <div className="w-12 h-12 rounded-lg bg-accent/8 flex items-center justify-center group-hover:bg-accent/12 transition-colors">
+        <div className="relative w-12 h-12 rounded-lg bg-accent/8 flex items-center justify-center group-hover:bg-accent/12 transition-colors">
           <IconComponent className="w-6 h-6 text-accent" />
+          {badge > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1 leading-none">
+              {badge > 99 ? "99+" : badge}
+            </span>
+          )}
         </div>
         <div className="text-center">
           <h3 className="text-sm font-medium text-foreground">

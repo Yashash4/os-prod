@@ -14,11 +14,17 @@ import { apiFetch } from "@/lib/api-fetch";
 type ModuleLike = Omit<Module, "id" | "created_at"> | Module;
 
 export default function Home() {
-  const { user, role, isAdmin } = useAuth();
+  const { user, role, isAdmin, loading: authLoading } = useAuth();
   const [modules, setModules] = useState<ModuleLike[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [chatUnread, setChatUnread] = useState(0);
 
   useEffect(() => {
+    // Wait for auth to fully resolve before deciding on modules.
+    // Without this, the effect fires with user=null while auth is still
+    // loading, sets loaded=true with empty modules, and flashes "No modules".
+    if (authLoading) return;
+
     async function load() {
       if (!user) {
         setModules([]);
@@ -53,7 +59,25 @@ export default function Home() {
       }
     }
     load();
-  }, [user, role, isAdmin]);
+  }, [user, role, isAdmin, authLoading]);
+
+  // Fetch chat unread count
+  useEffect(() => {
+    if (!user) return;
+    async function fetchChatUnread() {
+      try {
+        const res = await apiFetch("/api/chat/channels");
+        const data = await res.json();
+        const channels: { unread_count?: number }[] = data.channels || [];
+        setChatUnread(channels.reduce((sum, ch) => sum + (ch.unread_count || 0), 0));
+      } catch {
+        // ignore
+      }
+    }
+    fetchChatUnread();
+    const interval = setInterval(fetchChatUnread, 30000);
+    return () => clearInterval(interval);
+  }, [user]);
 
   const displayModules = loaded ? modules : [];
 
@@ -75,7 +99,11 @@ export default function Home() {
                 </p>
               </div>
 
-              {loaded && displayModules.length === 0 ? (
+              {(!loaded || authLoading) && displayModules.length === 0 ? (
+                <div className="flex items-center justify-center py-16">
+                  <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : loaded && displayModules.length === 0 ? (
                 <div className="text-center py-16">
                   <p className="text-muted text-sm">
                     No modules have been assigned to your account yet.
@@ -94,6 +122,7 @@ export default function Home() {
                       icon={mod.icon}
                       href={mod.path}
                       index={i}
+                      badge={mod.slug === "chat" ? chatUnread : 0}
                     />
                   ))}
                 </div>
