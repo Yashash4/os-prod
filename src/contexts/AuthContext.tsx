@@ -65,45 +65,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  const loadUser = useCallback(async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const data = await fetchUserData(session.user.id, session.user.email!);
+  const handleSession = useCallback(async (session: { user: { id: string; email?: string } } | null) => {
+    if (session?.user) {
+      try {
+        const data = await Promise.race([
+          fetchUserData(session.user.id, session.user.email!),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 8000)),
+        ]);
         setUser(data.user);
         setRole(data.role);
-      } else {
-        setUser(null);
+      } catch {
+        // Profile fetch failed/timed out — set basic user so we don't block the app
+        setUser({ id: session.user.id, email: session.user.email!, full_name: null });
         setRole(null);
       }
+    } else {
+      setUser(null);
+      setRole(null);
+    }
+    setLoading(false);
+  }, []);
+
+  // refreshUser still available for manual refresh
+  const refreshUser = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      await handleSession(session);
     } catch {
       setUser(null);
       setRole(null);
-    } finally {
       setLoading(false);
     }
-  }, []);
+  }, [handleSession]);
 
   useEffect(() => {
-    loadUser();
-
+    // Use onAuthStateChange as single source of truth.
+    // Supabase fires INITIAL_SESSION on subscribe — no need for getSession().
+    // Calling getSession() grabs the auth lock and can block signIn if it hangs.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === "SIGNED_IN" && session?.user) {
-          const data = await fetchUserData(session.user.id, session.user.email!);
-          setUser(data.user);
-          setRole(data.role);
-          setLoading(false);
-        } else if (event === "SIGNED_OUT") {
-          setUser(null);
-          setRole(null);
-          setLoading(false);
-        }
+      async (_event, session) => {
+        await handleSession(session);
       }
     );
 
-    return () => subscription.unsubscribe();
-  }, [loadUser]);
+    // Safety net: if INITIAL_SESSION never fires within 10s, stop loading
+    const timeout = setTimeout(() => {
+      setLoading((prev) => {
+        if (prev) {
+          setUser(null);
+          setRole(null);
+        }
+        return false;
+      });
+    }, 10000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
+  }, [handleSession]);
 
   const handleSignOut = useCallback(async () => {
     await supabase.auth.signOut();
@@ -122,7 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loading,
         isAdmin,
         signOut: handleSignOut,
-        refreshUser: loadUser,
+        refreshUser,
       }}
     >
       {children}

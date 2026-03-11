@@ -67,6 +67,7 @@ export default function EmployeesPage() {
   const [ft, setFt] = useState("full_time");
   const [fj, setFj] = useState("");
   const [fr, setFr] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   function showToast(msg: string, duration = 2000) {
     setToast(msg);
@@ -118,25 +119,39 @@ export default function EmployeesPage() {
 
   async function handleAdd() {
     if (!fn.trim()) return;
-    const res = await apiFetch("/api/hr/employees", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        full_name: fn.trim(), email: fe || null, phone: fp || null,
-        department_id: fd || null, designation_id: fdes || null,
-        employment_type: ft, join_date: fj || null, reporting_to: fr || null,
-      }),
-    });
-    const data = await res.json();
-    setFn(""); setFe(""); setFp(""); setFd(""); setFdes(""); setFt("full_time"); setFj(""); setFr("");
-    setShowForm(false);
+    setSubmitting(true);
+    try {
+      const res = await apiFetch("/api/hr/employees", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          full_name: fn.trim(), email: fe || null, phone: fp || null,
+          department_id: fd || null, designation_id: fdes || null,
+          employment_type: ft, join_date: fj || null, reporting_to: fr || null,
+        }),
+      });
+      const data = await res.json();
 
-    if (data.auto_created_user) {
-      showToast(`Employee added — Invite email sent to ${fe} to set their password`, 6000);
-    } else {
-      showToast("Employee added");
+      if (!res.ok) {
+        showToast(data.error || "Failed to add employee", 4000);
+        return;
+      }
+
+      setFn(""); setFe(""); setFp(""); setFd(""); setFdes(""); setFt("full_time"); setFj(""); setFr("");
+      setShowForm(false);
+
+      if (data.auto_created_user) {
+        showToast(`Employee added — Invite email sent to ${fe} to set their password`, 6000);
+      } else {
+        showToast("Employee added");
+      }
+      fetchData();
+    } catch (err) {
+      console.error("Add employee failed:", err);
+      showToast("Failed to add employee — check console for details", 4000);
+    } finally {
+      setSubmitting(false);
     }
-    fetchData();
   }
 
   async function handleUpdate(id: string, field: string, value: string | null) {
@@ -251,9 +266,10 @@ export default function EmployeesPage() {
                 {employees.map((e) => <option key={e.id} value={e.id}>{e.full_name}</option>)}
               </select></div>
           </div>
-          <button onClick={handleAdd}
-            className="px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors">
-            Add Employee
+          <button onClick={handleAdd} disabled={submitting || !fn.trim()}
+            className="px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+            {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+            {submitting ? "Adding..." : "Add Employee"}
           </button>
         </div>
       )}
