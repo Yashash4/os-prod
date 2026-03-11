@@ -93,6 +93,59 @@ export async function GET(req: NextRequest) {
   }
 }
 
+export async function DELETE(req: NextRequest) {
+  const result = await requireModuleAccess(req, "chat");
+  if ("error" in result) return result.error;
+
+  const { userId } = result.auth;
+
+  try {
+    const { searchParams } = new URL(req.url);
+    const channelId = searchParams.get("id");
+
+    if (!channelId) {
+      return NextResponse.json({ error: "id is required" }, { status: 400 });
+    }
+
+    // Only admin (is_admin role) or channel creator can delete
+    const { data: channel, error: chErr } = await supabaseAdmin
+      .from("chat_channels")
+      .select("id, created_by")
+      .eq("id", channelId)
+      .single();
+
+    if (chErr || !channel) {
+      return NextResponse.json({ error: "Channel not found" }, { status: 404 });
+    }
+
+    const { data: roleData } = await supabaseAdmin
+      .from("users")
+      .select("role:roles(is_admin)")
+      .eq("id", userId)
+      .single();
+
+    const isAdmin = (roleData?.role as { is_admin?: boolean } | null)?.is_admin === true;
+
+    if (!isAdmin && channel.created_by !== userId) {
+      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+    }
+
+    const { error } = await supabaseAdmin
+      .from("chat_channels")
+      .delete()
+      .eq("id", channelId);
+
+    if (error) throw error;
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Failed to delete channel" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(req: NextRequest) {
   const result = await requireModuleAccess(req, "chat");
   if ("error" in result) return result.error;

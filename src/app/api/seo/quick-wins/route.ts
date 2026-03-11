@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireModuleAccess } from "@/lib/api-auth";
+import { requireSubModuleAccess } from "@/lib/api-auth";
 import { getSearchAnalytics } from "@/lib/gsc";
 
 function getExpectedCtrForPosition(position: number): number {
@@ -11,7 +11,7 @@ function getExpectedCtrForPosition(position: number): number {
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await requireModuleAccess(req, "seo");
+  const auth = await requireSubModuleAccess(req, "seo", "seo-keywords");
   if ("error" in auth) return auth.error;
 
   try {

@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPaymentPages } from "@/lib/razorpay";
-import { requireModuleAccess } from "@/lib/api-auth";
+import { requireSubModuleAccess } from "@/lib/api-auth";
 
 let cache: { data: unknown[]; ts: number } | null = null;
 let inflight: Promise<unknown[]> | null = null;
 const CACHE_TTL = 120_000;
 
 export async function GET(req: NextRequest) {
-  const auth = await requireModuleAccess(req, "payments");
+  const auth = await requireSubModuleAccess(req, "payments", "payments-pages");
   if ("error" in auth) return auth.error;
   try {
     if (cache && Date.now() - cache.ts < CACHE_TTL) {

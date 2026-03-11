@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { requireModuleAccess } from "@/lib/api-auth";
+import { requireSubModuleAccess } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireModuleAccess(req, "meta");
+  const auth = await requireSubModuleAccess(req, "meta", "meta-campaign-tracker");
   if ("error" in auth) return auth.error;
   try {
     const campaignId = req.nextUrl.searchParams.get("campaign_id");
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireModuleAccess(req, "meta");
+  const auth = await requireSubModuleAccess(req, "meta", "meta-campaign-tracker");
   if ("error" in auth) return auth.error;
   try {
     const body = await req.json();
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const auth = await requireModuleAccess(req, "meta");
+  const auth = await requireSubModuleAccess(req, "meta", "meta-campaign-tracker");
   if ("error" in auth) return auth.error;
   try {
     const body = await req.json();
@@ -86,7 +86,7 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const auth = await requireModuleAccess(req, "meta");
+  const auth = await requireSubModuleAccess(req, "meta", "meta-campaign-tracker");
   if ("error" in auth) return auth.error;
   try {
     const id = req.nextUrl.searchParams.get("id");

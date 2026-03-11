@@ -4,7 +4,7 @@ import {
   getAdSetInsightsBulk,
   getAdInsightsBulk,
 } from "@/lib/meta";
-import { requireModuleAccess } from "@/lib/api-auth";
+import { requireSubModuleAccess } from "@/lib/api-auth";
 
 type Level = "campaigns" | "adsets" | "ads";
 type Metric = "spend" | "ctr" | "cpc" | "cpm" | "roas";
@@ -31,7 +31,7 @@ let inflight: { promise: Promise<unknown>; key: string } | null = null;
 const CACHE_TTL = 120_000; // 2 minutes
 
 export async function GET(req: NextRequest) {
-  const auth = await requireModuleAccess(req, "meta");
+  const auth = await requireSubModuleAccess(req, "meta", "meta-analytics");
   if ("error" in auth) return auth.error;
 
   try {

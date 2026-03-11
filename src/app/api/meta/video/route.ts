@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getVideoSource } from "@/lib/meta";
-import { requireModuleAccess } from "@/lib/api-auth";
+import { requireSubModuleAccess } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireModuleAccess(req, "meta");
+  const auth = await requireSubModuleAccess(req, "meta", "meta-ads");
   if ("error" in auth) return auth.error;
   try {
     const videoId = req.nextUrl.searchParams.get("videoId");

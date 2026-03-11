@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireModuleAccess } from "@/lib/api-auth";
+import { requireSubModuleAccess } from "@/lib/api-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(req: NextRequest) {
-  const result = await requireModuleAccess(req, "hr");
+  const result = await requireSubModuleAccess(req, "hr", "hr-kpis");
   if ("error" in result) return result.error;
 
   const department_id = req.nextUrl.searchParams.get("department_id");
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const result = await requireModuleAccess(req, "hr");
+  const result = await requireSubModuleAccess(req, "hr", "hr-kpis");
   if ("error" in result) return result.error;
 
   const body = await req.json();
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const result = await requireModuleAccess(req, "hr");
+  const result = await requireSubModuleAccess(req, "hr", "hr-kpis");
   if ("error" in result) return result.error;
 
   const body = await req.json();
@@ -71,7 +71,7 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const result = await requireModuleAccess(req, "hr");
+  const result = await requireSubModuleAccess(req, "hr", "hr-kpis");
   if ("error" in result) return result.error;
 
   const id = req.nextUrl.searchParams.get("id");

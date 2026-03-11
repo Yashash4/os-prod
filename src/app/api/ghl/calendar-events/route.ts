@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCalendarEvents } from "@/lib/ghl";
-import { requireModuleAccess } from "@/lib/api-auth";
+import { requireSubModuleAccess } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireModuleAccess(req, "ghl");
+  const auth = await requireSubModuleAccess(req, "ghl", "calendar");
   if ("error" in auth) return auth.error;
   try {
     const calendarId = req.nextUrl.searchParams.get("calendarId");

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { requireModuleAccess } from "@/lib/api-auth";
+import { requireSubModuleAccess } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireModuleAccess(req, "automations");
+  const auth = await requireSubModuleAccess(req, "automations", "automations-email");
   if ("error" in auth) return auth.error;
 
   try {

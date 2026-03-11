@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { requireModuleAccess } from "@/lib/api-auth";
+import { requireSubModuleAccess } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireModuleAccess(req, "automations");
+  const auth = await requireSubModuleAccess(req, "automations", "automations-email-templates");
   if ("error" in auth) return auth.error;
 
   try {
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const result = await requireModuleAccess(req, "automations");
+  const result = await requireSubModuleAccess(req, "automations", "automations-email-templates");
   if ("error" in result) return result.error;
 
   try {
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const result = await requireModuleAccess(req, "automations");
+  const result = await requireSubModuleAccess(req, "automations", "automations-email-templates");
   if ("error" in result) return result.error;
 
   try {
@@ -118,7 +118,7 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const result = await requireModuleAccess(req, "automations");
+  const result = await requireSubModuleAccess(req, "automations", "automations-email-templates");
   if ("error" in result) return result.error;
 
   try {

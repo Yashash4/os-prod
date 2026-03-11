@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPipelines } from "@/lib/ghl";
-import { requireModuleAccess } from "@/lib/api-auth";
+import { requireSubModuleAccess } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireModuleAccess(req, "ghl");
+  const auth = await requireSubModuleAccess(req, "ghl", "opportunities");
   if ("error" in auth) return auth.error;
   try {
     const pipelines = await getPipelines();

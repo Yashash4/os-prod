@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { requireModuleAccess } from "@/lib/api-auth";
+import { requireSubModuleAccess } from "@/lib/api-auth";
 
 // GET: Fetch all maverick meet tracking records joined with call_booked_tracking
 export async function GET(req: NextRequest) {
-  const auth = await requireModuleAccess(req, "sales");
+  const auth = await requireSubModuleAccess(req, "sales", "maverick");
   if ("error" in auth) return auth.error;
   try {
     // Fetch call_booked_tracking records (filtered by assigned_to on frontend)
@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
 
 // POST: Upsert maverick meet tracking record
 export async function POST(req: NextRequest) {
-  const auth = await requireModuleAccess(req, "sales");
+  const auth = await requireSubModuleAccess(req, "sales", "maverick");
   if ("error" in auth) return auth.error;
   try {
     const body = await req.json();
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
 
 // PUT: Update a single maverick meet tracking record
 export async function PUT(req: NextRequest) {
-  const auth = await requireModuleAccess(req, "sales");
+  const auth = await requireSubModuleAccess(req, "sales", "maverick");
   if ("error" in auth) return auth.error;
   try {
     const body = await req.json();

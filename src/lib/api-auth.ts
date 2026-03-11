@@ -175,6 +175,34 @@ export async function requireModuleAccess(
 }
 
 /**
+ * Require access to a specific sub-module under a parent module.
+ * Combines parent module check + sub-module check in one call.
+ * Use this when a route maps 1:1 to a sub-module.
+ */
+export async function requireSubModuleAccess(
+  req: NextRequest,
+  parentSlug: string,
+  subModuleSlug: string
+): Promise<{ auth: AuthResult } | { error: NextResponse }> {
+  const result = await requireModuleAccess(req, parentSlug);
+  if ("error" in result) return result;
+
+  if (result.auth.isAdmin) return result;
+
+  const subModules = await getAccessibleSubModules(result.auth, parentSlug);
+  if (!subModules.has("__admin__") && !subModules.has(subModuleSlug)) {
+    return {
+      error: NextResponse.json(
+        { error: "Module access required" },
+        { status: 403 }
+      ),
+    };
+  }
+
+  return result;
+}
+
+/**
  * Returns the set of sub-module slugs the user can access under a given parent.
  * Call this after requireModuleAccess has already verified the user is authenticated.
  *

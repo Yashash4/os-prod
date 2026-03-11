@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { requireModuleAccess } from "@/lib/api-auth";
+import { requireSubModuleAccess } from "@/lib/api-auth";
 
 // GET: Fetch all jobin meet tracking records joined with call_booked_tracking
 export async function GET(req: NextRequest) {
-  const auth = await requireModuleAccess(req, "sales");
+  const auth = await requireSubModuleAccess(req, "sales", "jobin");
   if ("error" in auth) return auth.error;
   try {
     const { data: callBooked, error: cbError } = await supabaseAdmin
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
 
 // POST: Upsert jobin meet tracking record
 export async function POST(req: NextRequest) {
-  const auth = await requireModuleAccess(req, "sales");
+  const auth = await requireSubModuleAccess(req, "sales", "jobin");
   if ("error" in auth) return auth.error;
   try {
     const body = await req.json();
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
 
 // PUT: Update a single jobin meet tracking record
 export async function PUT(req: NextRequest) {
-  const auth = await requireModuleAccess(req, "sales");
+  const auth = await requireSubModuleAccess(req, "sales", "jobin");
   if ("error" in auth) return auth.error;
   try {
     const body = await req.json();

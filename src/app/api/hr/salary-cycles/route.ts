@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireModuleAccess } from "@/lib/api-auth";
+import { requireSubModuleAccess } from "@/lib/api-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(req: NextRequest) {
-  const result = await requireModuleAccess(req, "hr");
+  const result = await requireSubModuleAccess(req, "hr", "hr-payroll");
   if ("error" in result) return result.error;
 
   const cycle_month = req.nextUrl.searchParams.get("cycle_month");
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const result = await requireModuleAccess(req, "hr");
+  const result = await requireSubModuleAccess(req, "hr", "hr-payroll");
   if ("error" in result) return result.error;
 
   const body = await req.json();
@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const result = await requireModuleAccess(req, "hr");
+  const result = await requireSubModuleAccess(req, "hr", "hr-payroll");
   if ("error" in result) return result.error;
 
   const body = await req.json();

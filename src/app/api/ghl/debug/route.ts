@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireModuleAccess } from "@/lib/api-auth";
+import { requireSubModuleAccess } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireModuleAccess(req, "ghl");
+  const auth = await requireSubModuleAccess(req, "ghl", "opportunities");
   if ("error" in auth) return auth.error;
   const apiKey = process.env.GHL_API_KEY || "";
   const locationId = process.env.GHL_LOCATION_ID || "";

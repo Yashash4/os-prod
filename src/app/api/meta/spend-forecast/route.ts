@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAccountInsights } from "@/lib/meta";
-import { requireModuleAccess } from "@/lib/api-auth";
+import { requireSubModuleAccess } from "@/lib/api-auth";
 
 // In-memory cache + in-flight dedup
 let cache: { data: unknown; ts: number; key: string } | null = null;
@@ -8,7 +8,7 @@ let inflight: { promise: Promise<unknown>; key: string } | null = null;
 const CACHE_TTL = 120_000; // 2 minutes
 
 export async function GET(req: NextRequest) {
-  const auth = await requireModuleAccess(req, "meta");
+  const auth = await requireSubModuleAccess(req, "meta", "meta-budget-planner");
   if ("error" in auth) return auth.error;
 
   try {

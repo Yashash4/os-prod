@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPerformanceMetrics } from "@/lib/gmb";
-import { requireModuleAccess } from "@/lib/api-auth";
+import { requireSubModuleAccess } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireModuleAccess(req, "seo");
+  const auth = await requireSubModuleAccess(req, "seo", "seo-gbp");
   if ("error" in auth) return auth.error;
   try {
     const sp = req.nextUrl.searchParams;

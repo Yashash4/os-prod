@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireModuleAccess } from "@/lib/api-auth";
+import { requireSubModuleAccess } from "@/lib/api-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendNotification } from "@/lib/notify";
 
 export async function GET(req: NextRequest) {
   try {
-    const result = await requireModuleAccess(req, "hr");
+    const result = await requireSubModuleAccess(req, "hr", "hr-leaves");
     if ("error" in result) return result.error;
 
     const employee_id = req.nextUrl.searchParams.get("employee_id");
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const result = await requireModuleAccess(req, "hr");
+    const result = await requireSubModuleAccess(req, "hr", "hr-leaves");
     if ("error" in result) return result.error;
 
     const body = await req.json();
@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const result = await requireModuleAccess(req, "hr");
+    const result = await requireSubModuleAccess(req, "hr", "hr-leaves");
     if ("error" in result) return result.error;
 
     const body = await req.json();
