@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireModuleAccess, getAccessibleSubModules } from "@/lib/api-auth";
 import { resolveDataScope } from "@/lib/data-scope";
 import { getModulePermissions } from "@/lib/permissions";
+import { logImportant } from "@/lib/logger";
 
 type RawTask = Record<string, unknown> & { assigned_to: string | null };
 type PublicUser = { id: string; full_name: string | null; email: string; avatar_url: string | null };
@@ -236,8 +237,23 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Task id is required" }, { status: 400 });
     }
 
+    // Fetch task before deletion for audit snapshot
+    const { data: beforeTask } = await supabaseAdmin
+      .from("tasks")
+      .select("*")
+      .eq("id", id)
+      .single();
+
     const { error } = await supabaseAdmin.from("tasks").delete().eq("id", id);
     if (error) throw error;
+
+    await logImportant(auth.auth.userId, {
+      action: "task.deleted",
+      module: "tasks",
+      breadcrumb_path: "APEX OS > Tasks",
+      details: { entity_type: "task", entity_id: id },
+      before_value: beforeTask as Record<string, unknown> || undefined,
+    });
 
     return NextResponse.json({ success: true });
   } catch (err) {

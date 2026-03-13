@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSubModuleAccess } from "@/lib/api-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { logImportant } from "@/lib/logger";
 
 export async function GET(req: NextRequest) {
   try {
@@ -51,6 +52,14 @@ export async function POST(req: NextRequest) {
       console.error("leave_types POST error:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    await logImportant(result.auth.userId, {
+      action: "leave_type.created",
+      module: "hr",
+      breadcrumb_path: "APEX OS > HR > Leaves",
+      details: { entity_type: "leave_type", entity_id: data.id },
+      after_value: { name, days_per_year: days_per_year ?? 0, is_active: is_active ?? true },
+    });
 
     return NextResponse.json({ leave_type: data });
   } catch (err) {

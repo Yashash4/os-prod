@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSubModuleAccess } from "@/lib/api-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { logImportant } from "@/lib/logger";
 
 export async function GET(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "hr", "hr-kpis");
@@ -48,6 +49,15 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await logImportant(result.auth.userId, {
+    action: "kpi.created",
+    module: "hr",
+    breadcrumb_path: "APEX OS > HR > KPIs",
+    details: { entity_type: "hr_kpi", entity_id: data.id },
+    after_value: { name, description, department_id, designation_id, unit, target_value, frequency },
+  });
+
   return NextResponse.json({ kpi: data });
 }
 
@@ -61,6 +71,13 @@ export async function PUT(req: NextRequest) {
 
   if (!id) return NextResponse.json({ error: "ID is required" }, { status: 400 });
 
+  // Fetch before state for audit
+  const { data: before } = await supabaseAdmin
+    .from("hr_kpis")
+    .select("*")
+    .eq("id", id)
+    .single();
+
   const { data, error } = await supabaseAdmin
     .from("hr_kpis")
     .update(updates)
@@ -69,6 +86,16 @@ export async function PUT(req: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await logImportant(result.auth.userId, {
+    action: "kpi.updated",
+    module: "hr",
+    breadcrumb_path: "APEX OS > HR > KPIs",
+    details: { entity_type: "hr_kpi", entity_id: id },
+    before_value: before as Record<string, unknown> || undefined,
+    after_value: data as Record<string, unknown>,
+  });
+
   return NextResponse.json({ kpi: data });
 }
 
@@ -80,11 +107,28 @@ export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "ID is required" }, { status: 400 });
 
+  // Fetch before state for audit snapshot
+  const { data: before } = await supabaseAdmin
+    .from("hr_kpis")
+    .select("*")
+    .eq("id", id)
+    .single();
+
   const { error } = await supabaseAdmin
     .from("hr_kpis")
     .update({ is_active: false })
     .eq("id", id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await logImportant(result.auth.userId, {
+    action: "kpi.deleted",
+    module: "hr",
+    breadcrumb_path: "APEX OS > HR > KPIs",
+    details: { entity_type: "hr_kpi", entity_id: id },
+    before_value: before as Record<string, unknown> || undefined,
+    after_value: { is_active: false },
+  });
+
   return NextResponse.json({ success: true });
 }
