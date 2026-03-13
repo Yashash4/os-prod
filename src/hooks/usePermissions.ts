@@ -108,7 +108,7 @@ export function usePermissions(parentModuleSlug: string): UsePermissionsResult {
   const canDo = useCallback(
     (subModuleSlug: string, action: keyof PermissionMatrix): boolean => {
       // While loading, deny by default
-      if (!data) return isAdmin;
+      if (!data) return false;
       // Admin override
       if (isAdmin || data.scopeLevel === "admin") return true;
       // canDelete is special — admin-only

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { rateLimit } from "@/lib/rate-limit";
+import { logCritical } from "@/lib/logger";
 
 export async function POST(req: NextRequest) {
   try {
@@ -36,6 +37,13 @@ export async function POST(req: NextRequest) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin;
     await supabaseAdmin.auth.resetPasswordForEmail(email, {
       redirectTo: `${appUrl}/auth/reset-password`,
+    });
+
+    await logCritical("anonymous", {
+      action: "PASSWORD_RESET_REQUESTED",
+      module: "auth",
+      breadcrumb_path: "APEX OS > Password Reset",
+      details: { email, ip },
     });
 
     return NextResponse.json({ success: true });

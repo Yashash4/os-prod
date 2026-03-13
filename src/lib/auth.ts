@@ -32,11 +32,6 @@ export async function signOut() {
   if (error) throw error;
 }
 
-export async function requestPasswordReset(email: string) {
-  // Password reset is handled server-side; this is a placeholder
-  // The actual reset email is sent via the API route
-}
-
 export async function getCurrentUser() {
   const {
     data: { user },
