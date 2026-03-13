@@ -2,17 +2,39 @@ import { supabase } from "./supabase";
 import type { Role } from "@/types";
 
 export async function signIn(email: string, password: string) {
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
+  // Go through the rate-limited API route
+  const res = await fetch("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
   });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ error: "Login failed" }));
+    throw new Error(data.error || "Login failed");
+  }
+
+  const { access_token, refresh_token } = await res.json();
+
+  // Set the session on the client-side Supabase instance
+  const { data, error } = await supabase.auth.setSession({
+    access_token,
+    refresh_token,
+  });
+
   if (error) throw error;
+
   return data;
 }
 
 export async function signOut() {
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
+}
+
+export async function requestPasswordReset(email: string) {
+  // Password reset is handled server-side; this is a placeholder
+  // The actual reset email is sent via the API route
 }
 
 export async function getCurrentUser() {

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Wallet, Plus, Loader2, X } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import PermissionGate from "@/components/PermissionGate";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -118,12 +119,14 @@ export default function BudgetsPage() {
             onChange={(e) => setMonth(e.target.value)}
             className="bg-surface border border-border rounded-lg px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-accent [color-scheme:dark]"
           />
-          <button
-            onClick={() => setShowForm(true)}
-            className="flex items-center gap-1.5 bg-accent text-white px-3 py-1.5 rounded-lg text-sm hover:bg-accent/90 transition-colors"
-          >
-            <Plus className="w-4 h-4" /> Add Budget
-          </button>
+          <PermissionGate module="finance" subModule="finance-budgets" action="canCreate">
+            <button
+              onClick={() => setShowForm(true)}
+              className="flex items-center gap-1.5 bg-accent text-white px-3 py-1.5 rounded-lg text-sm hover:bg-accent/90 transition-colors"
+            >
+              <Plus className="w-4 h-4" /> Add Budget
+            </button>
+          </PermissionGate>
         </div>
       </div>
 
@@ -154,12 +157,14 @@ export default function BudgetsPage() {
             />
           </div>
           <div className="flex gap-2">
-            <button
-              onClick={handleCreate}
-              className="bg-accent text-white px-4 py-2 rounded-lg text-sm hover:bg-accent/90 transition-colors"
-            >
-              Create Budget
-            </button>
+            <PermissionGate module="finance" subModule="finance-budgets" action="canCreate">
+              <button
+                onClick={handleCreate}
+                className="bg-accent text-white px-4 py-2 rounded-lg text-sm hover:bg-accent/90 transition-colors"
+              >
+                Create Budget
+              </button>
+            </PermissionGate>
             <button
               onClick={() => setShowForm(false)}
               className="border border-border text-muted px-4 py-2 rounded-lg text-sm hover:text-foreground transition-colors"

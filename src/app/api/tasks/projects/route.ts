@@ -1,16 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireModuleAccess, getAccessibleSubModules } from "@/lib/api-auth";
+import { resolveDataScope, scopeQuery } from "@/lib/data-scope";
+import { getModulePermissions } from "@/lib/permissions";
 
 export async function GET(req: NextRequest) {
   const auth = await requireModuleAccess(req, "tasks");
   if ("error" in auth) return auth.error;
+
+  const [scope, permissions] = await Promise.all([
+    resolveDataScope(auth.auth.userId, auth.auth.roleId, auth.auth.isAdmin),
+    getModulePermissions(auth.auth.userId, auth.auth.roleId, "tasks-projects", auth.auth.isAdmin),
+  ]);
 
   try {
     const { searchParams } = new URL(req.url);
     const status = searchParams.get("status");
 
     let query = supabaseAdmin.from("projects").select("*");
+
+    // Scope on created_by (owner_id)
+    query = scopeQuery(query, scope, "owner_id");
 
     if (status) {
       query = query.eq("status", status);
@@ -21,7 +31,7 @@ export async function GET(req: NextRequest) {
     const { data, error } = await query;
     if (error) throw error;
 
-    return NextResponse.json({ projects: data || [] });
+    return NextResponse.json({ projects: data || [], _permissions: permissions });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to fetch projects" },
@@ -37,6 +47,11 @@ export async function POST(req: NextRequest) {
   const subModules = await getAccessibleSubModules(auth.auth, "tasks");
   if (!subModules.has("__admin__") && !subModules.has("tasks-projects")) {
     return NextResponse.json({ error: "Module access required" }, { status: 403 });
+  }
+
+  const permissions = await getModulePermissions(auth.auth.userId, auth.auth.roleId, "tasks-projects", auth.auth.isAdmin);
+  if (!permissions.canCreate) {
+    return NextResponse.json({ error: "Permission denied: canCreate" }, { status: 403 });
   }
 
   try {
@@ -78,6 +93,11 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Module access required" }, { status: 403 });
   }
 
+  const permissions = await getModulePermissions(auth.auth.userId, auth.auth.roleId, "tasks-projects", auth.auth.isAdmin);
+  if (!permissions.canEdit) {
+    return NextResponse.json({ error: "Permission denied: canEdit" }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     const { id, ...updates } = body;
@@ -114,9 +134,10 @@ export async function DELETE(req: NextRequest) {
   const auth = await requireModuleAccess(req, "tasks");
   if ("error" in auth) return auth.error;
 
-  const subModules = await getAccessibleSubModules(auth.auth, "tasks");
-  if (!subModules.has("__admin__") && !subModules.has("tasks-projects")) {
-    return NextResponse.json({ error: "Module access required" }, { status: 403 });
+  // Delete is admin-only
+  const scope = await resolveDataScope(auth.auth.userId, auth.auth.roleId, auth.auth.isAdmin);
+  if (!scope.scopeLevel.can_delete) {
+    return NextResponse.json({ error: "Permission denied: delete is admin-only" }, { status: 403 });
   }
 
   try {

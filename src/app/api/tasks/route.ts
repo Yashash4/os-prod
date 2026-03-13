@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireModuleAccess, getAccessibleSubModules } from "@/lib/api-auth";
+import { resolveDataScope } from "@/lib/data-scope";
+import { getModulePermissions } from "@/lib/permissions";
 
 type RawTask = Record<string, unknown> & { assigned_to: string | null };
 type PublicUser = { id: string; full_name: string | null; email: string; avatar_url: string | null };
@@ -33,6 +35,12 @@ export async function GET(req: NextRequest) {
   const canSeeTeam  = isAdmin || subModules.has("tasks-team");
   const canSeeMy    = isAdmin || subModules.has("tasks-my");
 
+  // Resolve scope and permissions
+  const [scope, permissions] = await Promise.all([
+    resolveDataScope(auth.auth.userId, auth.auth.roleId, auth.auth.isAdmin),
+    getModulePermissions(auth.auth.userId, auth.auth.roleId, "tasks-board", auth.auth.isAdmin),
+  ]);
+
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
@@ -53,7 +61,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: "Access denied" }, { status: 403 });
       }
       const [enriched] = await enrichTasksWithUsers([data as RawTask]);
-      return NextResponse.json({ task: enriched });
+      return NextResponse.json({ task: enriched, _permissions: permissions });
     }
 
     let query = supabaseAdmin
@@ -65,8 +73,12 @@ export async function GET(req: NextRequest) {
       if (canSeeMy) {
         query = query.eq("assigned_to", auth.auth.userId);
       } else {
-        return NextResponse.json({ tasks: [] });
+        return NextResponse.json({ tasks: [], _permissions: permissions });
       }
+    } else if (canSeeTeam && !canSeeBoard) {
+      // Team scope: filter assigned_to by team user IDs
+      const teamIds = [auth.auth.userId, ...scope.teamUserIds];
+      query = query.in("assigned_to", teamIds);
     }
 
     if (projectId) query = query.eq("project_id", projectId);
@@ -80,7 +92,7 @@ export async function GET(req: NextRequest) {
 
     const enriched = await enrichTasksWithUsers((data || []) as RawTask[]);
 
-    return NextResponse.json({ tasks: enriched });
+    return NextResponse.json({ tasks: enriched, _permissions: permissions });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to fetch tasks" },
@@ -98,6 +110,12 @@ export async function POST(req: NextRequest) {
   const canSeeBoard = isAdmin || subModules.has("tasks-board");
   const canSeeTeam  = isAdmin || subModules.has("tasks-team");
   const canSeeMy    = isAdmin || subModules.has("tasks-my");
+
+  // Permission check
+  const permissions = await getModulePermissions(auth.auth.userId, auth.auth.roleId, "tasks-board", auth.auth.isAdmin);
+  if (!permissions.canCreate) {
+    return NextResponse.json({ error: "Permission denied: canCreate" }, { status: 403 });
+  }
 
   try {
     const body = await req.json();
@@ -151,6 +169,12 @@ export async function PUT(req: NextRequest) {
   const canSeeTeam  = isAdmin || subModules.has("tasks-team");
   const canSeeMy    = isAdmin || subModules.has("tasks-my");
 
+  // Permission check
+  const permissions = await getModulePermissions(auth.auth.userId, auth.auth.roleId, "tasks-board", auth.auth.isAdmin);
+  if (!permissions.canEdit) {
+    return NextResponse.json({ error: "Permission denied: canEdit" }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     const { id, ...updates } = body;
@@ -198,11 +222,11 @@ export async function DELETE(req: NextRequest) {
   const auth = await requireModuleAccess(req, "tasks");
   if ("error" in auth) return auth.error;
 
-  const subModules = await getAccessibleSubModules(auth.auth, "tasks");
-  const isAdmin     = subModules.has("__admin__");
-  const canSeeBoard = isAdmin || subModules.has("tasks-board");
-  const canSeeTeam  = isAdmin || subModules.has("tasks-team");
-  const canSeeMy    = isAdmin || subModules.has("tasks-my");
+  // Delete is admin-only
+  const scope = await resolveDataScope(auth.auth.userId, auth.auth.roleId, auth.auth.isAdmin);
+  if (!scope.scopeLevel.can_delete) {
+    return NextResponse.json({ error: "Permission denied: delete is admin-only" }, { status: 403 });
+  }
 
   try {
     const { searchParams } = new URL(req.url);
@@ -210,13 +234,6 @@ export async function DELETE(req: NextRequest) {
 
     if (!id) {
       return NextResponse.json({ error: "Task id is required" }, { status: 400 });
-    }
-
-    if (!canSeeBoard && !canSeeTeam && canSeeMy) {
-      const { data: existing } = await supabaseAdmin.from("tasks").select("assigned_to").eq("id", id).single();
-      if (!existing || existing.assigned_to !== auth.auth.userId) {
-        return NextResponse.json({ error: "Access denied" }, { status: 403 });
-      }
     }
 
     const { error } = await supabaseAdmin.from("tasks").delete().eq("id", id);

@@ -5,6 +5,7 @@ import {
   Users, Plus, Loader2, Search, Trash2, ChevronDown, ChevronUp, Save, Shield,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import PermissionGate from "@/components/PermissionGate";
 
 interface Employee {
   id: string;
@@ -192,10 +193,12 @@ export default function EmployeesPage() {
           <span className="text-sm text-muted">({filtered.length})</span>
           {loading && <Loader2 className="w-5 h-5 animate-spin text-accent" />}
         </div>
-        <button onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors">
-          <Plus className="w-4 h-4" /> Add Employee
-        </button>
+        <PermissionGate module="hr" subModule="hr-employees" action="canCreate">
+          <button onClick={() => setShowForm(!showForm)}
+            className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors">
+            <Plus className="w-4 h-4" /> Add Employee
+          </button>
+        </PermissionGate>
       </div>
 
       {/* Filters */}
@@ -414,10 +417,12 @@ export default function EmployeesPage() {
                     <Save className="w-3.5 h-3.5" />
                     Changes auto-save on edit
                   </div>
-                  <button onClick={() => handleDelete(e.id)}
-                    className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 transition-colors">
-                    <Trash2 className="w-3.5 h-3.5" /> Remove Employee
-                  </button>
+                  <PermissionGate module="hr" subModule="hr-employees" action="canDelete">
+                    <button onClick={() => handleDelete(e.id)}
+                      className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 transition-colors">
+                      <Trash2 className="w-3.5 h-3.5" /> Remove Employee
+                    </button>
+                  </PermissionGate>
                 </div>
               </div>
             )}

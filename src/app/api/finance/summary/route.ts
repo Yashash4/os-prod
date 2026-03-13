@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireModuleAccess } from "@/lib/api-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { resolveDataScope, scopeQuery } from "@/lib/data-scope";
 
 export async function GET(req: NextRequest) {
   const result = await requireModuleAccess(req, "finance");
@@ -18,12 +19,18 @@ export async function GET(req: NextRequest) {
     to = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
   }
 
+  const scope = await resolveDataScope(result.auth.userId, result.auth.roleId, result.auth.isAdmin);
+
   // Get expenses in range
-  const { data: expenses, error } = await supabaseAdmin
+  let expenseQuery = supabaseAdmin
     .from("expenses")
     .select("amount, category_id, category:expense_categories(name)")
     .gte("date", from)
     .lte("date", to);
+
+  expenseQuery = scopeQuery(expenseQuery, scope, "created_by");
+
+  const { data: expenses, error } = await expenseQuery;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

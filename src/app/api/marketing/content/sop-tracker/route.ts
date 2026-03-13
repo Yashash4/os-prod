@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireSubModuleAccess } from "@/lib/api-auth";
+import { scopeQuery } from "@/lib/data-scope";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "content", "content-sop-tracker");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "content", "content-sop-tracker");
+  if ("error" in result) return result.error;
   try {
     const from = req.nextUrl.searchParams.get("from");
     const to = req.nextUrl.searchParams.get("to");
@@ -17,9 +18,11 @@ export async function GET(req: NextRequest) {
     if (from) query = query.gte("sop_date", from);
     if (to) query = query.lte("sop_date", to);
 
+    query = scopeQuery(query, result.scope, "created_by");
+
     const { data, error } = await query;
     if (error) throw error;
-    return NextResponse.json({ records: data || [] });
+    return NextResponse.json({ records: data || [], _permissions: result.permissions });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch SOP tracker";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -27,8 +30,12 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "content", "content-sop-tracker");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "content", "content-sop-tracker");
+  if ("error" in result) return result.error;
+
+  if (!result.permissions.canCreate) {
+    return NextResponse.json({ error: "You do not have permission to create SOP entries" }, { status: 403 });
+  }
 
   const action = req.nextUrl.searchParams.get("action");
 
@@ -74,7 +81,7 @@ export async function POST(req: NextRequest) {
 
       const rows = missingDates.map((dateStr) => ({
         sop_date: dateStr,
-        created_by: auth.auth.userId,
+        created_by: result.auth.userId,
       }));
 
       const { data: inserted, error } = await supabaseAdmin
@@ -102,7 +109,7 @@ export async function POST(req: NextRequest) {
 
     const { data, error } = await supabaseAdmin
       .from("content_sop_daily")
-      .insert({ sop_date, created_by: auth.auth.userId })
+      .insert({ sop_date, created_by: result.auth.userId })
       .select()
       .single();
 
@@ -115,8 +122,13 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "content", "content-sop-tracker");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "content", "content-sop-tracker");
+  if ("error" in result) return result.error;
+
+  if (!result.permissions.canEdit) {
+    return NextResponse.json({ error: "You do not have permission to edit SOP entries" }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     const { id, ...updates } = body;
@@ -138,8 +150,13 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "content", "content-sop-tracker");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "content", "content-sop-tracker");
+  if ("error" in result) return result.error;
+
+  if (!result.scope.scopeLevel.can_delete) {
+    return NextResponse.json({ error: "Only admins can delete SOP entries" }, { status: 403 });
+  }
+
   try {
     const id = req.nextUrl.searchParams.get("id");
     if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });

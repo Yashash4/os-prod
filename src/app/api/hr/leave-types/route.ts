@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ leave_types: leaveTypes || [] });
+    return NextResponse.json({ leave_types: leaveTypes || [], _permissions: result.permissions });
   } catch (err) {
     console.error("leave_types GET uncaught:", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
   try {
     const result = await requireSubModuleAccess(req, "hr", "hr-leaves");
     if ("error" in result) return result.error;
+    if (!result.permissions.canCreate) return NextResponse.json({ error: "Permission denied" }, { status: 403 });
 
     const body = await req.json();
     const { name, days_per_year, is_active } = body;

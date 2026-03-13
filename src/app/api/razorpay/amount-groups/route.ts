@@ -4,8 +4,8 @@ import { requireSubModuleAccess } from "@/lib/api-auth";
 
 // GET: Fetch all saved amount groups
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "payments", "payments-analytics");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "payments", "payments-analytics");
+  if ("error" in result) return result.error;
   try {
     const { data, error } = await supabaseAdmin
       .from("payment_amount_groups")
@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
       .order("created_at", { ascending: false });
 
     if (error) throw error;
-    return NextResponse.json({ groups: data || [] });
+    return NextResponse.json({ groups: data || [], _permissions: result.permissions });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch groups";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -22,8 +22,13 @@ export async function GET(req: NextRequest) {
 
 // POST: Create a new amount group
 export async function POST(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "payments", "payments-analytics");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "payments", "payments-analytics");
+  if ("error" in result) return result.error;
+
+  if (!result.permissions.canCreate) {
+    return NextResponse.json({ error: "You do not have permission to create groups" }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     const { name, min_amount, max_amount } = body;
@@ -55,8 +60,13 @@ export async function POST(req: NextRequest) {
 
 // DELETE: Remove a group by id
 export async function DELETE(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "payments", "payments-analytics");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "payments", "payments-analytics");
+  if ("error" in result) return result.error;
+
+  if (!result.scope.scopeLevel.can_delete) {
+    return NextResponse.json({ error: "Only admins can delete groups" }, { status: 403 });
+  }
+
   try {
     const id = req.nextUrl.searchParams.get("id");
     if (!id) {

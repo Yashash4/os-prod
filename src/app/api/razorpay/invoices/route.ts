@@ -7,20 +7,20 @@ let inflight: { promise: Promise<unknown[]>; key: string } | null = null;
 const CACHE_TTL = 120_000;
 
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "payments", "payments-invoices");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "payments", "payments-invoices");
+  if ("error" in result) return result.error;
   try {
     const from = req.nextUrl.searchParams.get("from") || undefined;
     const to = req.nextUrl.searchParams.get("to") || undefined;
     const cacheKey = `${from || "all"}_${to || "all"}`;
 
     if (cache && cache.key === cacheKey && Date.now() - cache.ts < CACHE_TTL) {
-      return NextResponse.json({ invoices: cache.data });
+      return NextResponse.json({ invoices: cache.data, _permissions: result.permissions });
     }
 
     if (inflight && inflight.key === cacheKey) {
       const data = await inflight.promise;
-      return NextResponse.json({ invoices: data });
+      return NextResponse.json({ invoices: data, _permissions: result.permissions });
     }
 
     const fromTs = from ? parseInt(from) : undefined;
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
     const data = await promise;
     cache = { data, ts: Date.now(), key: cacheKey };
     inflight = null;
-    return NextResponse.json({ invoices: data });
+    return NextResponse.json({ invoices: data, _permissions: result.permissions });
   } catch (error) {
     inflight = null;
     const message = error instanceof Error ? error.message : "Failed to fetch invoices";

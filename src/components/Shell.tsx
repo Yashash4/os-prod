@@ -6,13 +6,15 @@ import Link from "next/link";
 import Breadcrumb from "./Breadcrumb";
 import { buildBreadcrumbFromPath } from "@/lib/modules";
 import { useAuth } from "@/contexts/AuthContext";
-import { LogOut, Settings } from "lucide-react";
+import { LogOut, Settings, Shield } from "lucide-react";
 import NavTree from "./NavTree";
 import NotificationDropdown from "./NotificationDropdown";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export default function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, signOut } = useAuth();
+  const { scope } = usePermissions("admin");
 
   const pathSegments = pathname.startsWith("/m/")
     ? pathname.replace("/m/", "").split("/").filter(Boolean)
@@ -60,6 +62,16 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                 <span className="text-xs text-muted hidden sm:block">
                   {displayName}
                 </span>
+                {scope && (
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium uppercase tracking-wider hidden sm:block ${
+                    scope === "admin" ? "bg-accent/15 text-accent" :
+                    scope === "manager" ? "bg-blue-500/15 text-blue-400" :
+                    scope === "client" ? "bg-purple-500/15 text-purple-400" :
+                    "bg-surface-hover text-muted"
+                  }`}>
+                    {scope}
+                  </span>
+                )}
               </Link>
             )}
             <Link

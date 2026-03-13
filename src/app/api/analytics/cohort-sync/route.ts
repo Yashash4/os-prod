@@ -225,8 +225,11 @@ export async function GET(req: NextRequest) {
 
 // Manual trigger from UI uses POST — requires authenticated user
 export async function POST(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "analytics", "analytics-cohort");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "analytics", "analytics-cohort");
+  if ("error" in result) return result.error;
+  if (!result.permissions.canCreate) {
+    return NextResponse.json({ error: "Permission denied: canCreate" }, { status: 403 });
+  }
   return runSync(req);
 }
 

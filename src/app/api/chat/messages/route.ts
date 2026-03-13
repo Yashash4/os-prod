@@ -188,7 +188,7 @@ export async function GET(req: NextRequest) {
       .eq("channel_id", channelId)
       .eq("user_id", userId);
 
-    return NextResponse.json({ messages: messages || [] });
+    return NextResponse.json({ messages: messages || [], _permissions: { canRead: true, canCreate: true, canEdit: true, canApprove: false, canExport: false, canDelete: result.auth.isAdmin } });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to fetch messages" },
@@ -460,8 +460,17 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Message not found" }, { status: 404 });
     }
 
+    // Allow message owner or admin to delete
     if (existing.user_id !== userId) {
-      return NextResponse.json({ error: "You can only delete your own messages" }, { status: 403 });
+      const { data: roleData } = await supabaseAdmin
+        .from("users")
+        .select("role:roles(is_admin)")
+        .eq("id", userId)
+        .single();
+      const isAdmin = (roleData?.role as { is_admin?: boolean } | null)?.is_admin === true;
+      if (!isAdmin) {
+        return NextResponse.json({ error: "You can only delete your own messages" }, { status: 403 });
+      }
     }
 
     if (existing.is_deleted) {

@@ -4,8 +4,8 @@ import { requireSubModuleAccess } from "@/lib/api-auth";
 
 // GET: Fetch all maverick meet tracking records joined with call_booked_tracking
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "sales", "maverick");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "sales", "maverick");
+  if ("error" in result) return result.error;
   try {
     // Fetch call_booked_tracking records (filtered by assigned_to on frontend)
     const { data: callBooked, error: cbError } = await supabaseAdmin
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
       outcome: meetMap[cb.opportunity_id]?.outcome || null,
     }));
 
-    return NextResponse.json({ records: merged });
+    return NextResponse.json({ records: merged, _permissions: result.permissions });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch meet management data";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -47,8 +47,13 @@ export async function GET(req: NextRequest) {
 
 // POST: Upsert maverick meet tracking record
 export async function POST(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "sales", "maverick");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "sales", "maverick");
+  if ("error" in result) return result.error;
+
+  if (!result.permissions.canCreate) {
+    return NextResponse.json({ error: "You do not have permission to create records" }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     const records = Array.isArray(body) ? body : [body];
@@ -78,8 +83,13 @@ export async function POST(req: NextRequest) {
 
 // PUT: Update a single maverick meet tracking record
 export async function PUT(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "sales", "maverick");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "sales", "maverick");
+  if ("error" in result) return result.error;
+
+  if (!result.permissions.canEdit) {
+    return NextResponse.json({ error: "You do not have permission to edit records" }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     const { opportunity_id, ...updates } = body;

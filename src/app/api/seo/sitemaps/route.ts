@@ -3,11 +3,11 @@ import { getSitemaps } from "@/lib/gsc";
 import { requireSubModuleAccess } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "seo", "seo-sitemap");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "seo", "seo-sitemap");
+  if ("error" in result) return result.error;
   try {
     const sitemaps = await getSitemaps();
-    return NextResponse.json({ sitemaps });
+    return NextResponse.json({ sitemaps, _permissions: result.permissions });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to fetch sitemaps";

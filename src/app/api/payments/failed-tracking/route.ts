@@ -1,18 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireSubModuleAccess } from "@/lib/api-auth";
+import { scopeQuery } from "@/lib/data-scope";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "payments", "payments-failed");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "payments", "payments-failed");
+  if ("error" in result) return result.error;
   try {
-    const { data, error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from("failed_payment_tracking")
       .select("*")
       .order("created_at", { ascending: false });
 
+    query = scopeQuery(query, result.scope, "created_by");
+
+    const { data, error } = await query;
+
     if (error) throw error;
-    return NextResponse.json({ records: data || [] });
+    return NextResponse.json({ records: data || [], _permissions: result.permissions });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch records";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -20,8 +25,13 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "payments", "payments-failed");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "payments", "payments-failed");
+  if ("error" in result) return result.error;
+
+  if (!result.permissions.canCreate) {
+    return NextResponse.json({ error: "You do not have permission to create records" }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     const { razorpay_payment_id, contact_name, contact_email, contact_phone, amount, original_status } = body;
@@ -41,7 +51,7 @@ export async function POST(req: NextRequest) {
           amount: Math.round(amount),
           original_status: original_status || "failed",
           follow_up_status: "pending",
-          created_by: auth.auth.userId,
+          created_by: result.auth.userId,
         },
         { onConflict: "razorpay_payment_id" }
       )
@@ -57,8 +67,13 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "payments", "payments-failed");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "payments", "payments-failed");
+  if ("error" in result) return result.error;
+
+  if (!result.permissions.canEdit) {
+    return NextResponse.json({ error: "You do not have permission to edit records" }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     const { id, ...updates } = body;

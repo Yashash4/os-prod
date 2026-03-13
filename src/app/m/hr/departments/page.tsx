@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Building2, Plus, Loader2, Pencil, Trash2, Users } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import PermissionGate from "@/components/PermissionGate";
 
 interface Department {
   id: string;
@@ -78,12 +79,14 @@ export default function DepartmentsPage() {
           <h1 className="text-2xl font-bold">Departments</h1>
           {loading && <Loader2 className="w-5 h-5 animate-spin text-accent" />}
         </div>
-        <button
-          onClick={() => { setShowForm(!showForm); setEditId(null); setFormName(""); setFormDesc(""); }}
-          className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors"
-        >
-          <Plus className="w-4 h-4" /> Add Department
-        </button>
+        <PermissionGate module="hr" subModule="hr-departments" action="canCreate">
+          <button
+            onClick={() => { setShowForm(!showForm); setEditId(null); setFormName(""); setFormDesc(""); }}
+            className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors"
+          >
+            <Plus className="w-4 h-4" /> Add Department
+          </button>
+        </PermissionGate>
       </div>
 
       {(showForm || editId) && (
@@ -123,12 +126,16 @@ export default function DepartmentsPage() {
                 {d.description && <p className="text-xs text-muted mt-0.5">{d.description}</p>}
               </div>
               <div className="flex gap-1">
-                <button onClick={() => startEdit(d)} className="text-muted hover:text-accent p-1">
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={() => handleDelete(d.id)} className="text-muted hover:text-red-400 p-1">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                <PermissionGate module="hr" subModule="hr-departments" action="canEdit">
+                  <button onClick={() => startEdit(d)} className="text-muted hover:text-accent p-1">
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                </PermissionGate>
+                <PermissionGate module="hr" subModule="hr-departments" action="canDelete">
+                  <button onClick={() => handleDelete(d.id)} className="text-muted hover:text-red-400 p-1">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </PermissionGate>
               </div>
             </div>
             <div className="flex items-center gap-4 text-sm">

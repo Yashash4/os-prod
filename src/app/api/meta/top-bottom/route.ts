@@ -31,8 +31,8 @@ let inflight: { promise: Promise<unknown>; key: string } | null = null;
 const CACHE_TTL = 120_000; // 2 minutes
 
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "meta", "meta-analytics");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "meta", "meta-analytics");
+  if ("error" in result) return result.error;
 
   try {
     const level = (req.nextUrl.searchParams.get("level") || "campaigns") as Level;
@@ -42,13 +42,13 @@ export async function GET(req: NextRequest) {
 
     // Return cached data if fresh
     if (cache && cache.key === cacheKey && Date.now() - cache.ts < CACHE_TTL) {
-      return NextResponse.json(cache.data);
+      return NextResponse.json({ ...(cache.data as object), _permissions: result.permissions });
     }
 
     // Deduplicate concurrent requests
     if (inflight && inflight.key === cacheKey) {
-      const result = await inflight.promise;
-      return NextResponse.json(result);
+      const r = await inflight.promise;
+      return NextResponse.json({ ...(r as object), _permissions: result.permissions });
     }
 
     const promise = (async () => {
@@ -88,10 +88,10 @@ export async function GET(req: NextRequest) {
     })();
 
     inflight = { promise, key: cacheKey };
-    const result = await promise;
-    cache = { data: result, ts: Date.now(), key: cacheKey };
+    const r = await promise;
+    cache = { data: r, ts: Date.now(), key: cacheKey };
     inflight = null;
-    return NextResponse.json(result);
+    return NextResponse.json({ ...r, _permissions: result.permissions });
   } catch (error) {
     inflight = null;
     const message =

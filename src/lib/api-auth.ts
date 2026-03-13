@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "./supabase-admin";
+import { resolveDataScope } from "./data-scope";
+import { getModulePermissions } from "./permissions";
+import type { DataScope, PermissionMatrix } from "@/types";
 
 /**
  * Server-side auth helper for API routes.
@@ -7,11 +10,17 @@ import { supabaseAdmin } from "./supabase-admin";
  * Returns the authenticated user or a 401 response.
  */
 
-interface AuthResult {
+export interface AuthResult {
   userId: string;
   email: string;
   roleId: string | null;
   isAdmin: boolean;
+}
+
+export interface AuthWithScope {
+  auth: AuthResult;
+  scope: DataScope;
+  permissions: PermissionMatrix;
 }
 
 /**
@@ -30,17 +39,26 @@ export async function authenticateRequest(
       accessToken = authHeader.slice(7);
     }
 
-    // Try cookie-based session (only if cookies are present)
+    // Try cookie-based session via SSR client (only if cookies are present)
     if (!accessToken) {
       const cookieHeader = req.headers.get("cookie");
       if (cookieHeader) {
-        const { createClient } = await import("@supabase/supabase-js");
-        const supabaseServer = createClient(
+        const { createServerClient } = await import("@supabase/ssr");
+        const supabaseServer = createServerClient(
           process.env.NEXT_PUBLIC_SUPABASE_URL!,
           process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
           {
-            global: {
-              headers: { cookie: cookieHeader },
+            cookies: {
+              getAll() {
+                // Parse cookie header into name/value pairs
+                return (cookieHeader || "").split(";").map((c) => {
+                  const [name, ...rest] = c.trim().split("=");
+                  return { name, value: rest.join("=") };
+                });
+              },
+              setAll() {
+                // API routes don't need to set cookies — middleware handles refresh
+              },
             },
           }
         );
@@ -176,30 +194,70 @@ export async function requireModuleAccess(
 
 /**
  * Require access to a specific sub-module under a parent module.
- * Combines parent module check + sub-module check in one call.
- * Use this when a route maps 1:1 to a sub-module.
+ * Combines parent module check + sub-module check + scope resolution + permission matrix.
+ *
+ * Returns { auth, scope, permissions } on success.
+ * Set `skipScope` to true for routes that don't need scope resolution (e.g. POST-only).
  */
 export async function requireSubModuleAccess(
   req: NextRequest,
   parentSlug: string,
-  subModuleSlug: string
-): Promise<{ auth: AuthResult } | { error: NextResponse }> {
+  subModuleSlug: string,
+  options?: { skipScope?: boolean }
+): Promise<AuthWithScope | { error: NextResponse }> {
   const result = await requireModuleAccess(req, parentSlug);
   if ("error" in result) return result;
 
-  if (result.auth.isAdmin) return result;
+  if (!result.auth.isAdmin) {
+    const subModules = await getAccessibleSubModules(result.auth, parentSlug);
+    if (!subModules.has("__admin__") && !subModules.has(subModuleSlug)) {
+      return {
+        error: NextResponse.json(
+          { error: "Module access required" },
+          { status: 403 }
+        ),
+      };
+    }
+  }
 
-  const subModules = await getAccessibleSubModules(result.auth, parentSlug);
-  if (!subModules.has("__admin__") && !subModules.has(subModuleSlug)) {
+  // Resolve scope and permissions
+  const { auth } = result;
+
+  if (options?.skipScope) {
+    // Return minimal scope for routes that don't need it
+    const permissions = await getModulePermissions(
+      auth.userId,
+      auth.roleId,
+      subModuleSlug,
+      auth.isAdmin
+    );
     return {
-      error: NextResponse.json(
-        { error: "Module access required" },
-        { status: 403 }
-      ),
+      auth,
+      scope: {
+        scopeLevel: {
+          id: "",
+          name: "",
+          slug: auth.isAdmin ? "admin" : "employee",
+          rank: 0,
+          data_visibility: auth.isAdmin ? "all" : "self",
+          can_delete: auth.isAdmin,
+          is_system: true,
+          created_at: "",
+        },
+        userId: auth.userId,
+        teamEmployeeIds: [],
+        teamUserIds: [],
+      },
+      permissions,
     };
   }
 
-  return result;
+  const [scope, permissions] = await Promise.all([
+    resolveDataScope(auth.userId, auth.roleId, auth.isAdmin),
+    getModulePermissions(auth.userId, auth.roleId, subModuleSlug, auth.isAdmin),
+  ]);
+
+  return { auth, scope, permissions };
 }
 
 /**

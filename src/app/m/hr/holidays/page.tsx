@@ -9,6 +9,7 @@ import {
   Calendar,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import PermissionGate from "@/components/PermissionGate";
 
 interface Holiday {
   id: string;
@@ -152,12 +153,14 @@ export default function HolidaysPage() {
           <span className="text-sm text-muted">({holidays.length})</span>
           {loading && <Loader2 className="w-5 h-5 animate-spin text-accent" />}
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors"
-        >
-          <Plus className="w-4 h-4" /> Add Holiday
-        </button>
+        <PermissionGate module="hr" subModule="hr-holidays" action="canCreate">
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors"
+          >
+            <Plus className="w-4 h-4" /> Add Holiday
+          </button>
+        </PermissionGate>
       </div>
 
       {/* Add Form */}
@@ -239,13 +242,15 @@ export default function HolidaysPage() {
                   </div>
                   <p className="text-xs text-muted">{formatDate(h.date)}</p>
                 </div>
-                <button
-                  onClick={() => handleDelete(h.id)}
-                  className="p-1.5 rounded-lg text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                  title="Delete holiday"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <PermissionGate module="hr" subModule="hr-holidays" action="canDelete">
+                  <button
+                    onClick={() => handleDelete(h.id)}
+                    className="p-1.5 rounded-lg text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                    title="Delete holiday"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </PermissionGate>
               </div>
             ))}
           </div>

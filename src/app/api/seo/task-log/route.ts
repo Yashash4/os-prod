@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireSubModuleAccess } from "@/lib/api-auth";
+import { scopeQuery } from "@/lib/data-scope";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "seo", "seo-task-log");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "seo", "seo-task-log");
+  if ("error" in result) return result.error;
 
   try {
     let query = supabaseAdmin
@@ -20,9 +21,11 @@ export async function GET(req: NextRequest) {
     if (taskType) query = query.eq("task_type", taskType);
     if (assignedTo) query = query.eq("assigned_to", assignedTo);
 
+    query = scopeQuery(query, result.scope, "created_by");
+
     const { data, error } = await query;
     if (error) throw error;
-    return NextResponse.json({ entries: data || [] });
+    return NextResponse.json({ entries: data || [], _permissions: result.permissions });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch task log";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -30,8 +33,12 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "seo", "seo-task-log");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "seo", "seo-task-log");
+  if ("error" in result) return result.error;
+
+  if (!result.permissions.canCreate) {
+    return NextResponse.json({ error: "You do not have permission to create task log entries" }, { status: 403 });
+  }
 
   try {
     const body = await req.json();
@@ -45,7 +52,7 @@ export async function POST(req: NextRequest) {
 
     const { data, error } = await supabaseAdmin
       .from("seo_task_log")
-      .insert({ ...body, created_by: auth.auth.userId })
+      .insert({ ...body, created_by: result.auth.userId })
       .select()
       .single();
 
@@ -58,8 +65,12 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "seo", "seo-task-log");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "seo", "seo-task-log");
+  if ("error" in result) return result.error;
+
+  if (!result.permissions.canEdit) {
+    return NextResponse.json({ error: "You do not have permission to edit task log entries" }, { status: 403 });
+  }
 
   try {
     const body = await req.json();
@@ -85,8 +96,12 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "seo", "seo-task-log");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "seo", "seo-task-log");
+  if ("error" in result) return result.error;
+
+  if (!result.scope.scopeLevel.can_delete) {
+    return NextResponse.json({ error: "Only admins can delete task log entries" }, { status: 403 });
+  }
 
   try {
     const id = req.nextUrl.searchParams.get("id");

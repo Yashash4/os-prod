@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireSubModuleAccess } from "@/lib/api-auth";
+import { scopeQuery } from "@/lib/data-scope";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "seo", "seo-content-briefs");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "seo", "seo-content-briefs");
+  if ("error" in result) return result.error;
 
   try {
     let query = supabaseAdmin
@@ -18,9 +19,11 @@ export async function GET(req: NextRequest) {
     if (status) query = query.eq("status", status);
     if (assignedTo) query = query.eq("assigned_to", assignedTo);
 
+    query = scopeQuery(query, result.scope, "created_by");
+
     const { data, error } = await query;
     if (error) throw error;
-    return NextResponse.json({ briefs: data || [] });
+    return NextResponse.json({ briefs: data || [], _permissions: result.permissions });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch content briefs";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -28,8 +31,12 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "seo", "seo-content-briefs");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "seo", "seo-content-briefs");
+  if ("error" in result) return result.error;
+
+  if (!result.permissions.canCreate) {
+    return NextResponse.json({ error: "You do not have permission to create content briefs" }, { status: 403 });
+  }
 
   try {
     const body = await req.json();
@@ -43,7 +50,7 @@ export async function POST(req: NextRequest) {
 
     const { data, error } = await supabaseAdmin
       .from("seo_content_briefs")
-      .insert({ ...body, created_by: auth.auth.userId })
+      .insert({ ...body, created_by: result.auth.userId })
       .select()
       .single();
 
@@ -56,8 +63,12 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "seo", "seo-content-briefs");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "seo", "seo-content-briefs");
+  if ("error" in result) return result.error;
+
+  if (!result.permissions.canEdit) {
+    return NextResponse.json({ error: "You do not have permission to edit content briefs" }, { status: 403 });
+  }
 
   try {
     const body = await req.json();
@@ -83,8 +94,12 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "seo", "seo-content-briefs");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "seo", "seo-content-briefs");
+  if ("error" in result) return result.error;
+
+  if (!result.scope.scopeLevel.can_delete) {
+    return NextResponse.json({ error: "Only admins can delete content briefs" }, { status: 403 });
+  }
 
   try {
     const id = req.nextUrl.searchParams.get("id");

@@ -8,8 +8,8 @@ let inflight: { promise: Promise<unknown>; key: string } | null = null;
 const CACHE_TTL = 120_000; // 2 minutes
 
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "meta", "meta-budget-planner");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "meta", "meta-budget-planner");
+  if ("error" in result) return result.error;
 
   try {
     const datePreset =
@@ -18,13 +18,13 @@ export async function GET(req: NextRequest) {
 
     // Return cached data if fresh
     if (cache && cache.key === cacheKey && Date.now() - cache.ts < CACHE_TTL) {
-      return NextResponse.json(cache.data);
+      return NextResponse.json({ ...(cache.data as object), _permissions: result.permissions });
     }
 
     // Deduplicate concurrent requests
     if (inflight && inflight.key === cacheKey) {
-      const result = await inflight.promise;
-      return NextResponse.json(result);
+      const r = await inflight.promise;
+      return NextResponse.json({ ...(r as object), _permissions: result.permissions });
     }
 
     const promise = (async () => {
@@ -66,18 +66,18 @@ export async function GET(req: NextRequest) {
     })();
 
     inflight = { promise, key: cacheKey };
-    const result = await promise;
+    const r = await promise;
     inflight = null;
 
-    if (result === null) {
+    if (r === null) {
       return NextResponse.json(
         { error: "No spend data available for the selected period" },
         { status: 404 }
       );
     }
 
-    cache = { data: result, ts: Date.now(), key: cacheKey };
-    return NextResponse.json(result);
+    cache = { data: r, ts: Date.now(), key: cacheKey };
+    return NextResponse.json({ ...r, _permissions: result.permissions });
   } catch (error) {
     inflight = null;
     const message =

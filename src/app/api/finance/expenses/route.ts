@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSubModuleAccess } from "@/lib/api-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { scopeQuery } from "@/lib/data-scope";
 
 export async function GET(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "finance", "finance-expenses");
@@ -25,15 +26,21 @@ export async function GET(req: NextRequest) {
     query = query.gte("date", start).lte("date", end);
   }
 
+  query = scopeQuery(query, result.scope, "created_by");
+
   const { data, error } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ records: data || [] });
+  return NextResponse.json({ records: data || [], _permissions: result.permissions });
 }
 
 export async function POST(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "finance", "finance-expenses");
   if ("error" in result) return result.error;
+
+  if (!result.permissions.canCreate) {
+    return NextResponse.json({ error: "You do not have permission to create expenses" }, { status: 403 });
+  }
 
   const body = await req.json();
   const {
@@ -91,6 +98,10 @@ export async function PUT(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "finance", "finance-expenses");
   if ("error" in result) return result.error;
 
+  if (!result.permissions.canEdit) {
+    return NextResponse.json({ error: "You do not have permission to edit expenses" }, { status: 403 });
+  }
+
   const body = await req.json();
   const { id, ...updates } = body;
 
@@ -110,6 +121,10 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "finance", "finance-expenses");
   if ("error" in result) return result.error;
+
+  if (!result.scope.scopeLevel.can_delete) {
+    return NextResponse.json({ error: "Only admins can delete expenses" }, { status: 403 });
+  }
 
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "ID is required" }, { status: 400 });

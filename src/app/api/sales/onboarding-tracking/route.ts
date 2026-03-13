@@ -14,8 +14,8 @@ const DEFAULT_CHECKLIST = [
 
 // GET: Auto-sync onboarding with won deals, then return merged records
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "sales", "onboarding");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "sales", "onboarding");
+  if ("error" in result) return result.error;
   try {
     // 1. Fetch all won deals from call_booked_tracking
     const { data: wonDeals, error: wonErr } = await supabaseAdmin
@@ -120,7 +120,7 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return NextResponse.json({ records: merged });
+    return NextResponse.json({ records: merged, _permissions: result.permissions });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch onboarding data";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -129,8 +129,13 @@ export async function GET(req: NextRequest) {
 
 // PUT: Update an onboarding record
 export async function PUT(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "sales", "onboarding");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "sales", "onboarding");
+  if ("error" in result) return result.error;
+
+  if (!result.permissions.canEdit) {
+    return NextResponse.json({ error: "You do not have permission to edit records" }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     const { opportunity_id, ...updates } = body;

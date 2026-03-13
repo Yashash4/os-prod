@@ -6,8 +6,8 @@ import { requireSubModuleAccess } from "@/lib/api-auth";
 // Only shows leads with ghl_status='won' — sales data persists because
 // sync no longer deletes records when leads move stages in GHL
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "sales", "maverick");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "sales", "maverick");
+  if ("error" in result) return result.error;
   try {
     // Fetch call_booked_tracking records with ghl_status = 'won'
     const { data: callBooked, error: cbError } = await supabaseAdmin
@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
       sales_notes: salesMap[cb.opportunity_id]?.notes || null,
     }));
 
-    return NextResponse.json({ records: merged });
+    return NextResponse.json({ records: merged, _permissions: result.permissions });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch sales data";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -54,8 +54,13 @@ export async function GET(req: NextRequest) {
 
 // PUT: Upsert a sales tracking record
 export async function PUT(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "sales", "maverick");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "sales", "maverick");
+  if ("error" in result) return result.error;
+
+  if (!result.permissions.canEdit) {
+    return NextResponse.json({ error: "You do not have permission to edit records" }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     const { opportunity_id, ...updates } = body;

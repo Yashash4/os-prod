@@ -1,20 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireSubModuleAccess } from "@/lib/api-auth";
+import { scopeQuery } from "@/lib/data-scope";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "sales", "pipeline");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "sales", "pipeline");
+  if ("error" in result) return result.error;
 
   try {
-    const { data, error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from("sales_call_booked_tracking")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(1000);
 
+    query = scopeQuery(query, result.scope, "assigned_to");
+
+    const { data, error } = await query;
+
     if (error) throw error;
-    return NextResponse.json({ records: data || [] });
+    return NextResponse.json({ records: data || [], _permissions: result.permissions });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch call booked tracking";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -22,8 +27,12 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "sales", "pipeline");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "sales", "pipeline");
+  if ("error" in result) return result.error;
+
+  if (!result.permissions.canCreate) {
+    return NextResponse.json({ error: "You do not have permission to create records" }, { status: 403 });
+  }
 
   try {
     const body = await req.json();
@@ -76,8 +85,12 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "sales", "pipeline");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "sales", "pipeline");
+  if ("error" in result) return result.error;
+
+  if (!result.scope.scopeLevel.can_delete) {
+    return NextResponse.json({ error: "Only admins can delete records" }, { status: 403 });
+  }
 
   try {
     const oppIds = req.nextUrl.searchParams.get("keep_ids");
@@ -114,8 +127,12 @@ export async function DELETE(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "sales", "pipeline");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "sales", "pipeline");
+  if ("error" in result) return result.error;
+
+  if (!result.permissions.canEdit) {
+    return NextResponse.json({ error: "You do not have permission to edit records" }, { status: 403 });
+  }
 
   try {
     const body = await req.json();

@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { Receipt, Plus, Trash2, Search, X, Loader2 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import PermissionGate from "@/components/PermissionGate";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -261,12 +262,14 @@ export default function ExpensesPage() {
               </select>
             </div>
             <div className="flex gap-2">
-              <button
-                onClick={handleCreate}
-                className="bg-accent text-white px-4 py-2 rounded-lg text-sm hover:bg-accent/90 transition-colors"
-              >
-                Add Expense
-              </button>
+              <PermissionGate module="finance" subModule="finance-expenses" action="canCreate">
+                <button
+                  onClick={handleCreate}
+                  className="bg-accent text-white px-4 py-2 rounded-lg text-sm hover:bg-accent/90 transition-colors"
+                >
+                  Add Expense
+                </button>
+              </PermissionGate>
               <button
                 onClick={() => setShowForm(false)}
                 className="border border-border text-muted px-4 py-2 rounded-lg text-sm hover:text-foreground transition-colors"
@@ -307,12 +310,14 @@ export default function ExpensesPage() {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
-            <button
-              onClick={() => setShowForm(true)}
-              className="flex items-center gap-1.5 bg-accent text-white px-3 py-1.5 rounded-lg text-sm hover:bg-accent/90 transition-colors"
-            >
-              <Plus className="w-4 h-4" /> Add Expense
-            </button>
+            <PermissionGate module="finance" subModule="finance-expenses" action="canCreate">
+              <button
+                onClick={() => setShowForm(true)}
+                className="flex items-center gap-1.5 bg-accent text-white px-3 py-1.5 rounded-lg text-sm hover:bg-accent/90 transition-colors"
+              >
+                <Plus className="w-4 h-4" /> Add Expense
+              </button>
+            </PermissionGate>
             <span className="text-xs text-muted ml-auto">
               {filtered.length} of {expenses.length}
             </span>
@@ -449,17 +454,19 @@ export default function ExpensesPage() {
 
                   {/* Status */}
                   <td className="px-4 py-2 border-r border-border">
-                    <select
-                      value={e.status}
-                      onChange={(ev) => handleUpdate(e.id, { status: ev.target.value })}
-                      className={`bg-transparent text-[11px] border-none focus:outline-none cursor-pointer [&>option]:bg-surface ${
-                        STATUS_COLORS[e.status]?.split(" ").find((c) => c.startsWith("text-")) || "text-muted"
-                      }`}
-                    >
-                      {STATUS_OPTIONS.map((s) => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
+                    <PermissionGate module="finance" subModule="finance-expenses" action="canApprove">
+                      <select
+                        value={e.status}
+                        onChange={(ev) => handleUpdate(e.id, { status: ev.target.value })}
+                        className={`bg-transparent text-[11px] border-none focus:outline-none cursor-pointer [&>option]:bg-surface ${
+                          STATUS_COLORS[e.status]?.split(" ").find((c) => c.startsWith("text-")) || "text-muted"
+                        }`}
+                      >
+                        {STATUS_OPTIONS.map((s) => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </PermissionGate>
                   </td>
 
                   {/* Notes */}
@@ -486,12 +493,14 @@ export default function ExpensesPage() {
 
                   {/* Delete */}
                   <td className="px-3 py-2">
-                    <button
-                      onClick={() => handleDelete(e.id)}
-                      className="text-muted hover:text-red-400 transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <PermissionGate module="finance" subModule="finance-expenses" action="canDelete">
+                      <button
+                        onClick={() => handleDelete(e.id)}
+                        className="text-muted hover:text-red-400 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </PermissionGate>
                   </td>
                 </tr>
               );

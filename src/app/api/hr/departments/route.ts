@@ -29,12 +29,13 @@ export async function GET(req: NextRequest) {
     employee_count: countMap[d.id as string] || 0,
   }));
 
-  return NextResponse.json({ departments });
+  return NextResponse.json({ departments, _permissions: result.permissions });
 }
 
 export async function POST(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "hr", "hr-departments");
   if ("error" in result) return result.error;
+  if (!result.permissions.canCreate) return NextResponse.json({ error: "Permission denied" }, { status: 403 });
 
   const body = await req.json();
   const { name, description } = body;
@@ -66,6 +67,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "hr", "hr-departments");
   if ("error" in result) return result.error;
+  if (!result.permissions.canEdit) return NextResponse.json({ error: "Permission denied" }, { status: 403 });
 
   const body = await req.json();
   const { id, ...updates } = body;
@@ -87,6 +89,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "hr", "hr-departments");
   if ("error" in result) return result.error;
+  if (!result.scope.scopeLevel.can_delete) return NextResponse.json({ error: "Admin only" }, { status: 403 });
 
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "ID is required" }, { status: 400 });

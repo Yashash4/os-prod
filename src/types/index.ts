@@ -358,6 +358,61 @@ export interface HRKRA {
   updated_at: string;
 }
 
+/* ── Scope & Permissions ────────────────────────── */
+
+export interface ScopeLevel {
+  id: string;
+  name: string;
+  slug: "admin" | "manager" | "employee" | "client";
+  rank: number;
+  data_visibility: "all" | "team" | "self";
+  can_delete: boolean;
+  is_system: boolean;
+  description?: string;
+  created_at: string;
+}
+
+export interface DataScope {
+  scopeLevel: ScopeLevel;
+  userId: string;
+  employeeId?: string;
+  teamEmployeeIds: string[];
+  teamUserIds: string[];
+  departmentId?: string;
+}
+
+export interface PermissionMatrix {
+  canRead: boolean;
+  canCreate: boolean;
+  canEdit: boolean;
+  canApprove: boolean;
+  canExport: boolean;
+  canDelete: boolean;
+}
+
+export interface RoleModulePermission {
+  id: string;
+  role_id: string;
+  module_id: string;
+  can_read: boolean;
+  can_create: boolean;
+  can_edit: boolean;
+  can_approve: boolean;
+  can_export: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserPermissionOverride {
+  id: string;
+  user_id: string;
+  module_id: string;
+  action: "read" | "create" | "edit" | "approve" | "export";
+  granted: boolean;
+  granted_by: string | null;
+  created_at: string;
+}
+
 export interface InvoiceFollowUp {
   id: string;
   razorpay_invoice_id: string;

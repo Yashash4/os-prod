@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireSubModuleAccess } from "@/lib/api-auth";
+import { scopeQuery } from "@/lib/data-scope";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "payments", "payments-collection-log");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "payments", "payments-collection-log");
+  if ("error" in result) return result.error;
   try {
     const date = req.nextUrl.searchParams.get("date");
 
@@ -17,9 +18,11 @@ export async function GET(req: NextRequest) {
       query = query.eq("log_date", date);
     }
 
+    query = scopeQuery(query, result.scope, "created_by");
+
     const { data, error } = await query;
     if (error) throw error;
-    return NextResponse.json({ records: data || [] });
+    return NextResponse.json({ records: data || [], _permissions: result.permissions });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch collection log";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -27,8 +30,13 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "payments", "payments-collection-log");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "payments", "payments-collection-log");
+  if ("error" in result) return result.error;
+
+  if (!result.permissions.canCreate) {
+    return NextResponse.json({ error: "You do not have permission to create entries" }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     const { log_date, customer_name, amount, payment_mode, reference_id, notes } = body;
@@ -46,7 +54,7 @@ export async function POST(req: NextRequest) {
         payment_mode: payment_mode || null,
         reference_id: reference_id || null,
         notes: notes || null,
-        created_by: auth.auth.userId,
+        created_by: result.auth.userId,
       })
       .select()
       .single();
@@ -60,8 +68,13 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "payments", "payments-collection-log");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "payments", "payments-collection-log");
+  if ("error" in result) return result.error;
+
+  if (!result.permissions.canEdit) {
+    return NextResponse.json({ error: "You do not have permission to edit entries" }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     const { id, ...updates } = body;
@@ -86,8 +99,13 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "payments", "payments-collection-log");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "payments", "payments-collection-log");
+  if ("error" in result) return result.error;
+
+  if (!result.scope.scopeLevel.can_delete) {
+    return NextResponse.json({ error: "Only admins can delete entries" }, { status: 403 });
+  }
+
   try {
     const id = req.nextUrl.searchParams.get("id");
     if (!id) {

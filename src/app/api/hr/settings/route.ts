@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
     );
 
     return NextResponse.json({
+      _permissions: result.permissions,
       unlinked_employees: employees.filter(
         (e: Record<string, unknown>) => !e.user_id
       ),
@@ -56,6 +57,7 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "hr", "hr-settings");
   if ("error" in result) return result.error;
+  if (!result.permissions.canEdit) return NextResponse.json({ error: "Permission denied" }, { status: 403 });
 
   try {
     const body = await req.json();

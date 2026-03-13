@@ -5,6 +5,7 @@ import { UserPlus, Trash2, Edit3, Check, X } from "lucide-react";
 import InviteUserModal from "@/components/admin/InviteUserModal";
 import type { Role } from "@/types";
 import { apiFetch } from "@/lib/api-fetch";
+import PermissionGate from "@/components/PermissionGate";
 
 interface UserRow {
   id: string;
@@ -113,13 +114,15 @@ export default function PeoplePage() {
             {users.length} team member{users.length !== 1 ? "s" : ""}. Invite users and assign roles.
           </p>
         </div>
-        <button
-          onClick={() => setShowInvite(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-accent text-background text-sm rounded-lg hover:bg-accent/90 transition-colors"
-        >
-          <UserPlus className="w-4 h-4" />
-          Invite User
-        </button>
+        <PermissionGate module="admin" subModule="admin-people" action="canCreate">
+          <button
+            onClick={() => setShowInvite(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-accent text-background text-sm rounded-lg hover:bg-accent/90 transition-colors"
+          >
+            <UserPlus className="w-4 h-4" />
+            Invite User
+          </button>
+        </PermissionGate>
       </div>
 
       <div className="space-y-2">
@@ -194,20 +197,24 @@ export default function PeoplePage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => startEdit(user)}
-                    className="p-2 text-muted hover:text-foreground hover:bg-surface-hover rounded-lg transition-colors"
-                    title="Edit user"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(user.id, user.full_name || user.email)}
-                    className="p-2 text-muted hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
-                    title="Delete user"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <PermissionGate module="admin" subModule="admin-people" action="canEdit">
+                    <button
+                      onClick={() => startEdit(user)}
+                      className="p-2 text-muted hover:text-foreground hover:bg-surface-hover rounded-lg transition-colors"
+                      title="Edit user"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </button>
+                  </PermissionGate>
+                  <PermissionGate module="admin" subModule="admin-people" action="canDelete">
+                    <button
+                      onClick={() => handleDelete(user.id, user.full_name || user.email)}
+                      className="p-2 text-muted hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                      title="Delete user"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </PermissionGate>
                 </div>
               </div>
             )}

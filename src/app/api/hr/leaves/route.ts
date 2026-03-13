@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSubModuleAccess } from "@/lib/api-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { scopeQuery } from "@/lib/data-scope";
 import { sendNotification } from "@/lib/notify";
 
 export async function GET(req: NextRequest) {
@@ -21,6 +22,7 @@ export async function GET(req: NextRequest) {
 
     if (employee_id) query = query.eq("employee_id", employee_id);
     if (status) query = query.eq("status", status);
+    query = scopeQuery(query, result.scope, "employee_id", true);
     if (year) {
       query = query
         .gte("start_date", `${year}-01-01`)
@@ -34,7 +36,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ leaves: leaves || [] });
+    return NextResponse.json({ leaves: leaves || [], _permissions: result.permissions });
   } catch (err) {
     console.error("leave_requests GET uncaught:", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
@@ -45,6 +47,7 @@ export async function POST(req: NextRequest) {
   try {
     const result = await requireSubModuleAccess(req, "hr", "hr-leaves");
     if ("error" in result) return result.error;
+    if (!result.permissions.canCreate) return NextResponse.json({ error: "Permission denied" }, { status: 403 });
 
     const body = await req.json();
     const { employee_id, leave_type_id, start_date, end_date, days, reason } = body;
@@ -116,6 +119,7 @@ export async function PUT(req: NextRequest) {
   try {
     const result = await requireSubModuleAccess(req, "hr", "hr-leaves");
     if ("error" in result) return result.error;
+    if (!result.permissions.canApprove) return NextResponse.json({ error: "Permission denied" }, { status: 403 });
 
     const body = await req.json();
     const { id, status, approved_by } = body;
@@ -137,12 +141,30 @@ export async function PUT(req: NextRequest) {
     // Get the leave request first
     const { data: leaveReq, error: fetchErr } = await supabaseAdmin
       .from("leave_requests")
-      .select("id, employee_id, leave_type_id, days, employee:hr_employees(id, full_name, user_id)")
+      .select("id, employee_id, leave_type_id, days, employee:hr_employees(id, full_name, user_id, reporting_to)")
       .eq("id", id)
       .single();
 
     if (fetchErr || !leaveReq) {
       return NextResponse.json({ error: "Leave request not found" }, { status: 404 });
+    }
+
+    // Verify approver is the reporting manager (or admin)
+    if (!result.auth.isAdmin) {
+      const employee = Array.isArray(leaveReq.employee) ? leaveReq.employee[0] : leaveReq.employee;
+      if (employee) {
+        // Find the approver's employee record
+        const { data: approverEmp } = await supabaseAdmin
+          .from("hr_employees")
+          .select("id")
+          .eq("user_id", result.auth.userId)
+          .maybeSingle();
+
+        const reportingTo = (employee as Record<string, unknown>).reporting_to as string | null;
+        if (!approverEmp || approverEmp.id !== reportingTo) {
+          return NextResponse.json({ error: "Only the reporting manager or admin can approve/reject leaves" }, { status: 403 });
+        }
+      }
     }
 
     // Update the leave request

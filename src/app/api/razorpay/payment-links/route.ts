@@ -7,11 +7,11 @@ let cache: { data: unknown[]; ts: number } | null = null;
 const CACHE_TTL = 120_000;
 
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "payments", "payments-send-links");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "payments", "payments-send-links");
+  if ("error" in result) return result.error;
   try {
     if (cache && Date.now() - cache.ts < CACHE_TTL) {
-      return NextResponse.json({ paymentLinks: cache.data });
+      return NextResponse.json({ paymentLinks: cache.data, _permissions: result.permissions });
     }
 
     const from = req.nextUrl.searchParams.get("from") || undefined;
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
       razorpay_created_at: item.created_at,
     }));
     cache = { data: normalized, ts: Date.now() };
-    return NextResponse.json({ paymentLinks: normalized });
+    return NextResponse.json({ paymentLinks: normalized, _permissions: result.permissions });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch payment links";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -33,8 +33,13 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "payments", "payments-send-links");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "payments", "payments-send-links");
+  if ("error" in result) return result.error;
+
+  if (!result.permissions.canCreate) {
+    return NextResponse.json({ error: "You do not have permission to create payment links" }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     const {
@@ -71,7 +76,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = await createPaymentLink({
+    const linkResult = await createPaymentLink({
       amountInRupees: amount,
       currency: currency || "INR",
       description,
@@ -87,10 +92,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       paymentLink: {
-        id: result.id,
-        short_url: result.short_url,
-        amount: result.amount,
-        status: result.status,
+        id: linkResult.id,
+        short_url: linkResult.short_url,
+        amount: linkResult.amount,
+        status: linkResult.status,
       },
     });
   } catch (error) {

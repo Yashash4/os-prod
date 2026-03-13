@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { FolderOpen, Plus, Trash2, Loader2, X } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import PermissionGate from "@/components/PermissionGate";
 
 /* ── Types ─────────────────────────────────────────── */
 

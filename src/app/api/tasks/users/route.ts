@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireModuleAccess } from "@/lib/api-auth";
+import { getModulePermissions } from "@/lib/permissions";
 
 export async function GET(req: NextRequest) {
   const auth = await requireModuleAccess(req, "tasks");
@@ -14,7 +15,8 @@ export async function GET(req: NextRequest) {
 
     if (error) throw error;
 
-    return NextResponse.json({ users: data || [] });
+    const permissions = await getModulePermissions(auth.auth.userId, auth.auth.roleId, "tasks-board", auth.auth.isAdmin);
+    return NextResponse.json({ users: data || [], _permissions: permissions });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to fetch users" },

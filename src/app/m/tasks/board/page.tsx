@@ -7,6 +7,7 @@ import { apiFetch } from "@/lib/api-fetch";
 import { useAuth } from "@/contexts/AuthContext";
 import TaskDetailModal, { type Task, type TaskUser } from "@/components/tasks/TaskDetailModal";
 import { Plus, ChevronDown, Filter } from "lucide-react";
+import PermissionGate from "@/components/PermissionGate";
 
 const STATUSES: { key: Task["status"]; label: string; color: string; headerColor: string }[] = [
   { key: "todo", label: "Todo", color: "bg-gray-500/15 text-gray-400", headerColor: "bg-gray-500" },
@@ -390,13 +391,15 @@ function BoardContent() {
                       </div>
                     </div>
                   ) : (
-                    <button
-                      className="flex items-center gap-1.5 w-full px-2 py-2 text-xs text-muted hover:text-foreground hover:bg-surface-hover rounded-xl transition-colors"
-                      onClick={() => { setAddingCol(col.key); setNewTitle(""); }}
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Add task
-                    </button>
+                    <PermissionGate module="tasks" subModule="tasks-board" action="canCreate">
+                      <button
+                        className="flex items-center gap-1.5 w-full px-2 py-2 text-xs text-muted hover:text-foreground hover:bg-surface-hover rounded-xl transition-colors"
+                        onClick={() => { setAddingCol(col.key); setNewTitle(""); }}
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add task
+                      </button>
+                    </PermissionGate>
                   )}
                 </div>
               </div>

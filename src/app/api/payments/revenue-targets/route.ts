@@ -3,8 +3,8 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireSubModuleAccess } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "payments", "payments-dashboard");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "payments", "payments-dashboard");
+  if ("error" in result) return result.error;
   try {
     const periodType = req.nextUrl.searchParams.get("period_type");
 
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await query;
     if (error) throw error;
-    return NextResponse.json({ targets: data || [] });
+    return NextResponse.json({ targets: data || [], _permissions: result.permissions });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch targets";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -27,8 +27,13 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "payments", "payments-dashboard");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "payments", "payments-dashboard");
+  if ("error" in result) return result.error;
+
+  if (!result.permissions.canCreate) {
+    return NextResponse.json({ error: "You do not have permission to create targets" }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     const { period_type, period_start, target_amount } = body;
@@ -40,7 +45,7 @@ export async function POST(req: NextRequest) {
     const { data, error } = await supabaseAdmin
       .from("revenue_targets")
       .upsert(
-        { period_type, period_start, target_amount: Math.round(target_amount), created_by: auth.auth.userId },
+        { period_type, period_start, target_amount: Math.round(target_amount), created_by: result.auth.userId },
         { onConflict: "period_type,period_start" }
       )
       .select()
@@ -55,8 +60,13 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "payments", "payments-dashboard");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "payments", "payments-dashboard");
+  if ("error" in result) return result.error;
+
+  if (!result.permissions.canEdit) {
+    return NextResponse.json({ error: "You do not have permission to edit targets" }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     const { id, ...updates } = body;
@@ -81,8 +91,13 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "payments", "payments-dashboard");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "payments", "payments-dashboard");
+  if ("error" in result) return result.error;
+
+  if (!result.scope.scopeLevel.can_delete) {
+    return NextResponse.json({ error: "Only admins can delete targets" }, { status: 403 });
+  }
+
   try {
     const id = req.nextUrl.searchParams.get("id");
     if (!id) {

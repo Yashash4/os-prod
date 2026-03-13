@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { Target, Loader2, Plus, Star } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import PermissionGate from "@/components/PermissionGate";
 
 interface KPI {
   id: string;
@@ -211,14 +212,18 @@ export default function KPIsPage() {
       {tab === "kpi" && (
         <>
           <div className="flex gap-2">
-            <button onClick={() => setShowKPIForm(!showKPIForm)}
-              className="flex items-center gap-2 px-3 py-1.5 border border-border rounded-lg text-xs text-muted hover:text-foreground">
-              <Plus className="w-3.5 h-3.5" /> Define KPI
-            </button>
-            <button onClick={() => setShowEntryForm(!showEntryForm)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-accent text-white rounded-lg text-xs font-medium">
-              <Plus className="w-3.5 h-3.5" /> Log Entry
-            </button>
+            <PermissionGate module="hr" subModule="hr-kpis" action="canCreate">
+              <button onClick={() => setShowKPIForm(!showKPIForm)}
+                className="flex items-center gap-2 px-3 py-1.5 border border-border rounded-lg text-xs text-muted hover:text-foreground">
+                <Plus className="w-3.5 h-3.5" /> Define KPI
+              </button>
+            </PermissionGate>
+            <PermissionGate module="hr" subModule="hr-kpis" action="canCreate">
+              <button onClick={() => setShowEntryForm(!showEntryForm)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-accent text-white rounded-lg text-xs font-medium">
+                <Plus className="w-3.5 h-3.5" /> Log Entry
+              </button>
+            </PermissionGate>
           </div>
 
           {showKPIForm && (
@@ -316,10 +321,12 @@ export default function KPIsPage() {
       {/* KRA Tab */}
       {tab === "kra" && (
         <>
-          <button onClick={() => setShowKRAForm(!showKRAForm)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-accent text-white rounded-lg text-xs font-medium">
-            <Plus className="w-3.5 h-3.5" /> Add KRA
-          </button>
+          <PermissionGate module="hr" subModule="hr-kpis" action="canCreate">
+            <button onClick={() => setShowKRAForm(!showKRAForm)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-accent text-white rounded-lg text-xs font-medium">
+              <Plus className="w-3.5 h-3.5" /> Add KRA
+            </button>
+          </PermissionGate>
 
           {showKRAForm && (
             <div className="card border border-border rounded-xl p-4 space-y-3">

@@ -1,19 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSubModuleAccess } from "@/lib/api-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { scopeQuery } from "@/lib/data-scope";
 
 export async function GET(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "hr", "hr-dashboard");
   if ("error" in result) return result.error;
+
+  let empQuery = supabaseAdmin.from("hr_employees").select("id, full_name, status, department_id, employment_type, join_date");
+  empQuery = scopeQuery(empQuery, result.scope, "id", true);
+
+  let cycleQuery = supabaseAdmin.from("hr_salary_cycles").select("status, net_amount").eq("cycle_month", new Date().toISOString().slice(0, 7));
+  cycleQuery = scopeQuery(cycleQuery, result.scope, "employee_id", true);
 
   const [
     { data: employees },
     { data: departments },
     { data: currentCycles },
   ] = await Promise.all([
-    supabaseAdmin.from("hr_employees").select("id, full_name, status, department_id, employment_type, join_date"),
+    empQuery,
     supabaseAdmin.from("hr_departments").select("id, name").eq("is_active", true),
-    supabaseAdmin.from("hr_salary_cycles").select("status, net_amount").eq("cycle_month", new Date().toISOString().slice(0, 7)),
+    cycleQuery,
   ]);
 
   const allEmps = employees || [];
@@ -55,6 +62,7 @@ export async function GET(req: NextRequest) {
   const payrollPaid = cycles.filter((c: { status: string }) => c.status === "paid").length;
 
   return NextResponse.json({
+    _permissions: result.permissions,
     stats: {
       total: allEmps.length,
       active: active.length,

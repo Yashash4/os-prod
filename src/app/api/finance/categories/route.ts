@@ -28,12 +28,16 @@ export async function GET(req: NextRequest) {
     expense_count: countMap[c.id as string] || 0,
   }));
 
-  return NextResponse.json({ categories });
+  return NextResponse.json({ categories, _permissions: result.permissions });
 }
 
 export async function POST(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "finance", "finance-expenses");
   if ("error" in result) return result.error;
+
+  if (!result.permissions.canCreate) {
+    return NextResponse.json({ error: "You do not have permission to create categories" }, { status: 403 });
+  }
 
   const body = await req.json();
   const { name, icon } = body;
@@ -65,6 +69,10 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "finance", "finance-expenses");
   if ("error" in result) return result.error;
+
+  if (!result.scope.scopeLevel.can_delete) {
+    return NextResponse.json({ error: "Only admins can delete categories" }, { status: 403 });
+  }
 
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "ID is required" }, { status: 400 });

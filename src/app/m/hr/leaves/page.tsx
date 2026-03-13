@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 import { useAuth } from "@/contexts/AuthContext";
+import PermissionGate from "@/components/PermissionGate";
 
 interface LeaveType {
   id: string;
@@ -266,12 +267,14 @@ export default function LeavesPage() {
           <h1 className="text-2xl font-bold">Leave Management</h1>
           {loading && <Loader2 className="w-5 h-5 animate-spin text-accent" />}
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors"
-        >
-          <Plus className="w-4 h-4" /> Apply for Leave
-        </button>
+        <PermissionGate module="hr" subModule="hr-leaves" action="canCreate">
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors"
+          >
+            <Plus className="w-4 h-4" /> Apply for Leave
+          </button>
+        </PermissionGate>
       </div>
 
       {/* Leave Balance Cards */}
@@ -475,20 +478,24 @@ export default function LeavesPage() {
                     <td className="px-4 py-3">
                       {l.status === "pending" && (
                         <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => handleAction(l.id, "approved")}
-                            className="p-1.5 rounded-lg bg-green-500/15 text-green-400 hover:bg-green-500/25 transition-colors"
-                            title="Approve"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleAction(l.id, "rejected")}
-                            className="p-1.5 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25 transition-colors"
-                            title="Reject"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
+                          <PermissionGate module="hr" subModule="hr-leaves" action="canApprove">
+                            <button
+                              onClick={() => handleAction(l.id, "approved")}
+                              className="p-1.5 rounded-lg bg-green-500/15 text-green-400 hover:bg-green-500/25 transition-colors"
+                              title="Approve"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                            </button>
+                          </PermissionGate>
+                          <PermissionGate module="hr" subModule="hr-leaves" action="canApprove">
+                            <button
+                              onClick={() => handleAction(l.id, "rejected")}
+                              className="p-1.5 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25 transition-colors"
+                              title="Reject"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </PermissionGate>
                         </div>
                       )}
                     </td>

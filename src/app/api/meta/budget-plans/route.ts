@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireSubModuleAccess } from "@/lib/api-auth";
+import { scopeQuery } from "@/lib/data-scope";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "meta", "meta-budget-planner");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "meta", "meta-budget-planner");
+  if ("error" in result) return result.error;
   try {
     const campaignId = req.nextUrl.searchParams.get("campaign_id");
 
@@ -17,9 +18,11 @@ export async function GET(req: NextRequest) {
       query = query.eq("campaign_id", campaignId);
     }
 
+    query = scopeQuery(query, result.scope, "created_by");
+
     const { data, error } = await query;
     if (error) throw error;
-    return NextResponse.json({ plans: data || [] });
+    return NextResponse.json({ plans: data || [], _permissions: result.permissions });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch budget plans";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -27,8 +30,13 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "meta", "meta-budget-planner");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "meta", "meta-budget-planner");
+  if ("error" in result) return result.error;
+
+  if (!result.permissions.canCreate) {
+    return NextResponse.json({ error: "You do not have permission to create budget plans" }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     const { campaign_id, campaign_name, period_start, period_end, planned_budget } = body;
@@ -39,7 +47,7 @@ export async function POST(req: NextRequest) {
 
     const { data, error } = await supabaseAdmin
       .from("meta_budget_plans")
-      .insert({ ...body, created_by: auth.auth.userId })
+      .insert({ ...body, created_by: result.auth.userId })
       .select()
       .single();
 
@@ -52,8 +60,13 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "meta", "meta-budget-planner");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "meta", "meta-budget-planner");
+  if ("error" in result) return result.error;
+
+  if (!result.permissions.canEdit) {
+    return NextResponse.json({ error: "You do not have permission to edit budget plans" }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     const { id, ...updates } = body;
@@ -78,8 +91,13 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "meta", "meta-budget-planner");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "meta", "meta-budget-planner");
+  if ("error" in result) return result.error;
+
+  if (!result.scope.scopeLevel.can_delete) {
+    return NextResponse.json({ error: "Only admins can delete budget plans" }, { status: 403 });
+  }
+
   try {
     const id = req.nextUrl.searchParams.get("id");
     if (!id) {

@@ -3,8 +3,8 @@ import { requireSubModuleAccess } from "@/lib/api-auth";
 import { getSearchAnalytics, SearchAnalyticsRow } from "@/lib/gsc";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "seo", "seo-keywords");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "seo", "seo-keywords");
+  if ("error" in result) return result.error;
 
   try {
     const startDate = req.nextUrl.searchParams.get("startDate");
@@ -90,7 +90,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ keywords });
+    return NextResponse.json({ keywords, _permissions: result.permissions });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch keyword comparison";
     return NextResponse.json({ error: message }, { status: 500 });

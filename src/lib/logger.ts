@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { supabaseAdmin } from "./supabase-admin";
 
 interface LogEntry {
   action: string;
@@ -10,10 +10,12 @@ interface LogEntry {
 }
 
 // Tier 1: Critical - always logged with full detail
+// userId can be "anonymous" for pre-auth events (login failures, password resets)
+// NOTE: This uses supabaseAdmin — only call from server-side (API routes).
 export async function logCritical(userId: string, entry: LogEntry) {
   try {
-    const { error } = await supabase.from("audit_logs").insert({
-      user_id: userId,
+    const { error } = await supabaseAdmin.from("audit_logs").insert({
+      user_id: userId === "anonymous" ? null : userId,
       tier: 1,
       ...entry,
     });
@@ -24,9 +26,10 @@ export async function logCritical(userId: string, entry: LogEntry) {
 }
 
 // Tier 2: Important - logged lightweight
+// NOTE: This uses supabaseAdmin — only call from server-side (API routes).
 export async function logImportant(userId: string, entry: LogEntry) {
   try {
-    const { error } = await supabase.from("audit_logs").insert({
+    const { error } = await supabaseAdmin.from("audit_logs").insert({
       user_id: userId,
       tier: 2,
       ...entry,

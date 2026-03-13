@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSubModuleAccess } from "@/lib/api-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { scopeQuery } from "@/lib/data-scope";
 
 export async function GET(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "hr", "hr-payroll");
@@ -15,14 +16,17 @@ export async function GET(req: NextRequest) {
 
   if (cycle_month) query = query.eq("cycle_month", cycle_month);
 
+  query = scopeQuery(query, result.scope, "employee_id", true);
+
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ cycles: data || [] });
+  return NextResponse.json({ cycles: data || [], _permissions: result.permissions });
 }
 
 export async function POST(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "hr", "hr-payroll");
   if ("error" in result) return result.error;
+  if (!result.permissions.canCreate) return NextResponse.json({ error: "Permission denied" }, { status: 403 });
 
   const body = await req.json();
 
@@ -111,6 +115,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "hr", "hr-payroll");
   if ("error" in result) return result.error;
+  if (!result.permissions.canEdit) return NextResponse.json({ error: "Permission denied" }, { status: 403 });
 
   const body = await req.json();
   const { id, ...updates } = body;

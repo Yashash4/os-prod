@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSubModuleAccess } from "@/lib/api-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { scopeQuery } from "@/lib/data-scope";
 
 export async function GET(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "hr", "hr-salary");
@@ -15,14 +16,17 @@ export async function GET(req: NextRequest) {
 
   if (employee_id) query = query.eq("employee_id", employee_id);
 
+  query = scopeQuery(query, result.scope, "employee_id", true);
+
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ salaries: data || [] });
+  return NextResponse.json({ salaries: data || [], _permissions: result.permissions });
 }
 
 export async function POST(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "hr", "hr-salary");
   if ("error" in result) return result.error;
+  if (!result.permissions.canCreate) return NextResponse.json({ error: "Permission denied" }, { status: 403 });
 
   const body = await req.json();
   const { employee_id, base_salary, effective_from, notes } = body;

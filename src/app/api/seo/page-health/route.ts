@@ -11,8 +11,8 @@ function getExpectedCtr(position: number): number {
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "seo", "seo-page-health");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "seo", "seo-page-health");
+  if ("error" in result) return result.error;
 
   try {
     const startDate = req.nextUrl.searchParams.get("startDate");
@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return NextResponse.json({ pages });
+    return NextResponse.json({ pages, _permissions: result.permissions });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch page health";
     return NextResponse.json({ error: message }, { status: 500 });

@@ -10,10 +10,10 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [timedOut, setTimedOut] = useState(false);
 
-  // Safety net: if auth loading takes longer than 12s, stop waiting
+  // Middleware is primary gate; this is fallback only
   useEffect(() => {
     if (!loading) return;
-    const timer = setTimeout(() => setTimedOut(true), 12000);
+    const timer = setTimeout(() => setTimedOut(true), 5000);
     return () => clearTimeout(timer);
   }, [loading]);
 

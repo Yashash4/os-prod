@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { IndianRupee, Loader2, Plus, History } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import PermissionGate from "@/components/PermissionGate";
 
 interface Employee { id: string; full_name: string; }
 interface Salary {
@@ -128,10 +129,12 @@ export default function SalaryPage() {
           <div className="card border border-border rounded-xl p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-medium text-muted uppercase tracking-wider">Current Salary</h2>
-              <button onClick={() => setShowRevise(!showRevise)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-accent text-white rounded-lg text-xs font-medium hover:bg-accent/90 transition-colors">
-                <Plus className="w-3.5 h-3.5" /> Revise
-              </button>
+              <PermissionGate module="hr" subModule="hr-salary" action="canCreate">
+                <button onClick={() => setShowRevise(!showRevise)}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-accent text-white rounded-lg text-xs font-medium hover:bg-accent/90 transition-colors">
+                  <Plus className="w-3.5 h-3.5" /> Revise
+                </button>
+              </PermissionGate>
             </div>
             {current ? (
               <div>
@@ -199,10 +202,12 @@ export default function SalaryPage() {
           <div className="card border border-border rounded-xl p-5">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-medium text-muted uppercase tracking-wider">Commission Rules</h3>
-              <button onClick={() => setShowAddComm(!showAddComm)}
-                className="text-xs text-accent hover:underline flex items-center gap-1">
-                <Plus className="w-3 h-3" /> Add Rule
-              </button>
+              <PermissionGate module="hr" subModule="hr-salary" action="canCreate">
+                <button onClick={() => setShowAddComm(!showAddComm)}
+                  className="text-xs text-accent hover:underline flex items-center gap-1">
+                  <Plus className="w-3 h-3" /> Add Rule
+                </button>
+              </PermissionGate>
             </div>
 
             {showAddComm && (

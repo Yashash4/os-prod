@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireSubModuleAccess } from "@/lib/api-auth";
 import { getAccountInsightsByRange } from "@/lib/meta";
+import { scopeQuery } from "@/lib/data-scope";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "analytics", "analytics-daily-sheet");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "analytics", "analytics-daily-sheet");
+  if ("error" in result) return result.error;
+  const { scope, permissions } = result;
   try {
     const from = req.nextUrl.searchParams.get("from");
     const to = req.nextUrl.searchParams.get("to");
@@ -15,12 +17,15 @@ export async function GET(req: NextRequest) {
       .select("*")
       .order("sheet_date", { ascending: false });
 
+    // Scope on created_by
+    query = scopeQuery(query, scope, "created_by");
+
     if (from) query = query.gte("sheet_date", from);
     if (to) query = query.lte("sheet_date", to);
 
     const { data, error } = await query;
     if (error) throw error;
-    return NextResponse.json({ records: data || [] });
+    return NextResponse.json({ records: data || [], _permissions: permissions });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch daily sheet";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -28,8 +33,12 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "analytics", "analytics-daily-sheet");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "analytics", "analytics-daily-sheet");
+  if ("error" in result) return result.error;
+  const auth = result;
+  if (!auth.permissions.canCreate) {
+    return NextResponse.json({ error: "Permission denied: canCreate" }, { status: 403 });
+  }
 
   const action = req.nextUrl.searchParams.get("action");
 
@@ -168,8 +177,12 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "analytics", "analytics-daily-sheet");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "analytics", "analytics-daily-sheet");
+  if ("error" in result) return result.error;
+  const auth = result;
+  if (!auth.permissions.canEdit) {
+    return NextResponse.json({ error: "Permission denied: canEdit" }, { status: 403 });
+  }
   try {
     const body = await req.json();
     const { id, ...updates } = body;
@@ -194,8 +207,12 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "analytics", "analytics-daily-sheet");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "analytics", "analytics-daily-sheet");
+  if ("error" in result) return result.error;
+  // Delete is admin-only
+  if (!result.scope.scopeLevel.can_delete) {
+    return NextResponse.json({ error: "Permission denied: delete is admin-only" }, { status: 403 });
+  }
   try {
     const id = req.nextUrl.searchParams.get("id");
     if (!id) {

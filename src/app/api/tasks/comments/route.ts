@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireModuleAccess, getAccessibleSubModules } from "@/lib/api-auth";
+import { getModulePermissions } from "@/lib/permissions";
 
 export async function GET(req: NextRequest) {
   const auth = await requireModuleAccess(req, "tasks");
@@ -36,7 +37,8 @@ export async function GET(req: NextRequest) {
 
     if (error) throw error;
 
-    return NextResponse.json({ comments: data || [] });
+    const permissions = await getModulePermissions(auth.auth.userId, auth.auth.roleId, "tasks-board", auth.auth.isAdmin);
+    return NextResponse.json({ comments: data || [], _permissions: permissions });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to fetch comments" },
@@ -54,6 +56,11 @@ export async function POST(req: NextRequest) {
   const canSeeBoard = isAdmin || subModules.has("tasks-board");
   const canSeeTeam  = isAdmin || subModules.has("tasks-team");
   const canSeeMy    = isAdmin || subModules.has("tasks-my");
+
+  const permissions = await getModulePermissions(auth.auth.userId, auth.auth.roleId, "tasks-board", auth.auth.isAdmin);
+  if (!permissions.canCreate) {
+    return NextResponse.json({ error: "Permission denied: canCreate" }, { status: 403 });
+  }
 
   try {
     const body = await req.json();

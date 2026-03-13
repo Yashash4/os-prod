@@ -3,15 +3,16 @@ import { searchOpportunities, updateOpportunity } from "@/lib/ghl";
 import { requireSubModuleAccess } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "ghl", "opportunities");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "ghl", "opportunities");
+  if ("error" in result) return result.error;
+  const { permissions } = result;
   try {
     const pipelineId = req.nextUrl.searchParams.get("pipeline_id");
     if (!pipelineId) {
       return NextResponse.json({ error: "pipeline_id is required" }, { status: 400 });
     }
     const opportunities = await searchOpportunities(pipelineId);
-    return NextResponse.json({ opportunities });
+    return NextResponse.json({ opportunities, _permissions: permissions });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch opportunities";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -19,8 +20,11 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "ghl", "opportunities");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "ghl", "opportunities");
+  if ("error" in result) return result.error;
+  if (!result.permissions.canEdit) {
+    return NextResponse.json({ error: "Permission denied: canEdit" }, { status: 403 });
+  }
   try {
     const body = await req.json();
     const { opportunityId, pipelineId, ...updates } = body;

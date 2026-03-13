@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireSubModuleAccess } from "@/lib/api-auth";
+import { scopeQuery } from "@/lib/data-scope";
 import { getCalendars, getCalendarEvents } from "@/lib/ghl";
 
 interface CalendarItem {
@@ -20,8 +21,8 @@ interface CalendarEvent {
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "sales", "pipeline");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "sales", "pipeline");
+  if ("error" in result) return result.error;
   try {
     const owner = req.nextUrl.searchParams.get("owner");
     const from = req.nextUrl.searchParams.get("from");
@@ -40,9 +41,11 @@ export async function GET(req: NextRequest) {
     if (from) query = query.gte("meet_date", from);
     if (to) query = query.lte("meet_date", to + "T23:59:59");
 
+    query = scopeQuery(query, result.scope, "created_by");
+
     const { data, error } = await query;
     if (error) throw error;
-    return NextResponse.json({ records: data || [] });
+    return NextResponse.json({ records: data || [], _permissions: result.permissions });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch meeting sheet";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -50,8 +53,12 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "sales", "pipeline");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "sales", "pipeline");
+  if ("error" in result) return result.error;
+
+  if (!result.permissions.canCreate) {
+    return NextResponse.json({ error: "You do not have permission to create records" }, { status: 403 });
+  }
 
   const action = req.nextUrl.searchParams.get("action");
 
@@ -156,7 +163,7 @@ export async function POST(req: NextRequest) {
           contact_email: contact?.contact_email || null,
           contact_phone: contact?.contact_phone || null,
           meeting_link: ev.address || null,
-          created_by: auth.auth.userId,
+          created_by: result.auth.userId,
         };
       });
 
@@ -195,8 +202,13 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "sales", "pipeline");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "sales", "pipeline");
+  if ("error" in result) return result.error;
+
+  if (!result.permissions.canEdit) {
+    return NextResponse.json({ error: "You do not have permission to edit records" }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     const { id, ...updates } = body;
@@ -221,8 +233,13 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "sales", "pipeline");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "sales", "pipeline");
+  if ("error" in result) return result.error;
+
+  if (!result.scope.scopeLevel.can_delete) {
+    return NextResponse.json({ error: "Only admins can delete records" }, { status: 403 });
+  }
+
   try {
     const id = req.nextUrl.searchParams.get("id");
     if (!id) {

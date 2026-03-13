@@ -8,8 +8,8 @@ let inflight: { promise: Promise<unknown>; key: string } | null = null;
 const CACHE_TTL = 120_000; // 2 minutes
 
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "meta", "meta-analytics");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "meta", "meta-analytics");
+  if ("error" in result) return result.error;
 
   try {
     const datePreset =
@@ -20,13 +20,13 @@ export async function GET(req: NextRequest) {
 
     // Return cached data if fresh
     if (cache && cache.key === cacheKey && Date.now() - cache.ts < CACHE_TTL) {
-      return NextResponse.json(cache.data);
+      return NextResponse.json({ ...(cache.data as object), _permissions: result.permissions });
     }
 
     // Deduplicate concurrent requests
     if (inflight && inflight.key === cacheKey) {
       const data = await inflight.promise;
-      return NextResponse.json(data);
+      return NextResponse.json({ ...(data as object), _permissions: result.permissions });
     }
 
     const promise = Promise.all([
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
     const data = await promise;
     cache = { data, ts: Date.now(), key: cacheKey };
     inflight = null;
-    return NextResponse.json(data);
+    return NextResponse.json({ ...data, _permissions: result.permissions });
   } catch (error) {
     inflight = null;
     const message =

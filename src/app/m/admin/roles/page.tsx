@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Plus, Trash2, Edit3, Check, X, Shield } from "lucide-react";
 import type { Role } from "@/types";
 import { apiFetch } from "@/lib/api-fetch";
+import PermissionGate from "@/components/PermissionGate";
 
 interface RoleWithCount extends Role {
   user_count: number;
@@ -108,13 +109,15 @@ export default function RolesPage() {
             Assign module permissions under Permissions tab.
           </p>
         </div>
-        <button
-          onClick={() => { setShowAdd(true); setError(""); }}
-          className="flex items-center gap-2 px-4 py-2 bg-accent text-background text-sm rounded-lg hover:bg-accent/90 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Add Role
-        </button>
+        <PermissionGate module="admin" subModule="admin-roles" action="canCreate">
+          <button
+            onClick={() => { setShowAdd(true); setError(""); }}
+            className="flex items-center gap-2 px-4 py-2 bg-accent text-background text-sm rounded-lg hover:bg-accent/90 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add Role
+          </button>
+        </PermissionGate>
       </div>
 
       {error && (
@@ -246,26 +249,30 @@ export default function RolesPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => {
-                      setEditingId(role.id);
-                      setEditName(role.name);
-                      setEditDesc(role.description || "");
-                      setEditIsAdmin(role.is_admin || false);
-                    }}
-                    className="p-2 text-muted hover:text-foreground hover:bg-surface-hover rounded-lg transition-colors"
-                    title="Edit role"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                  </button>
-                  {!role.is_admin && (
+                  <PermissionGate module="admin" subModule="admin-roles" action="canEdit">
                     <button
-                      onClick={() => handleDelete(role.id, role.name)}
-                      className="p-2 text-muted hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
-                      title="Delete role"
+                      onClick={() => {
+                        setEditingId(role.id);
+                        setEditName(role.name);
+                        setEditDesc(role.description || "");
+                        setEditIsAdmin(role.is_admin || false);
+                      }}
+                      className="p-2 text-muted hover:text-foreground hover:bg-surface-hover rounded-lg transition-colors"
+                      title="Edit role"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Edit3 className="w-4 h-4" />
                     </button>
+                  </PermissionGate>
+                  {!role.is_admin && (
+                    <PermissionGate module="admin" subModule="admin-roles" action="canDelete">
+                      <button
+                        onClick={() => handleDelete(role.id, role.name)}
+                        className="p-2 text-muted hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                        title="Delete role"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </PermissionGate>
                   )}
                 </div>
               </div>

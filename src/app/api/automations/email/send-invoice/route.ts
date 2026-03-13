@@ -6,8 +6,12 @@ import { Resend } from "resend";
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "automations", "automations-email");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "automations", "automations-email");
+  if ("error" in result) return result.error;
+  const auth = result;
+  if (!auth.permissions.canCreate) {
+    return NextResponse.json({ error: "Permission denied: canCreate" }, { status: 403 });
+  }
 
   try {
     const body = await req.json();

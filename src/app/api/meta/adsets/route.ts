@@ -7,19 +7,19 @@ let inflight: { promise: Promise<unknown[]>; key: string } | null = null;
 const CACHE_TTL = 120_000;
 
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "meta", "meta-adsets");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "meta", "meta-adsets");
+  if ("error" in result) return result.error;
   try {
     const campaignId = req.nextUrl.searchParams.get("campaignId") || undefined;
     const cacheKey = campaignId || "__all__";
 
     if (adsetsCache && adsetsCache.key === cacheKey && Date.now() - adsetsCache.ts < CACHE_TTL) {
-      return NextResponse.json({ adsets: adsetsCache.data });
+      return NextResponse.json({ adsets: adsetsCache.data, _permissions: result.permissions });
     }
 
     if (inflight && inflight.key === cacheKey) {
       const adsets = await inflight.promise;
-      return NextResponse.json({ adsets });
+      return NextResponse.json({ adsets, _permissions: result.permissions });
     }
 
     const promise = getAdSets(campaignId);
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
     const adsets = await promise;
     adsetsCache = { data: adsets, ts: Date.now(), key: cacheKey };
     inflight = null;
-    return NextResponse.json({ adsets });
+    return NextResponse.json({ adsets, _permissions: result.permissions });
   } catch (error) {
     inflight = null;
     const message = error instanceof Error ? error.message : "Failed to fetch ad sets";

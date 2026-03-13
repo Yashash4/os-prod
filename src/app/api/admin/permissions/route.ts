@@ -28,6 +28,11 @@ export async function GET(req: NextRequest) {
       .from("role_modules")
       .select("*");
 
+    // Get role_module_permissions (permission matrix)
+    const { data: roleModulePermissions } = await supabaseAdmin
+      .from("role_module_permissions")
+      .select("*");
+
     // Get user overrides if user_id provided
     let userOverrides = null;
     if (userId) {
@@ -38,10 +43,18 @@ export async function GET(req: NextRequest) {
       userOverrides = data;
     }
 
+    // Get scope levels
+    const { data: scopeLevels } = await supabaseAdmin
+      .from("scope_levels")
+      .select("*")
+      .order("rank", { ascending: true });
+
     return NextResponse.json({
       roles: roles || [],
       modules: modules || [],
       roleModules: roleModules || [],
+      roleModulePermissions: roleModulePermissions || [],
+      scopeLevels: scopeLevels || [],
       userOverrides,
     });
   } catch (err) {
@@ -52,13 +65,45 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// Toggle role-module assignment
+// Toggle role-module assignment or update permission matrix
 export async function PUT(req: NextRequest) {
   const authResult = await requireAdmin(req);
   if ("error" in authResult) return authResult.error;
 
   try {
     const body = await req.json();
+
+    // Handle permission matrix update
+    if (body.type === "permission_matrix") {
+      const { role_id, module_id, can_read, can_create, can_edit, can_approve, can_export } = body;
+
+      if (!role_id || !module_id) {
+        return NextResponse.json(
+          { error: "role_id and module_id required for permission_matrix" },
+          { status: 400 }
+        );
+      }
+
+      const { error } = await supabaseAdmin
+        .from("role_module_permissions")
+        .upsert(
+          {
+            role_id,
+            module_id,
+            can_read: can_read ?? false,
+            can_create: can_create ?? false,
+            can_edit: can_edit ?? false,
+            can_approve: can_approve ?? false,
+            can_export: can_export ?? false,
+          },
+          { onConflict: "role_id,module_id" }
+        );
+      if (error) throw error;
+
+      return NextResponse.json({ success: true });
+    }
+
+    // Handle role-module access toggle (existing behavior)
     const { role_id, module_id, action } = body;
 
     if (!role_id || !module_id || !action) {

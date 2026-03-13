@@ -3,8 +3,8 @@ import { getSearchAnalytics } from "@/lib/gsc";
 import { requireSubModuleAccess } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "seo", "seo-performance");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "seo", "seo-performance");
+  if ("error" in result) return result.error;
   try {
     const sp = req.nextUrl.searchParams;
     const startDate = sp.get("startDate") || "";
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
       rowLimit: 1000,
     });
 
-    return NextResponse.json({ rows });
+    return NextResponse.json({ rows, _permissions: result.permissions });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to fetch daily analytics";

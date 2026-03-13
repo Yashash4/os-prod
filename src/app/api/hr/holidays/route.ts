@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ holidays: holidays || [] });
+    return NextResponse.json({ holidays: holidays || [], _permissions: result.permissions });
   } catch (err) {
     console.error("holidays GET uncaught:", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
   try {
     const result = await requireSubModuleAccess(req, "hr", "hr-holidays");
     if ("error" in result) return result.error;
+    if (!result.permissions.canCreate) return NextResponse.json({ error: "Permission denied" }, { status: 403 });
 
     const body = await req.json();
     const { name, date, is_optional } = body;
@@ -65,6 +66,7 @@ export async function DELETE(req: NextRequest) {
   try {
     const result = await requireSubModuleAccess(req, "hr", "hr-holidays");
     if ("error" in result) return result.error;
+    if (!result.scope.scopeLevel.can_delete) return NextResponse.json({ error: "Admin only" }, { status: 403 });
 
     const id = req.nextUrl.searchParams.get("id");
     if (!id) {

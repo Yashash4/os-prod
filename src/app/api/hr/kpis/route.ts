@@ -18,12 +18,13 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ kpis: data || [] });
+  return NextResponse.json({ kpis: data || [], _permissions: result.permissions });
 }
 
 export async function POST(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "hr", "hr-kpis");
   if ("error" in result) return result.error;
+  if (!result.permissions.canCreate) return NextResponse.json({ error: "Permission denied" }, { status: 403 });
 
   const body = await req.json();
   const { name, description, department_id, designation_id, unit, target_value, frequency } = body;
@@ -53,6 +54,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "hr", "hr-kpis");
   if ("error" in result) return result.error;
+  if (!result.permissions.canEdit) return NextResponse.json({ error: "Permission denied" }, { status: 403 });
 
   const body = await req.json();
   const { id, ...updates } = body;
@@ -73,6 +75,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "hr", "hr-kpis");
   if ("error" in result) return result.error;
+  if (!result.scope.scopeLevel.can_delete) return NextResponse.json({ error: "Admin only" }, { status: 403 });
 
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "ID is required" }, { status: 400 });

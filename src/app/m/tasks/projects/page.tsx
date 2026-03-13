@@ -6,6 +6,7 @@ import AuthGuard from "@/components/AuthGuard";
 import { apiFetch } from "@/lib/api-fetch";
 import { useAuth } from "@/contexts/AuthContext";
 import { Plus, FolderOpen, Trash2, ExternalLink, X } from "lucide-react";
+import PermissionGate from "@/components/PermissionGate";
 
 interface Project {
   id: string;
@@ -66,13 +67,15 @@ function ProjectCard({
             <ExternalLink className="w-3.5 h-3.5" />
           </button>
           {canDelete && (
-            <button
-              onClick={onDelete}
-              title="Delete project"
-              className="p-1 text-muted hover:text-red-400 transition-colors"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
+            <PermissionGate module="tasks" subModule="tasks-projects" action="canDelete">
+              <button
+                onClick={onDelete}
+                title="Delete project"
+                className="p-1 text-muted hover:text-red-400 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </PermissionGate>
           )}
         </div>
       </div>
@@ -262,13 +265,15 @@ function ProjectsContent() {
           <h1 className="text-xl font-semibold text-foreground">Projects</h1>
           <p className="text-sm text-muted mt-0.5">{projects.length} project{projects.length !== 1 ? "s" : ""}</p>
         </div>
-        <button
-          onClick={() => setShowNewProject(true)}
-          className="flex items-center gap-1.5 px-3 py-2 bg-accent text-white text-sm rounded-lg hover:bg-accent/90 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          New Project
-        </button>
+        <PermissionGate module="tasks" subModule="tasks-projects" action="canCreate">
+          <button
+            onClick={() => setShowNewProject(true)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-accent text-white text-sm rounded-lg hover:bg-accent/90 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            New Project
+          </button>
+        </PermissionGate>
       </div>
 
       {loading ? (

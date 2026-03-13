@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSubModuleAccess } from "@/lib/api-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { scopeQuery } from "@/lib/data-scope";
 
 export async function GET(req: NextRequest) {
   try {
@@ -18,6 +19,8 @@ export async function GET(req: NextRequest) {
     if (department_id) query = query.eq("department_id", department_id);
     if (status) query = query.eq("status", status);
 
+    query = scopeQuery(query, result.scope, "id", true);
+
     const { data: employees, error } = await query;
 
     if (error) {
@@ -28,7 +31,7 @@ export async function GET(req: NextRequest) {
     const empList = employees || [];
 
     if (empList.length === 0) {
-      return NextResponse.json({ employees: [] });
+      return NextResponse.json({ employees: [], _permissions: result.permissions });
     }
 
     const deptIds = [...new Set(empList.map((e: Record<string, unknown>) => e.department_id).filter(Boolean))] as string[];
@@ -56,7 +59,7 @@ export async function GET(req: NextRequest) {
       manager: null,
     }));
 
-    return NextResponse.json({ employees: enriched });
+    return NextResponse.json({ employees: enriched, _permissions: result.permissions });
   } catch (err) {
     console.error("hr_employees GET uncaught:", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
@@ -66,6 +69,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "hr", "hr-employees");
   if ("error" in result) return result.error;
+  if (!result.permissions.canCreate) return NextResponse.json({ error: "Permission denied" }, { status: 403 });
 
   const body = await req.json();
   const { full_name, email, phone, department_id, designation_id, employment_type, join_date, reporting_to, user_id } = body;
@@ -190,11 +194,28 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "hr", "hr-employees");
   if ("error" in result) return result.error;
+  if (!result.permissions.canEdit) return NextResponse.json({ error: "Permission denied" }, { status: 403 });
 
   const body = await req.json();
   const { id, ...updates } = body;
 
   if (!id) return NextResponse.json({ error: "ID is required" }, { status: 400 });
+
+  // Scope-check: verify the target employee is within the user's data scope
+  const { data: targetEmp } = await supabaseAdmin
+    .from("hr_employees")
+    .select("id")
+    .eq("id", id);
+  const scopedTarget = targetEmp?.filter((e: Record<string, unknown>) => {
+    if (result.scope.scopeLevel.data_visibility === "all") return true;
+    if (result.scope.scopeLevel.data_visibility === "team") {
+      return e.id === result.scope.employeeId || result.scope.teamEmployeeIds.includes(e.id as string);
+    }
+    return e.id === result.scope.employeeId;
+  });
+  if (!scopedTarget || scopedTarget.length === 0) {
+    return NextResponse.json({ error: "Not authorized to edit this employee" }, { status: 403 });
+  }
 
   // Capture before state if user_id is being changed
   let beforeUserId: string | null = null;
@@ -237,6 +258,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "hr", "hr-employees");
   if ("error" in result) return result.error;
+  if (!result.scope.scopeLevel.can_delete) return NextResponse.json({ error: "Admin only" }, { status: 403 });
 
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "ID is required" }, { status: 400 });

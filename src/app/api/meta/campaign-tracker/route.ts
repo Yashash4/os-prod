@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireSubModuleAccess } from "@/lib/api-auth";
+import { scopeQuery } from "@/lib/data-scope";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "meta", "meta-campaign-tracker");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "meta", "meta-campaign-tracker");
+  if ("error" in result) return result.error;
   try {
     const campaignId = req.nextUrl.searchParams.get("campaign_id");
     const from = req.nextUrl.searchParams.get("from");
@@ -25,9 +26,11 @@ export async function GET(req: NextRequest) {
       query = query.lte("log_date", to);
     }
 
+    query = scopeQuery(query, result.scope, "decided_by");
+
     const { data, error } = await query;
     if (error) throw error;
-    return NextResponse.json({ entries: data || [] });
+    return NextResponse.json({ entries: data || [], _permissions: result.permissions });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch campaign tracker entries";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -35,8 +38,13 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "meta", "meta-campaign-tracker");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "meta", "meta-campaign-tracker");
+  if ("error" in result) return result.error;
+
+  if (!result.permissions.canCreate) {
+    return NextResponse.json({ error: "You do not have permission to create campaign tracker entries" }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     const { campaign_id, campaign_name, action } = body;
@@ -47,7 +55,7 @@ export async function POST(req: NextRequest) {
 
     const { data, error } = await supabaseAdmin
       .from("meta_campaign_tracker")
-      .insert({ ...body, decided_by: auth.auth.userId })
+      .insert({ ...body, decided_by: result.auth.userId })
       .select()
       .single();
 
@@ -60,8 +68,13 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "meta", "meta-campaign-tracker");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "meta", "meta-campaign-tracker");
+  if ("error" in result) return result.error;
+
+  if (!result.permissions.canEdit) {
+    return NextResponse.json({ error: "You do not have permission to edit campaign tracker entries" }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     const { id, ...updates } = body;
@@ -86,8 +99,13 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "meta", "meta-campaign-tracker");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "meta", "meta-campaign-tracker");
+  if ("error" in result) return result.error;
+
+  if (!result.scope.scopeLevel.can_delete) {
+    return NextResponse.json({ error: "Only admins can delete campaign tracker entries" }, { status: 403 });
+  }
+
   try {
     const id = req.nextUrl.searchParams.get("id");
     if (!id) {

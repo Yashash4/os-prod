@@ -24,12 +24,16 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ budgets: data || [] });
+  return NextResponse.json({ budgets: data || [], _permissions: result.permissions });
 }
 
 export async function POST(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "finance", "finance-budgets");
   if ("error" in result) return result.error;
+
+  if (!result.permissions.canCreate) {
+    return NextResponse.json({ error: "You do not have permission to create budgets" }, { status: 403 });
+  }
 
   const body = await req.json();
   const { name, department, month, planned_amount } = body;
@@ -69,6 +73,10 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "finance", "finance-budgets");
   if ("error" in result) return result.error;
+
+  if (!result.permissions.canEdit) {
+    return NextResponse.json({ error: "You do not have permission to edit budgets" }, { status: 403 });
+  }
 
   const body = await req.json();
   const { id, ...updates } = body;

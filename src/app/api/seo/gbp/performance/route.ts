@@ -3,8 +3,8 @@ import { getPerformanceMetrics } from "@/lib/gmb";
 import { requireSubModuleAccess } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "seo", "seo-gbp");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "seo", "seo-gbp");
+  if ("error" in result) return result.error;
   try {
     const sp = req.nextUrl.searchParams;
     const startDate = sp.get("startDate") || "";
@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     }
 
     const metrics = await getPerformanceMetrics(startDate, endDate);
-    return NextResponse.json({ metrics });
+    return NextResponse.json({ metrics, _permissions: result.permissions });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to fetch GBP performance";

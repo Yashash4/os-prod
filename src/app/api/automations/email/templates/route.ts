@@ -3,8 +3,9 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireSubModuleAccess } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireSubModuleAccess(req, "automations", "automations-email-templates");
-  if ("error" in auth) return auth.error;
+  const result = await requireSubModuleAccess(req, "automations", "automations-email-templates");
+  if ("error" in result) return result.error;
+  const { permissions } = result;
 
   try {
     const { data, error } = await supabaseAdmin
@@ -13,7 +14,7 @@ export async function GET(req: NextRequest) {
       .order("created_at", { ascending: true });
 
     if (error) throw error;
-    return NextResponse.json({ templates: data || [] });
+    return NextResponse.json({ templates: data || [], _permissions: permissions });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch templates";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -23,6 +24,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "automations", "automations-email-templates");
   if ("error" in result) return result.error;
+  if (!result.permissions.canCreate) {
+    return NextResponse.json({ error: "Permission denied: canCreate" }, { status: 403 });
+  }
 
   try {
     const body = await req.json();
@@ -68,6 +72,9 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "automations", "automations-email-templates");
   if ("error" in result) return result.error;
+  if (!result.permissions.canEdit) {
+    return NextResponse.json({ error: "Permission denied: canEdit" }, { status: 403 });
+  }
 
   try {
     const body = await req.json();
@@ -120,6 +127,10 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "automations", "automations-email-templates");
   if ("error" in result) return result.error;
+  // Delete is admin-only
+  if (!result.scope.scopeLevel.can_delete) {
+    return NextResponse.json({ error: "Permission denied: delete is admin-only" }, { status: 403 });
+  }
 
   try {
     const { searchParams } = new URL(req.url);
