@@ -35,8 +35,8 @@ export async function POST(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "finance", "finance-expenses");
   if ("error" in result) return result.error;
 
-  if (!result.permissions.canCreate) {
-    return NextResponse.json({ error: "You do not have permission to create categories" }, { status: 403 });
+  if (!result.auth.isAdmin) {
+    return NextResponse.json({ error: "Only admins can create categories" }, { status: 403 });
   }
 
   const body = await req.json();

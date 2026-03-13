@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireSubModuleAccess } from "@/lib/api-auth";
-import { scopeQuery } from "@/lib/data-scope";
+import { scopeQuery, verifyScopeAccess } from "@/lib/data-scope";
 
 export async function GET(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "content", "content-social");
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
 
     const { data, error } = await supabaseAdmin
       .from("content_social")
-      .insert(body)
+      .insert({ ...body, created_by: result.auth.userId })
       .select()
       .maybeSingle();
 
@@ -74,6 +74,9 @@ export async function PUT(req: NextRequest) {
   try {
     const body = await req.json();
     const { id, ...updates } = body;
+
+    const allowed = await verifyScopeAccess(result.scope, "content_social", id, "created_by");
+    if (!allowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
 
     const { data, error } = await supabaseAdmin
       .from("content_social")
@@ -101,6 +104,9 @@ export async function DELETE(req: NextRequest) {
 
   try {
     const id = req.nextUrl.searchParams.get("id");
+
+    const allowed = await verifyScopeAccess(result.scope, "content_social", id!, "created_by");
+    if (!allowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
 
     const { error } = await supabaseAdmin
       .from("content_social")

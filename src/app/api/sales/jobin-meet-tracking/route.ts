@@ -1,16 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireSubModuleAccess } from "@/lib/api-auth";
+import { scopeQuery, verifyScopeAccess } from "@/lib/data-scope";
 
 // GET: Fetch all jobin meet tracking records joined with call_booked_tracking
 export async function GET(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "sales", "jobin");
   if ("error" in result) return result.error;
   try {
-    const { data: callBooked, error: cbError } = await supabaseAdmin
+    let cbQuery = supabaseAdmin
       .from("sales_call_booked_tracking")
       .select("*")
       .order("created_at", { ascending: false });
+
+    cbQuery = scopeQuery(cbQuery, result.scope, "assigned_to");
+
+    const { data: callBooked, error: cbError } = await cbQuery;
 
     if (cbError) throw cbError;
 
@@ -93,6 +98,9 @@ export async function PUT(req: NextRequest) {
     if (!opportunity_id) {
       return NextResponse.json({ error: "opportunity_id is required" }, { status: 400 });
     }
+
+    const allowed = await verifyScopeAccess(result.scope, "sales_call_booked_tracking", opportunity_id, "assigned_to", false, "opportunity_id");
+    if (!allowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
 
     const { data, error } = await supabaseAdmin
       .from("jobin_meet_tracking")

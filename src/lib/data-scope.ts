@@ -206,3 +206,59 @@ export function scopeQuery<T>(
   }
   return typedQuery.eq(column, userId);
 }
+
+/**
+ * Verify that the current user's scope allows access to a specific record.
+ * Used before PUT/DELETE operations to ensure the user can modify the target row.
+ *
+ * @param scope - The resolved DataScope
+ * @param table - The DB table name
+ * @param id - The record's primary key value
+ * @param column - The column to check ownership against (e.g. "created_by", "employee_id")
+ * @param useEmployeeIds - If true, compare against employee IDs; if false, compare against user IDs
+ * @returns true if access is allowed, false otherwise
+ */
+export async function verifyScopeAccess(
+  scope: DataScope,
+  table: string,
+  id: string,
+  column: string,
+  useEmployeeIds = false,
+  idColumn = "id"
+): Promise<boolean> {
+  const { scopeLevel, userId, employeeId, teamEmployeeIds, teamUserIds } = scope;
+
+  // Admin sees all
+  if (scopeLevel.data_visibility === "all") {
+    return true;
+  }
+
+  // Fetch the target row's ownership column
+  const { data: row, error } = await supabaseAdmin
+    .from(table)
+    .select(column)
+    .eq(idColumn, id)
+    .single();
+
+  if (error || !row) {
+    return false;
+  }
+
+  const rowValue = (row as unknown as Record<string, unknown>)[column] as string | null;
+  if (!rowValue) return false;
+
+  if (scopeLevel.data_visibility === "team") {
+    if (useEmployeeIds) {
+      const allIds = employeeId ? [employeeId, ...teamEmployeeIds] : teamEmployeeIds;
+      return allIds.includes(rowValue);
+    }
+    const allIds = [userId, ...teamUserIds];
+    return allIds.includes(rowValue);
+  }
+
+  // "self"
+  if (useEmployeeIds && employeeId) {
+    return rowValue === employeeId;
+  }
+  return rowValue === userId;
+}

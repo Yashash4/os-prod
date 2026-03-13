@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireModuleAccess, getAccessibleSubModules } from "@/lib/api-auth";
-import { resolveDataScope, scopeQuery } from "@/lib/data-scope";
+import { resolveDataScope, scopeQuery, verifyScopeAccess } from "@/lib/data-scope";
 import { getModulePermissions } from "@/lib/permissions";
 
 export async function GET(req: NextRequest) {
@@ -106,6 +106,10 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Project id is required" }, { status: 400 });
     }
 
+    const scope = await resolveDataScope(auth.auth.userId, auth.auth.roleId, auth.auth.isAdmin);
+    const scopeAllowed = await verifyScopeAccess(scope, "projects", id, "owner_id");
+    if (!scopeAllowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
+
     const allowed: Record<string, unknown> = {};
     if (updates.name !== undefined) allowed.name = updates.name;
     if (updates.description !== undefined) allowed.description = updates.description;
@@ -147,6 +151,9 @@ export async function DELETE(req: NextRequest) {
     if (!id) {
       return NextResponse.json({ error: "Project id is required" }, { status: 400 });
     }
+
+    const scopeAllowed = await verifyScopeAccess(scope, "projects", id, "owner_id");
+    if (!scopeAllowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
 
     const { error } = await supabaseAdmin.from("projects").delete().eq("id", id);
     if (error) throw error;

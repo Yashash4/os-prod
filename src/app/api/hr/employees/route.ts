@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSubModuleAccess } from "@/lib/api-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { scopeQuery } from "@/lib/data-scope";
+import { scopeQuery, verifyScopeAccess } from "@/lib/data-scope";
 
 export async function GET(req: NextRequest) {
   try {
@@ -202,18 +202,8 @@ export async function PUT(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "ID is required" }, { status: 400 });
 
   // Scope-check: verify the target employee is within the user's data scope
-  const { data: targetEmp } = await supabaseAdmin
-    .from("hr_employees")
-    .select("id")
-    .eq("id", id);
-  const scopedTarget = targetEmp?.filter((e: Record<string, unknown>) => {
-    if (result.scope.scopeLevel.data_visibility === "all") return true;
-    if (result.scope.scopeLevel.data_visibility === "team") {
-      return e.id === result.scope.employeeId || result.scope.teamEmployeeIds.includes(e.id as string);
-    }
-    return e.id === result.scope.employeeId;
-  });
-  if (!scopedTarget || scopedTarget.length === 0) {
+  const allowed = await verifyScopeAccess(result.scope, "hr_employees", id, "id", true);
+  if (!allowed) {
     return NextResponse.json({ error: "Not authorized to edit this employee" }, { status: 403 });
   }
 

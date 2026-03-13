@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireSubModuleAccess } from "@/lib/api-auth";
-import { scopeQuery } from "@/lib/data-scope";
+import { scopeQuery, verifyScopeAccess } from "@/lib/data-scope";
 
 export async function GET(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "sales", "pipeline");
@@ -141,6 +141,9 @@ export async function PUT(req: NextRequest) {
     if (!opportunity_id) {
       return NextResponse.json({ error: "opportunity_id is required" }, { status: 400 });
     }
+
+    const allowed = await verifyScopeAccess(result.scope, "sales_call_booked_tracking", opportunity_id, "assigned_to", false, "opportunity_id");
+    if (!allowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
 
     const { data, error } = await supabaseAdmin
       .from("sales_call_booked_tracking")

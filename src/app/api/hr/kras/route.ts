@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSubModuleAccess } from "@/lib/api-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { scopeQuery } from "@/lib/data-scope";
+import { scopeQuery, verifyScopeAccess } from "@/lib/data-scope";
 
 export async function GET(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "hr", "hr-kpis");
@@ -65,6 +65,9 @@ export async function PUT(req: NextRequest) {
 
   if (!id) return NextResponse.json({ error: "ID is required" }, { status: 400 });
 
+  const allowed = await verifyScopeAccess(result.scope, "hr_kras", id, "employee_id", true);
+  if (!allowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
+
   const { data, error } = await supabaseAdmin
     .from("hr_kras")
     .update({ ...updates, updated_at: new Date().toISOString() })
@@ -95,6 +98,9 @@ export async function DELETE(req: NextRequest) {
 
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "ID is required" }, { status: 400 });
+
+  const allowed = await verifyScopeAccess(result.scope, "hr_kras", id, "employee_id", true);
+  if (!allowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
 
   const { error } = await supabaseAdmin.from("hr_kras").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
