@@ -6,6 +6,7 @@ import {
   Clock, CheckCircle2, ChevronDown,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import PermissionGate from "@/components/PermissionGate";
 
 /* ── Types ─────────────────────────────────────────────────── */
 
@@ -191,13 +192,15 @@ export default function TaskLogPage() {
           <h1 className="text-2xl font-bold">SEO Task Log</h1>
           {loading && <Loader2 className="w-5 h-5 animate-spin text-accent" />}
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Add Task
-        </button>
+        <PermissionGate module="marketing" subModule="marketing-seo-task-log" action="canCreate">
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add Task
+          </button>
+        </PermissionGate>
       </div>
 
       {error && (
@@ -367,15 +370,17 @@ export default function TaskLogPage() {
                     </span>
                   </td>
                   <td className="px-4 py-2">
-                    <select
-                      value={r.status}
-                      onChange={(e) => handleUpdate(r.id, "status", e.target.value)}
-                      className="bg-background/50 border border-border rounded px-2 py-1 text-xs"
-                    >
-                      {STATUSES.map((s) => (
-                        <option key={s} value={s}>{STATUS_LABELS[s]}</option>
-                      ))}
-                    </select>
+                    <PermissionGate module="marketing" subModule="marketing-seo-task-log" action="canEdit" fallback={<span className="text-xs">{STATUS_LABELS[r.status] ?? r.status}</span>}>
+                      <select
+                        value={r.status}
+                        onChange={(e) => handleUpdate(r.id, "status", e.target.value)}
+                        className="bg-background/50 border border-border rounded px-2 py-1 text-xs"
+                      >
+                        {STATUSES.map((s) => (
+                          <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                        ))}
+                      </select>
+                    </PermissionGate>
                   </td>
                   <td className="px-4 py-2 max-w-[160px]">
                     {r.page_url ? (
@@ -397,42 +402,46 @@ export default function TaskLogPage() {
                     {r.due_date || "-"}
                   </td>
                   <td className="px-4 py-2 max-w-[180px]">
-                    {editingNotes === r.id ? (
-                      <input
-                        autoFocus
-                        type="text"
-                        value={editNotesVal}
-                        onChange={(e) => setEditNotesVal(e.target.value)}
-                        onBlur={() => {
-                          handleUpdate(r.id, "notes", editNotesVal);
-                          setEditingNotes(null);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
+                    <PermissionGate module="marketing" subModule="marketing-seo-task-log" action="canEdit" fallback={<span className="text-xs text-muted truncate block" title={r.notes}>{r.notes || "-"}</span>}>
+                      {editingNotes === r.id ? (
+                        <input
+                          autoFocus
+                          type="text"
+                          value={editNotesVal}
+                          onChange={(e) => setEditNotesVal(e.target.value)}
+                          onBlur={() => {
                             handleUpdate(r.id, "notes", editNotesVal);
                             setEditingNotes(null);
-                          }
-                          if (e.key === "Escape") setEditingNotes(null);
-                        }}
-                        className="bg-background/50 border border-border rounded px-2 py-1 text-xs w-full"
-                      />
-                    ) : (
-                      <span
-                        onClick={() => { setEditingNotes(r.id); setEditNotesVal(r.notes ?? ""); }}
-                        className="text-xs text-muted truncate block cursor-pointer hover:text-foreground"
-                        title={r.notes}
-                      >
-                        {r.notes || "..."}
-                      </span>
-                    )}
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              handleUpdate(r.id, "notes", editNotesVal);
+                              setEditingNotes(null);
+                            }
+                            if (e.key === "Escape") setEditingNotes(null);
+                          }}
+                          className="bg-background/50 border border-border rounded px-2 py-1 text-xs w-full"
+                        />
+                      ) : (
+                        <span
+                          onClick={() => { setEditingNotes(r.id); setEditNotesVal(r.notes ?? ""); }}
+                          className="text-xs text-muted truncate block cursor-pointer hover:text-foreground"
+                          title={r.notes}
+                        >
+                          {r.notes || "..."}
+                        </span>
+                      )}
+                    </PermissionGate>
                   </td>
                   <td className="px-4 py-2">
-                    <button
-                      onClick={() => handleDelete(r.id)}
-                      className="text-muted hover:text-red-400 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <PermissionGate module="marketing" subModule="marketing-seo-task-log" action="canDelete">
+                      <button
+                        onClick={() => handleDelete(r.id)}
+                        className="text-muted hover:text-red-400 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </PermissionGate>
                   </td>
                 </tr>
               ))}

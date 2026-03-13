@@ -12,6 +12,7 @@ import {
 import { apiFetch } from "@/lib/api-fetch";
 import { useAuth } from "@/contexts/AuthContext";
 import PermissionGate from "@/components/PermissionGate";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface LeaveType {
   id: string;
@@ -72,7 +73,8 @@ const INPUT =
 const LABEL = "text-[11px] text-muted uppercase tracking-wider mb-1 block";
 
 export default function LeavesPage() {
-  const { user, isAdmin } = useAuth();
+  const { user } = useAuth();
+  const { canDo } = usePermissions("hr");
 
   const [tab, setTab] = useState<"my" | "team">("my");
   const [loading, setLoading] = useState(true);
@@ -255,8 +257,8 @@ export default function LeavesPage() {
     });
   }
 
-  // Check if the current user is a manager or admin (can approve/reject)
-  const canApprove = isAdmin || employees.some((e) => e.reporting_to === myEmployee?.id);
+  // Permission-based approve check (replaces client-side manager/admin logic)
+  const canApprove = canDo("hr-leaves", "canApprove");
 
   return (
     <div className="p-6 space-y-6 max-w-[1400px] mx-auto">

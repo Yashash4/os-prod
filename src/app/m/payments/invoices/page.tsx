@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { PaymentsTableSkeleton } from "@/components/Skeleton";
 import { apiFetch } from "@/lib/api-fetch";
+import PermissionGate from "@/components/PermissionGate";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -238,13 +239,15 @@ export default function InvoicesPage() {
             <p className="text-muted text-xs mt-0.5">Razorpay invoices and payment links</p>
           </div>
         </div>
-        <button
-          onClick={exportCSV}
-          className="flex items-center gap-2 px-3 py-2 bg-surface border border-border rounded-lg text-sm text-muted hover:text-foreground transition-colors"
-        >
-          <Download className="w-4 h-4" />
-          Export CSV
-        </button>
+        <PermissionGate module="payments" subModule="payments-invoices" action="canExport">
+          <button
+            onClick={exportCSV}
+            className="flex items-center gap-2 px-3 py-2 bg-surface border border-border rounded-lg text-sm text-muted hover:text-foreground transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Export CSV
+          </button>
+        </PermissionGate>
       </div>
 
       {error && (

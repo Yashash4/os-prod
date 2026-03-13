@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import PermissionGate from "@/components/PermissionGate";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -216,13 +217,15 @@ export default function BudgetPlannerPage() {
             <p className="text-muted text-xs mt-0.5">Planned vs actual budget tracking</p>
           </div>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-1.5 px-3 py-2 bg-accent/15 text-accent border border-accent/30 rounded-lg text-sm font-medium hover:bg-accent/25 transition-colors"
-        >
-          {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-          {showForm ? "Cancel" : "Add Budget Plan"}
-        </button>
+        <PermissionGate module="marketing" subModule="marketing-meta-budget-planner" action="canCreate">
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-accent/15 text-accent border border-accent/30 rounded-lg text-sm font-medium hover:bg-accent/25 transition-colors"
+          >
+            {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+            {showForm ? "Cancel" : "Add Budget Plan"}
+          </button>
+        </PermissionGate>
       </div>
 
       {error && (
@@ -374,38 +377,44 @@ export default function BudgetPlannerPage() {
                       </span>
                     </td>
                     <td className="py-3 px-3 min-w-[150px]">
-                      {editingNotes === plan.id ? (
-                        <input
-                          autoFocus
-                          value={notesValue}
-                          onChange={(e) => setNotesValue(e.target.value)}
-                          onBlur={() => handleNotesUpdate(plan.id)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleNotesUpdate(plan.id);
-                            if (e.key === "Escape") setEditingNotes(null);
-                          }}
-                          className="w-full px-2 py-1 bg-background/50 border border-border rounded text-foreground text-xs focus:outline-none focus:border-accent"
-                        />
-                      ) : (
-                        <span
-                          onClick={() => {
-                            setEditingNotes(plan.id);
-                            setNotesValue(plan.notes || "");
-                          }}
-                          className="text-xs text-muted cursor-pointer hover:text-foreground transition-colors block truncate"
-                        >
-                          {plan.notes || "Click to add notes..."}
-                        </span>
-                      )}
+                      <PermissionGate module="marketing" subModule="marketing-meta-budget-planner" action="canEdit" fallback={
+                        <span className="text-xs text-muted">{plan.notes || "-"}</span>
+                      }>
+                        {editingNotes === plan.id ? (
+                          <input
+                            autoFocus
+                            value={notesValue}
+                            onChange={(e) => setNotesValue(e.target.value)}
+                            onBlur={() => handleNotesUpdate(plan.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleNotesUpdate(plan.id);
+                              if (e.key === "Escape") setEditingNotes(null);
+                            }}
+                            className="w-full px-2 py-1 bg-background/50 border border-border rounded text-foreground text-xs focus:outline-none focus:border-accent"
+                          />
+                        ) : (
+                          <span
+                            onClick={() => {
+                              setEditingNotes(plan.id);
+                              setNotesValue(plan.notes || "");
+                            }}
+                            className="text-xs text-muted cursor-pointer hover:text-foreground transition-colors block truncate"
+                          >
+                            {plan.notes || "Click to add notes..."}
+                          </span>
+                        )}
+                      </PermissionGate>
                     </td>
                     <td className="py-3 px-2">
-                      <button
-                        onClick={() => handleDelete(plan.id)}
-                        className="p-1 text-muted hover:text-red-400 transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <PermissionGate module="marketing" subModule="marketing-meta-budget-planner" action="canDelete">
+                        <button
+                          onClick={() => handleDelete(plan.id)}
+                          className="p-1 text-muted hover:text-red-400 transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </PermissionGate>
                     </td>
                   </tr>
                 );

@@ -16,6 +16,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import PermissionGate from "@/components/PermissionGate";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -461,17 +462,19 @@ export default function OutstandingPage() {
                         {isUntracked ? (
                           <span className="text-[11px] text-red-400 italic">Untracked</span>
                         ) : (
-                          <select
-                            value={fu?.follow_up_status || "pending"}
-                            onChange={(e) => {
-                              if (fu) updateFollowUp(fu.id, inv.id, { follow_up_status: e.target.value });
-                            }}
-                            className="w-full bg-transparent text-xs text-foreground border-none focus:outline-none cursor-pointer [&>option]:bg-surface"
-                          >
-                            {FOLLOW_UP_STATUSES.map((s) => (
-                              <option key={s.value} value={s.value}>{s.label}</option>
-                            ))}
-                          </select>
+                          <PermissionGate module="payments" subModule="payments-outstanding" action="canApprove" fallback={<span className="text-xs">{FOLLOW_UP_STATUSES.find((s) => s.value === (fu?.follow_up_status || "pending"))?.label ?? fu?.follow_up_status}</span>}>
+                            <select
+                              value={fu?.follow_up_status || "pending"}
+                              onChange={(e) => {
+                                if (fu) updateFollowUp(fu.id, inv.id, { follow_up_status: e.target.value });
+                              }}
+                              className="w-full bg-transparent text-xs text-foreground border-none focus:outline-none cursor-pointer [&>option]:bg-surface"
+                            >
+                              {FOLLOW_UP_STATUSES.map((s) => (
+                                <option key={s.value} value={s.value}>{s.label}</option>
+                              ))}
+                            </select>
+                          </PermissionGate>
                         )}
                       </td>
 
@@ -487,40 +490,46 @@ export default function OutstandingPage() {
                         {isUntracked ? (
                           <span className="text-muted">-</span>
                         ) : (
-                          <input
-                            type="date"
-                            value={fu?.next_follow_up_date ? new Date(fu.next_follow_up_date).toISOString().slice(0, 10) : ""}
-                            onChange={(e) => {
-                              if (fu) updateFollowUp(fu.id, inv.id, { next_follow_up_date: e.target.value || null });
-                            }}
-                            className="bg-transparent border-none text-xs text-foreground focus:outline-none cursor-pointer [color-scheme:dark] w-full"
-                          />
+                          <PermissionGate module="payments" subModule="payments-outstanding" action="canEdit" fallback={<span className="text-xs">{fu?.next_follow_up_date ? new Date(fu.next_follow_up_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short" }) : "-"}</span>}>
+                            <input
+                              type="date"
+                              value={fu?.next_follow_up_date ? new Date(fu.next_follow_up_date).toISOString().slice(0, 10) : ""}
+                              onChange={(e) => {
+                                if (fu) updateFollowUp(fu.id, inv.id, { next_follow_up_date: e.target.value || null });
+                              }}
+                              className="bg-transparent border-none text-xs text-foreground focus:outline-none cursor-pointer [color-scheme:dark] w-full"
+                            />
+                          </PermissionGate>
                         )}
                       </td>
 
                       {/* Notes (inline editable) */}
-                      <td
-                        className={`px-3 py-2 text-xs border-r border-border ${isUntracked ? "" : "cursor-pointer"}`}
-                        onClick={() => {
-                          if (!isUntracked) startEdit(inv.id, "notes", fu?.notes || "");
-                        }}
-                      >
-                        {editingCell?.id === inv.id && editingCell?.field === "notes" ? (
-                          <input
-                            autoFocus
-                            type="text"
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            onBlur={commitEdit}
-                            onKeyDown={(e) => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") cancelEdit(); }}
-                            className="w-full bg-background border border-[#B8860B] rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none"
-                          />
-                        ) : isUntracked ? (
+                      <td className="px-3 py-2 text-xs border-r border-border">
+                        {isUntracked ? (
                           <span className="text-muted">-</span>
                         ) : (
-                          <span className={fu?.notes ? "text-foreground" : "text-muted/40 italic"}>
-                            {fu?.notes || "Click to add..."}
-                          </span>
+                          <PermissionGate module="payments" subModule="payments-outstanding" action="canEdit" fallback={<span className="text-xs text-muted">{fu?.notes || "-"}</span>}>
+                            <div
+                              className="cursor-pointer"
+                              onClick={() => startEdit(inv.id, "notes", fu?.notes || "")}
+                            >
+                              {editingCell?.id === inv.id && editingCell?.field === "notes" ? (
+                                <input
+                                  autoFocus
+                                  type="text"
+                                  value={editValue}
+                                  onChange={(e) => setEditValue(e.target.value)}
+                                  onBlur={commitEdit}
+                                  onKeyDown={(e) => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") cancelEdit(); }}
+                                  className="w-full bg-background border border-[#B8860B] rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none"
+                                />
+                              ) : (
+                                <span className={fu?.notes ? "text-foreground" : "text-muted/40 italic"}>
+                                  {fu?.notes || "Click to add..."}
+                                </span>
+                              )}
+                            </div>
+                          </PermissionGate>
                         )}
                       </td>
 
@@ -528,13 +537,15 @@ export default function OutstandingPage() {
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-1.5">
                           {isUntracked ? (
-                            <button
-                              onClick={() => trackInvoice(inv.id)}
-                              disabled={trackingId === inv.id}
-                              className="px-2 py-1 bg-[#B8860B] hover:bg-[#9A7209] text-white text-[10px] font-medium rounded transition-colors disabled:opacity-50"
-                            >
-                              {trackingId === inv.id ? "..." : "Track"}
-                            </button>
+                            <PermissionGate module="payments" subModule="payments-outstanding" action="canCreate">
+                              <button
+                                onClick={() => trackInvoice(inv.id)}
+                                disabled={trackingId === inv.id}
+                                className="px-2 py-1 bg-[#B8860B] hover:bg-[#9A7209] text-white text-[10px] font-medium rounded transition-colors disabled:opacity-50"
+                              >
+                                {trackingId === inv.id ? "..." : "Track"}
+                              </button>
+                            </PermissionGate>
                           ) : null}
                           {inv.customer_details?.contact && (
                             <a

@@ -17,6 +17,7 @@ import {
 import Link from "next/link";
 import { DataTableSkeleton } from "@/components/Skeleton";
 import { apiFetch } from "@/lib/api-fetch";
+import PermissionGate from "@/components/PermissionGate";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -479,7 +480,9 @@ export default function JobinMeetManagementPage() {
 
                 {/* GHL Status */}
                 <td className="px-2 py-1.5 border-r border-border">
-                  <GHLStatusDropdown current={record.ghl_status || "open"} onChange={(s) => updateGHLStatus(record, s)} />
+                  <PermissionGate module="sales" subModule="sales-jobin-meet" action="canApprove" fallback={<span className="text-[11px]">{GHL_STATUS_CONFIG[record.ghl_status || "open"]?.label || record.ghl_status || "Open"}</span>}>
+                    <GHLStatusDropdown current={record.ghl_status || "open"} onChange={(s) => updateGHLStatus(record, s)} />
+                  </PermissionGate>
                 </td>
 
                 {/* Setter Status */}
@@ -504,24 +507,32 @@ export default function JobinMeetManagementPage() {
 
                 {/* Meet Notes (editable) */}
                 <td className="px-3 py-2 text-xs border-r border-border cursor-pointer" onClick={() => startEdit(record.opportunity_id, "meet_notes", record.meet_notes || "")}>
-                  {editingCell?.oppId === record.opportunity_id && editingCell?.field === "meet_notes" ? (
-                    <input autoFocus type="text" value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={commitEdit}
-                      onKeyDown={(e) => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") cancelEdit(); }}
-                      className="w-full bg-background border border-accent rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none" />
-                  ) : (
-                    <span className={record.meet_notes ? "text-foreground" : "text-muted/40 italic"}>{record.meet_notes || "Click to add..."}</span>
-                  )}
+                  <PermissionGate module="sales" subModule="sales-jobin-meet" action="canEdit" fallback={
+                    <span className={record.meet_notes ? "text-foreground" : "text-muted/40"}>{record.meet_notes || "-"}</span>
+                  }>
+                    {editingCell?.oppId === record.opportunity_id && editingCell?.field === "meet_notes" ? (
+                      <input autoFocus type="text" value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={commitEdit}
+                        onKeyDown={(e) => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") cancelEdit(); }}
+                        className="w-full bg-background border border-accent rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none" />
+                    ) : (
+                      <span className={record.meet_notes ? "text-foreground" : "text-muted/40 italic"}>{record.meet_notes || "Click to add..."}</span>
+                    )}
+                  </PermissionGate>
                 </td>
 
                 {/* Outcome (editable) */}
                 <td className="px-3 py-2 text-xs border-r border-border cursor-pointer" onClick={() => startEdit(record.opportunity_id, "outcome", record.outcome || "")}>
-                  {editingCell?.oppId === record.opportunity_id && editingCell?.field === "outcome" ? (
-                    <input autoFocus type="text" value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={commitEdit}
-                      onKeyDown={(e) => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") cancelEdit(); }}
-                      className="w-full bg-background border border-accent rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none" />
-                  ) : (
-                    <span className={record.outcome ? "text-foreground" : "text-muted/40 italic"}>{record.outcome || "Click to add..."}</span>
-                  )}
+                  <PermissionGate module="sales" subModule="sales-jobin-meet" action="canEdit" fallback={
+                    <span className={record.outcome ? "text-foreground" : "text-muted/40"}>{record.outcome || "-"}</span>
+                  }>
+                    {editingCell?.oppId === record.opportunity_id && editingCell?.field === "outcome" ? (
+                      <input autoFocus type="text" value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={commitEdit}
+                        onKeyDown={(e) => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") cancelEdit(); }}
+                        className="w-full bg-background border border-accent rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none" />
+                    ) : (
+                      <span className={record.outcome ? "text-foreground" : "text-muted/40 italic"}>{record.outcome || "Click to add..."}</span>
+                    )}
+                  </PermissionGate>
                 </td>
 
                 {/* Form Details */}

@@ -5,6 +5,7 @@ import {
   Loader2, Search, Trash2, Plus, Swords, TrendingUp, TrendingDown,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import PermissionGate from "@/components/PermissionGate";
 
 /* ── Types ─────────────────────────────────────────────────── */
 
@@ -195,13 +196,15 @@ export default function CompetitorTrackerPage() {
           <h1 className="text-2xl font-bold">Competitor Tracker</h1>
           {loading && <Loader2 className="w-5 h-5 animate-spin text-accent" />}
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Add Entry
-        </button>
+        <PermissionGate module="marketing" subModule="marketing-seo-competitor-tracker" action="canCreate">
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add Entry
+          </button>
+        </PermissionGate>
       </div>
 
       {error && (
@@ -380,12 +383,14 @@ export default function CompetitorTrackerPage() {
                     )}
                   </td>
                   <td className="px-4 py-2">
-                    <button
-                      onClick={() => handleDelete(r.id)}
-                      className="text-muted hover:text-red-400 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <PermissionGate module="marketing" subModule="marketing-seo-competitor-tracker" action="canDelete">
+                      <button
+                        onClick={() => handleDelete(r.id)}
+                        className="text-muted hover:text-red-400 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </PermissionGate>
                   </td>
                 </tr>
               ))}
