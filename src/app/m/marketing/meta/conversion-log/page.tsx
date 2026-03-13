@@ -11,6 +11,7 @@ import {
   IndianRupee,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import PermissionGate from "@/components/PermissionGate";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -374,14 +375,16 @@ export default function ConversionLogPage() {
                   />
                 </td>
                 <td className="py-2 px-2">
-                  <button
-                    onClick={handleAdd}
-                    disabled={saving || !formName.trim()}
-                    className="p-1.5 bg-accent text-black rounded hover:bg-accent/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    title="Add Lead"
-                  >
-                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                  </button>
+                  <PermissionGate module="marketing" subModule="marketing-meta-conversion-log" action="canCreate">
+                    <button
+                      onClick={handleAdd}
+                      disabled={saving || !formName.trim()}
+                      className="p-1.5 bg-accent text-black rounded hover:bg-accent/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      title="Add Lead"
+                    >
+                      {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                    </button>
+                  </PermissionGate>
                 </td>
               </tr>
 
@@ -398,26 +401,34 @@ export default function ConversionLogPage() {
                     {lead.phone || "-"}
                   </td>
                   <td className="py-3 px-3 text-center">
-                    <select
-                      value={lead.quality}
-                      onChange={(e) => handleFieldUpdate(lead.id, "quality", e.target.value)}
-                      className={`px-2 py-0.5 rounded-full border text-[11px] font-medium appearance-none text-center cursor-pointer focus:outline-none ${QUALITY_COLORS[lead.quality]}`}
-                    >
-                      {QUALITY_OPTIONS.map((q) => (
-                        <option key={q} value={q}>{q.charAt(0).toUpperCase() + q.slice(1)}</option>
-                      ))}
-                    </select>
+                    <PermissionGate module="marketing" subModule="marketing-meta-conversion-log" action="canEdit" fallback={
+                      <span className={`px-2 py-0.5 rounded-full border text-[11px] font-medium ${QUALITY_COLORS[lead.quality]}`}>{lead.quality}</span>
+                    }>
+                      <select
+                        value={lead.quality}
+                        onChange={(e) => handleFieldUpdate(lead.id, "quality", e.target.value)}
+                        className={`px-2 py-0.5 rounded-full border text-[11px] font-medium appearance-none text-center cursor-pointer focus:outline-none ${QUALITY_COLORS[lead.quality]}`}
+                      >
+                        {QUALITY_OPTIONS.map((q) => (
+                          <option key={q} value={q}>{q.charAt(0).toUpperCase() + q.slice(1)}</option>
+                        ))}
+                      </select>
+                    </PermissionGate>
                   </td>
                   <td className="py-3 px-3 text-center">
-                    <select
-                      value={lead.status}
-                      onChange={(e) => handleFieldUpdate(lead.id, "status", e.target.value)}
-                      className={`px-2 py-0.5 rounded-full border text-[11px] font-medium appearance-none text-center cursor-pointer focus:outline-none ${STATUS_COLORS[lead.status]}`}
-                    >
-                      {STATUS_OPTIONS.map((s) => (
-                        <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
-                      ))}
-                    </select>
+                    <PermissionGate module="marketing" subModule="marketing-meta-conversion-log" action="canEdit" fallback={
+                      <span className={`px-2 py-0.5 rounded-full border text-[11px] font-medium ${STATUS_COLORS[lead.status]}`}>{lead.status}</span>
+                    }>
+                      <select
+                        value={lead.status}
+                        onChange={(e) => handleFieldUpdate(lead.id, "status", e.target.value)}
+                        className={`px-2 py-0.5 rounded-full border text-[11px] font-medium appearance-none text-center cursor-pointer focus:outline-none ${STATUS_COLORS[lead.status]}`}
+                      >
+                        {STATUS_OPTIONS.map((s) => (
+                          <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                        ))}
+                      </select>
+                    </PermissionGate>
                   </td>
                   <td className="py-3 px-3 text-right">
                     {editingRevenue === lead.id ? (
@@ -483,13 +494,15 @@ export default function ConversionLogPage() {
                     )}
                   </td>
                   <td className="py-3 px-2">
-                    <button
-                      onClick={() => handleDelete(lead.id)}
-                      className="p-1 text-muted hover:text-red-400 transition-colors"
-                      title="Delete"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <PermissionGate module="marketing" subModule="marketing-meta-conversion-log" action="canDelete">
+                      <button
+                        onClick={() => handleDelete(lead.id)}
+                        className="p-1 text-muted hover:text-red-400 transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </PermissionGate>
                   </td>
                 </tr>
               ))}

@@ -454,7 +454,7 @@ export default function ExpensesPage() {
 
                   {/* Status */}
                   <td className="px-4 py-2 border-r border-border">
-                    <PermissionGate module="finance" subModule="finance-expenses" action="canApprove">
+                    <PermissionGate module="finance" subModule="finance-expenses" action="canApprove" fallback={<span className="text-[11px]">{e.status}</span>}>
                       <select
                         value={e.status}
                         onChange={(ev) => handleUpdate(e.id, { status: ev.target.value })}

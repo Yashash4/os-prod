@@ -11,6 +11,7 @@ import {
   Zap,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import PermissionGate from "@/components/PermissionGate";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -532,70 +533,82 @@ function CreativeRow({
       </td>
       {/* Status */}
       <td className="py-3 px-3 text-center">
-        <div className="flex items-center justify-center gap-1">
-          {saving && (
-            <Loader2 className="w-3 h-3 animate-spin text-accent flex-shrink-0" />
-          )}
-          <select
-            value={row.status}
-            onChange={(e) => onStatusChange(e.target.value)}
-            className={`px-2 py-1 rounded-md border text-xs font-medium focus:outline-none focus:border-accent ${statusBadgeClass(row.status)}`}
-          >
-            {STATUS_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        <PermissionGate module="marketing" subModule="marketing-meta-creative-tracker" action="canEdit" fallback={
+          <span className={`px-2 py-0.5 rounded-full border text-[11px] font-medium ${statusBadgeClass(row.status)}`}>{STATUS_OPTIONS.find(o => o.value === row.status)?.label || row.status}</span>
+        }>
+          <div className="flex items-center justify-center gap-1">
+            {saving && (
+              <Loader2 className="w-3 h-3 animate-spin text-accent flex-shrink-0" />
+            )}
+            <select
+              value={row.status}
+              onChange={(e) => onStatusChange(e.target.value)}
+              className={`px-2 py-1 rounded-md border text-xs font-medium focus:outline-none focus:border-accent ${statusBadgeClass(row.status)}`}
+            >
+              {STATUS_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </PermissionGate>
       </td>
       {/* Fatigue Score */}
       <td className="py-3 px-3 text-center">
-        <input
-          type="number"
-          min={0}
-          max={10}
-          value={localFatigue}
-          onChange={(e) => setLocalFatigue(e.target.value)}
-          onBlur={() => {
-            const val = Math.min(10, Math.max(0, parseInt(localFatigue) || 0));
-            setLocalFatigue(String(val));
-            if (val !== row.fatigue_score) {
-              onFatigueChange(val);
-            }
-          }}
-          className="w-14 px-2 py-1 bg-background/50 border border-border rounded-md text-foreground text-xs text-center focus:outline-none focus:border-accent"
-        />
+        <PermissionGate module="marketing" subModule="marketing-meta-creative-tracker" action="canEdit" fallback={
+          <span className="text-xs text-foreground">{row.fatigue_score}</span>
+        }>
+          <input
+            type="number"
+            min={0}
+            max={10}
+            value={localFatigue}
+            onChange={(e) => setLocalFatigue(e.target.value)}
+            onBlur={() => {
+              const val = Math.min(10, Math.max(0, parseInt(localFatigue) || 0));
+              setLocalFatigue(String(val));
+              if (val !== row.fatigue_score) {
+                onFatigueChange(val);
+              }
+            }}
+            className="w-14 px-2 py-1 bg-background/50 border border-border rounded-md text-foreground text-xs text-center focus:outline-none focus:border-accent"
+          />
+        </PermissionGate>
       </td>
       {/* Notes */}
       <td className="py-3 px-3 min-w-[180px]">
-        {editingNotes ? (
-          <input
-            type="text"
-            autoFocus
-            value={localNotes}
-            onChange={(e) => setLocalNotes(e.target.value)}
-            onBlur={() => {
-              setEditingNotes(false);
-              if (localNotes !== row.notes) {
-                onNotesChange(localNotes);
-              }
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                (e.target as HTMLInputElement).blur();
-              }
-            }}
-            className="w-full px-2 py-1 bg-background/50 border border-border rounded-md text-foreground text-xs focus:outline-none focus:border-accent"
-          />
-        ) : (
-          <span
-            onClick={() => setEditingNotes(true)}
-            className="block w-full px-2 py-1 text-xs text-muted cursor-pointer hover:text-foreground rounded-md hover:bg-background/50 transition-colors truncate"
-          >
-            {row.notes || "Click to add notes..."}
-          </span>
-        )}
+        <PermissionGate module="marketing" subModule="marketing-meta-creative-tracker" action="canEdit" fallback={
+          <span className="text-xs text-muted">{row.notes || "-"}</span>
+        }>
+          {editingNotes ? (
+            <input
+              type="text"
+              autoFocus
+              value={localNotes}
+              onChange={(e) => setLocalNotes(e.target.value)}
+              onBlur={() => {
+                setEditingNotes(false);
+                if (localNotes !== row.notes) {
+                  onNotesChange(localNotes);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  (e.target as HTMLInputElement).blur();
+                }
+              }}
+              className="w-full px-2 py-1 bg-background/50 border border-border rounded-md text-foreground text-xs focus:outline-none focus:border-accent"
+            />
+          ) : (
+            <span
+              onClick={() => setEditingNotes(true)}
+              className="block w-full px-2 py-1 text-xs text-muted cursor-pointer hover:text-foreground rounded-md hover:bg-background/50 transition-colors truncate"
+            >
+              {row.notes || "Click to add notes..."}
+            </span>
+          )}
+        </PermissionGate>
       </td>
     </tr>
   );

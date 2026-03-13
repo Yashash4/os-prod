@@ -10,6 +10,7 @@ import {
   PauseCircle,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import PermissionGate from "@/components/PermissionGate";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -437,58 +438,66 @@ function CampaignRow({
         {currency(row.cpc)}
       </td>
       <td className="py-3 px-3 text-center">
-        <div className="flex items-center justify-center gap-1">
-          {saving && (
-            <Loader2 className="w-3 h-3 animate-spin text-accent flex-shrink-0" />
-          )}
-          {row.action && !saving ? (
-            <span
-              className={`px-2 py-0.5 rounded-full border text-[11px] font-medium ${actionBadgeClass(row.action)} mr-1`}
+        <PermissionGate module="marketing" subModule="marketing-meta-campaign-tracker" action="canEdit" fallback={
+          row.action ? <span className={`px-2 py-0.5 rounded-full border text-[11px] font-medium ${actionBadgeClass(row.action)}`}>{row.action.replace(/_/g, " ")}</span> : <span className="text-xs text-muted">-</span>
+        }>
+          <div className="flex items-center justify-center gap-1">
+            {saving && (
+              <Loader2 className="w-3 h-3 animate-spin text-accent flex-shrink-0" />
+            )}
+            {row.action && !saving ? (
+              <span
+                className={`px-2 py-0.5 rounded-full border text-[11px] font-medium ${actionBadgeClass(row.action)} mr-1`}
+              >
+                {row.action.replace(/_/g, " ")}
+              </span>
+            ) : null}
+            <select
+              value={row.action}
+              onChange={(e) => onActionChange(e.target.value)}
+              className="px-2 py-1 bg-background/50 border border-border rounded-md text-foreground text-xs focus:outline-none focus:border-accent"
             >
-              {row.action.replace(/_/g, " ")}
-            </span>
-          ) : null}
-          <select
-            value={row.action}
-            onChange={(e) => onActionChange(e.target.value)}
-            className="px-2 py-1 bg-background/50 border border-border rounded-md text-foreground text-xs focus:outline-none focus:border-accent"
-          >
-            {ACTION_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
+              {ACTION_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </PermissionGate>
       </td>
       <td className="py-3 px-3 min-w-[200px]">
-        {editingNotes ? (
-          <input
-            type="text"
-            autoFocus
-            value={localNotes}
-            onChange={(e) => setLocalNotes(e.target.value)}
-            onBlur={() => {
-              setEditingNotes(false);
-              if (localNotes !== row.notes) {
-                onNotesChange(localNotes);
-              }
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                (e.target as HTMLInputElement).blur();
-              }
-            }}
-            className="w-full px-2 py-1 bg-background/50 border border-border rounded-md text-foreground text-xs focus:outline-none focus:border-accent"
-          />
-        ) : (
-          <span
-            onClick={() => setEditingNotes(true)}
-            className="block w-full px-2 py-1 text-xs text-muted cursor-pointer hover:text-foreground rounded-md hover:bg-background/50 transition-colors truncate"
-          >
-            {row.notes || "Click to add notes..."}
-          </span>
-        )}
+        <PermissionGate module="marketing" subModule="marketing-meta-campaign-tracker" action="canEdit" fallback={
+          <span className="text-xs text-muted">{row.notes || "-"}</span>
+        }>
+          {editingNotes ? (
+            <input
+              type="text"
+              autoFocus
+              value={localNotes}
+              onChange={(e) => setLocalNotes(e.target.value)}
+              onBlur={() => {
+                setEditingNotes(false);
+                if (localNotes !== row.notes) {
+                  onNotesChange(localNotes);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  (e.target as HTMLInputElement).blur();
+                }
+              }}
+              className="w-full px-2 py-1 bg-background/50 border border-border rounded-md text-foreground text-xs focus:outline-none focus:border-accent"
+            />
+          ) : (
+            <span
+              onClick={() => setEditingNotes(true)}
+              className="block w-full px-2 py-1 text-xs text-muted cursor-pointer hover:text-foreground rounded-md hover:bg-background/50 transition-colors truncate"
+            >
+              {row.notes || "Click to add notes..."}
+            </span>
+          )}
+        </PermissionGate>
       </td>
     </tr>
   );

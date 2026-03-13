@@ -18,6 +18,7 @@ import { SalesManagementSkeleton } from "@/components/Skeleton";
 import PaymentLinkModal from "@/components/PaymentLinkModal";
 import InvoiceSendModal from "@/components/InvoiceSendModal";
 import { apiFetch } from "@/lib/api-fetch";
+import PermissionGate from "@/components/PermissionGate";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -325,38 +326,50 @@ export default function SalesManagementPage() {
 
                 {/* Closed Date (editable) */}
                 <td className="px-3 py-2 text-xs border-r border-border">
-                  <input
-                    type="date"
-                    value={record.closed_date ? new Date(record.closed_date).toISOString().slice(0, 10) : ""}
-                    onChange={(e) => updateSalesRecord(record.opportunity_id, { closed_date: e.target.value || null })}
-                    className="bg-transparent border-none text-xs text-foreground focus:outline-none cursor-pointer [color-scheme:dark] w-full"
-                  />
+                  <PermissionGate module="sales" subModule="sales-maverick-sales" action="canEdit" fallback={
+                    <span className="text-xs text-foreground">{record.closed_date ? new Date(record.closed_date).toLocaleDateString("en-IN") : "-"}</span>
+                  }>
+                    <input
+                      type="date"
+                      value={record.closed_date ? new Date(record.closed_date).toISOString().slice(0, 10) : ""}
+                      onChange={(e) => updateSalesRecord(record.opportunity_id, { closed_date: e.target.value || null })}
+                      className="bg-transparent border-none text-xs text-foreground focus:outline-none cursor-pointer [color-scheme:dark] w-full"
+                    />
+                  </PermissionGate>
                 </td>
 
                 {/* Fees Quoted (editable) */}
                 <td className="px-3 py-2 text-xs border-r border-border cursor-pointer" onClick={() => startEdit(record.opportunity_id, "fees_quoted", String(record.fees_quoted || ""))}>
-                  {editingCell?.oppId === record.opportunity_id && editingCell?.field === "fees_quoted" ? (
-                    <input autoFocus type="number" value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={commitEdit}
-                      onKeyDown={(e) => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") cancelEdit(); }}
-                      className="w-full bg-background border border-accent rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none" />
-                  ) : (
-                    <span className={record.fees_quoted ? "text-foreground" : "text-muted/40 italic"}>
-                      {record.fees_quoted ? `₹${Number(record.fees_quoted).toLocaleString()}` : "Click to add..."}
-                    </span>
-                  )}
+                  <PermissionGate module="sales" subModule="sales-maverick-sales" action="canEdit" fallback={
+                    <span className={record.fees_quoted ? "text-foreground" : "text-muted/40"}>{record.fees_quoted ? `₹${Number(record.fees_quoted).toLocaleString()}` : "-"}</span>
+                  }>
+                    {editingCell?.oppId === record.opportunity_id && editingCell?.field === "fees_quoted" ? (
+                      <input autoFocus type="number" value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={commitEdit}
+                        onKeyDown={(e) => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") cancelEdit(); }}
+                        className="w-full bg-background border border-accent rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none" />
+                    ) : (
+                      <span className={record.fees_quoted ? "text-foreground" : "text-muted/40 italic"}>
+                        {record.fees_quoted ? `₹${Number(record.fees_quoted).toLocaleString()}` : "Click to add..."}
+                      </span>
+                    )}
+                  </PermissionGate>
                 </td>
 
                 {/* Fees Collected (editable) */}
                 <td className="px-3 py-2 text-xs border-r border-border cursor-pointer" onClick={() => startEdit(record.opportunity_id, "fees_collected", String(record.fees_collected || ""))}>
-                  {editingCell?.oppId === record.opportunity_id && editingCell?.field === "fees_collected" ? (
-                    <input autoFocus type="number" value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={commitEdit}
-                      onKeyDown={(e) => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") cancelEdit(); }}
-                      className="w-full bg-background border border-accent rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none" />
-                  ) : (
-                    <span className={record.fees_collected ? "text-green-400" : "text-muted/40 italic"}>
-                      {record.fees_collected ? `₹${Number(record.fees_collected).toLocaleString()}` : "Click to add..."}
-                    </span>
-                  )}
+                  <PermissionGate module="sales" subModule="sales-maverick-sales" action="canEdit" fallback={
+                    <span className={record.fees_collected ? "text-green-400" : "text-muted/40"}>{record.fees_collected ? `₹${Number(record.fees_collected).toLocaleString()}` : "-"}</span>
+                  }>
+                    {editingCell?.oppId === record.opportunity_id && editingCell?.field === "fees_collected" ? (
+                      <input autoFocus type="number" value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={commitEdit}
+                        onKeyDown={(e) => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") cancelEdit(); }}
+                        className="w-full bg-background border border-accent rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none" />
+                    ) : (
+                      <span className={record.fees_collected ? "text-green-400" : "text-muted/40 italic"}>
+                        {record.fees_collected ? `₹${Number(record.fees_collected).toLocaleString()}` : "Click to add..."}
+                      </span>
+                    )}
+                  </PermissionGate>
                 </td>
 
                 {/* Pending Amount (auto-calculated, read-only) */}
@@ -368,59 +381,79 @@ export default function SalesManagementPage() {
 
                 {/* Payment Mode (dropdown) */}
                 <td className="px-2 py-1.5 border-r border-border">
-                  <select
-                    value={record.payment_mode || ""}
-                    onChange={(e) => updateSalesRecord(record.opportunity_id, { payment_mode: e.target.value || null })}
-                    className="w-full bg-transparent text-xs text-foreground border-none focus:outline-none cursor-pointer [&>option]:bg-surface"
-                  >
-                    <option value="">Select...</option>
-                    {PAYMENT_MODES.map((m) => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
-                  </select>
+                  <PermissionGate module="sales" subModule="sales-maverick-sales" action="canEdit" fallback={
+                    <span className="text-xs text-foreground">{record.payment_mode || "-"}</span>
+                  }>
+                    <select
+                      value={record.payment_mode || ""}
+                      onChange={(e) => updateSalesRecord(record.opportunity_id, { payment_mode: e.target.value || null })}
+                      className="w-full bg-transparent text-xs text-foreground border-none focus:outline-none cursor-pointer [&>option]:bg-surface"
+                    >
+                      <option value="">Select...</option>
+                      {PAYMENT_MODES.map((m) => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                  </PermissionGate>
                 </td>
 
                 {/* Invoice Number (editable) */}
                 <td className="px-3 py-2 text-xs border-r border-border cursor-pointer" onClick={() => startEdit(record.opportunity_id, "invoice_number", record.invoice_number || "")}>
-                  {editingCell?.oppId === record.opportunity_id && editingCell?.field === "invoice_number" ? (
-                    <input autoFocus type="text" value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={commitEdit}
-                      onKeyDown={(e) => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") cancelEdit(); }}
-                      className="w-full bg-background border border-accent rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none" />
-                  ) : (
-                    <span className={record.invoice_number ? "text-foreground" : "text-muted/40 italic"}>{record.invoice_number || "Click to add..."}</span>
-                  )}
+                  <PermissionGate module="sales" subModule="sales-maverick-sales" action="canEdit" fallback={
+                    <span className={record.invoice_number ? "text-foreground" : "text-muted/40"}>{record.invoice_number || "-"}</span>
+                  }>
+                    {editingCell?.oppId === record.opportunity_id && editingCell?.field === "invoice_number" ? (
+                      <input autoFocus type="text" value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={commitEdit}
+                        onKeyDown={(e) => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") cancelEdit(); }}
+                        className="w-full bg-background border border-accent rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none" />
+                    ) : (
+                      <span className={record.invoice_number ? "text-foreground" : "text-muted/40 italic"}>{record.invoice_number || "Click to add..."}</span>
+                    )}
+                  </PermissionGate>
                 </td>
 
                 {/* Collection Status (dropdown) */}
                 <td className="px-2 py-1.5 border-r border-border">
-                  <CollectionStatusDropdown
-                    current={record.collection_status}
-                    onChange={(s) => updateSalesRecord(record.opportunity_id, { collection_status: s })}
-                  />
+                  <PermissionGate module="sales" subModule="sales-maverick-sales" action="canApprove" fallback={
+                    <span className="text-[11px]">{COLLECTION_STATUSES.find(c => c.value === record.collection_status)?.label || record.collection_status}</span>
+                  }>
+                    <CollectionStatusDropdown
+                      current={record.collection_status}
+                      onChange={(s) => updateSalesRecord(record.opportunity_id, { collection_status: s })}
+                    />
+                  </PermissionGate>
                 </td>
 
                 {/* Onboarding Status (dropdown) */}
                 <td className="px-2 py-1.5 border-r border-border">
-                  <select
-                    value={record.onboarding_status || "not_started"}
-                    onChange={(e) => updateSalesRecord(record.opportunity_id, { onboarding_status: e.target.value })}
-                    className="w-full bg-transparent text-xs text-foreground border-none focus:outline-none cursor-pointer [&>option]:bg-surface"
-                  >
-                    {ONBOARDING_STATUSES.map((s) => (
-                      <option key={s.value} value={s.value}>{s.label}</option>
-                    ))}
-                  </select>
+                  <PermissionGate module="sales" subModule="sales-maverick-sales" action="canApprove" fallback={
+                    <span className="text-[11px]">{ONBOARDING_STATUSES.find(s => s.value === (record.onboarding_status || "not_started"))?.label || record.onboarding_status}</span>
+                  }>
+                    <select
+                      value={record.onboarding_status || "not_started"}
+                      onChange={(e) => updateSalesRecord(record.opportunity_id, { onboarding_status: e.target.value })}
+                      className="w-full bg-transparent text-xs text-foreground border-none focus:outline-none cursor-pointer [&>option]:bg-surface"
+                    >
+                      {ONBOARDING_STATUSES.map((s) => (
+                        <option key={s.value} value={s.value}>{s.label}</option>
+                      ))}
+                    </select>
+                  </PermissionGate>
                 </td>
 
                 {/* Notes (editable) */}
                 <td className="px-3 py-2 text-xs border-r border-border cursor-pointer" onClick={() => startEdit(record.opportunity_id, "notes", record.sales_notes || "")}>
-                  {editingCell?.oppId === record.opportunity_id && editingCell?.field === "notes" ? (
-                    <input autoFocus type="text" value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={commitEdit}
-                      onKeyDown={(e) => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") cancelEdit(); }}
-                      className="w-full bg-background border border-accent rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none" />
-                  ) : (
-                    <span className={record.sales_notes ? "text-foreground" : "text-muted/40 italic"}>{record.sales_notes || "Click to add..."}</span>
-                  )}
+                  <PermissionGate module="sales" subModule="sales-maverick-sales" action="canEdit" fallback={
+                    <span className={record.sales_notes ? "text-foreground" : "text-muted/40"}>{record.sales_notes || "-"}</span>
+                  }>
+                    {editingCell?.oppId === record.opportunity_id && editingCell?.field === "notes" ? (
+                      <input autoFocus type="text" value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={commitEdit}
+                        onKeyDown={(e) => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") cancelEdit(); }}
+                        className="w-full bg-background border border-accent rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none" />
+                    ) : (
+                      <span className={record.sales_notes ? "text-foreground" : "text-muted/40 italic"}>{record.sales_notes || "Click to add..."}</span>
+                    )}
+                  </PermissionGate>
                 </td>
 
                 {/* Actions */}
@@ -429,20 +462,24 @@ export default function SalesManagementPage() {
                     {record.contact_phone && <a href={`tel:${record.contact_phone}`} className="p-1 rounded hover:bg-green-500/10 text-muted hover:text-green-400 transition-colors" title="Call"><Phone className="w-3.5 h-3.5" /></a>}
                     {record.contact_email && <a href={`mailto:${record.contact_email}`} className="p-1 rounded hover:bg-blue-500/10 text-muted hover:text-blue-400 transition-colors" title="Email"><Mail className="w-3.5 h-3.5" /></a>}
                     {record.contact_phone && <a href={`https://wa.me/${record.contact_phone.replace(/[^0-9]/g, "")}`} target="_blank" rel="noopener noreferrer" className="p-1 rounded hover:bg-green-500/10 text-muted hover:text-green-400 transition-colors" title="WhatsApp"><MessageSquare className="w-3.5 h-3.5" /></a>}
-                    <button
-                      onClick={() => setPaymentLinkRecord(record)}
-                      className={`p-1 rounded hover:bg-indigo-500/10 transition-colors ${record.payment_link_url ? "text-indigo-400" : "text-muted hover:text-indigo-400"}`}
-                      title={record.payment_link_url ? "Resend Payment Link" : "Send Payment Link"}
-                    >
-                      <IndianRupee className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => setInvoiceRecord(record)}
-                      className={`p-1 rounded hover:bg-amber-500/10 transition-colors ${record.invoice_number ? "text-amber-400" : "text-muted hover:text-amber-400"}`}
-                      title={record.invoice_number ? `Invoice: ${record.invoice_number}` : "Send Invoice"}
-                    >
-                      <FileText className="w-3.5 h-3.5" />
-                    </button>
+                    <PermissionGate module="sales" subModule="sales-maverick-sales" action="canEdit">
+                      <button
+                        onClick={() => setPaymentLinkRecord(record)}
+                        className={`p-1 rounded hover:bg-indigo-500/10 transition-colors ${record.payment_link_url ? "text-indigo-400" : "text-muted hover:text-indigo-400"}`}
+                        title={record.payment_link_url ? "Resend Payment Link" : "Send Payment Link"}
+                      >
+                        <IndianRupee className="w-3.5 h-3.5" />
+                      </button>
+                    </PermissionGate>
+                    <PermissionGate module="sales" subModule="sales-maverick-sales" action="canEdit">
+                      <button
+                        onClick={() => setInvoiceRecord(record)}
+                        className={`p-1 rounded hover:bg-amber-500/10 transition-colors ${record.invoice_number ? "text-amber-400" : "text-muted hover:text-amber-400"}`}
+                        title={record.invoice_number ? `Invoice: ${record.invoice_number}` : "Send Invoice"}
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                      </button>
+                    </PermissionGate>
                   </div>
                 </td>
               </tr>

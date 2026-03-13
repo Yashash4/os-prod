@@ -6,6 +6,7 @@ import {
   Eye, BookOpen, Archive,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import PermissionGate from "@/components/PermissionGate";
 
 /* ── Types ─────────────────────────────────────────────────── */
 
@@ -170,13 +171,15 @@ export default function ContentBriefsPage() {
           <h1 className="text-2xl font-bold">Content Briefs</h1>
           {loading && <Loader2 className="w-5 h-5 animate-spin text-accent" />}
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          New Brief
-        </button>
+        <PermissionGate module="marketing" subModule="marketing-seo-content-briefs" action="canCreate">
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            New Brief
+          </button>
+        </PermissionGate>
       </div>
 
       {error && (
@@ -336,15 +339,17 @@ export default function ContentBriefsPage() {
                     )}
                   </td>
                   <td className="px-4 py-2">
-                    <select
-                      value={r.status}
-                      onChange={(e) => handleUpdate(r.id, "status", e.target.value)}
-                      className="bg-background/50 border border-border rounded px-2 py-1 text-xs"
-                    >
-                      {STATUSES.map((s) => (
-                        <option key={s} value={s}>{STATUS_LABELS[s]}</option>
-                      ))}
-                    </select>
+                    <PermissionGate module="marketing" subModule="marketing-seo-content-briefs" action="canEdit" fallback={<span className="text-xs">{STATUS_LABELS[r.status] || r.status}</span>}>
+                      <select
+                        value={r.status}
+                        onChange={(e) => handleUpdate(r.id, "status", e.target.value)}
+                        className="bg-background/50 border border-border rounded px-2 py-1 text-xs"
+                      >
+                        {STATUSES.map((s) => (
+                          <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                        ))}
+                      </select>
+                    </PermissionGate>
                   </td>
                   <td className="px-4 py-2 text-right text-xs">
                     {r.word_count_target ? r.word_count_target.toLocaleString("en-IN") : "-"}
@@ -412,12 +417,14 @@ export default function ContentBriefsPage() {
                     )}
                   </td>
                   <td className="px-4 py-2">
-                    <button
-                      onClick={() => handleDelete(r.id)}
-                      className="text-muted hover:text-red-400 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <PermissionGate module="marketing" subModule="marketing-seo-content-briefs" action="canDelete">
+                      <button
+                        onClick={() => handleDelete(r.id)}
+                        className="text-muted hover:text-red-400 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </PermissionGate>
                   </td>
                 </tr>
               ))}

@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import PaymentLinkModal from "@/components/PaymentLinkModal";
 import { apiFetch } from "@/lib/api-fetch";
+import PermissionGate from "@/components/PermissionGate";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -501,41 +502,45 @@ export default function FailedPaymentsPage() {
                           Untracked
                         </span>
                       ) : (
-                        <TrackingStatusDropdown
-                          current={row.tracking!.status}
-                          onChange={(s) => updateTracking(row.payment.id, { status: s })}
-                        />
+                        <PermissionGate module="payments" subModule="payments-failed" action="canApprove" fallback={<span className="text-[11px] font-medium">{TRACKING_STATUSES.find((s) => s.value === row.tracking!.status)?.label ?? row.tracking!.status}</span>}>
+                          <TrackingStatusDropdown
+                            current={row.tracking!.status}
+                            onChange={(s) => updateTracking(row.payment.id, { status: s })}
+                          />
+                        </PermissionGate>
                       )}
                     </td>
 
                     {/* Notes */}
-                    <td
-                      className="px-3 py-2 text-xs border-r border-border cursor-pointer"
-                      onClick={() => {
-                        if (!isUntracked) {
-                          startEdit(row.payment.id, "notes", row.tracking?.notes || "");
-                        }
-                      }}
-                    >
+                    <td className="px-3 py-2 text-xs border-r border-border">
                       {isUntracked ? (
                         <span className="text-muted/40 italic">Track first...</span>
-                      ) : editingCell?.paymentId === row.payment.id && editingCell?.field === "notes" ? (
-                        <input
-                          autoFocus
-                          type="text"
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          onBlur={commitEdit}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") commitEdit();
-                            if (e.key === "Escape") cancelEdit();
-                          }}
-                          className="w-full bg-background border border-accent rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none"
-                        />
                       ) : (
-                        <span className={row.tracking?.notes ? "text-foreground" : "text-muted/40 italic"}>
-                          {row.tracking?.notes || "Click to add..."}
-                        </span>
+                        <PermissionGate module="payments" subModule="payments-failed" action="canEdit" fallback={<span className="text-xs text-muted">{row.tracking?.notes || "-"}</span>}>
+                          <div
+                            className="cursor-pointer"
+                            onClick={() => startEdit(row.payment.id, "notes", row.tracking?.notes || "")}
+                          >
+                            {editingCell?.paymentId === row.payment.id && editingCell?.field === "notes" ? (
+                              <input
+                                autoFocus
+                                type="text"
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                onBlur={commitEdit}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") commitEdit();
+                                  if (e.key === "Escape") cancelEdit();
+                                }}
+                                className="w-full bg-background border border-accent rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none"
+                              />
+                            ) : (
+                              <span className={row.tracking?.notes ? "text-foreground" : "text-muted/40 italic"}>
+                                {row.tracking?.notes || "Click to add..."}
+                              </span>
+                            )}
+                          </div>
+                        </PermissionGate>
                       )}
                     </td>
 
@@ -543,18 +548,20 @@ export default function FailedPaymentsPage() {
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-1.5">
                         {isUntracked ? (
-                          <button
-                            onClick={() => trackPayment(row)}
-                            disabled={isTrackingInProgress}
-                            className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md bg-accent/10 border border-accent/20 text-accent hover:bg-accent/20 transition-colors disabled:opacity-50"
-                          >
-                            {isTrackingInProgress ? (
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                            ) : (
-                              <Eye className="w-3 h-3" />
-                            )}
-                            Track
-                          </button>
+                          <PermissionGate module="payments" subModule="payments-failed" action="canCreate">
+                            <button
+                              onClick={() => trackPayment(row)}
+                              disabled={isTrackingInProgress}
+                              className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md bg-accent/10 border border-accent/20 text-accent hover:bg-accent/20 transition-colors disabled:opacity-50"
+                            >
+                              {isTrackingInProgress ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <Eye className="w-3 h-3" />
+                              )}
+                              Track
+                            </button>
+                          </PermissionGate>
                         ) : (
                           <>
                             {contactPhone && (

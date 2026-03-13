@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { DataTableSkeleton } from "@/components/Skeleton";
 import { apiFetch } from "@/lib/api-fetch";
+import PermissionGate from "@/components/PermissionGate";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -351,10 +352,12 @@ export default function OnboardingManagementPage() {
 
                     {/* Status (dropdown) */}
                     <td className="px-2 py-1.5 border-r border-border">
-                      <StatusDropdown
-                        current={record.onboarding_status}
-                        onChange={(s) => updateRecord(record.opportunity_id, { onboarding_status: s })}
-                      />
+                      <PermissionGate module="sales" subModule="sales-onboarding-management" action="canApprove" fallback={<span className="text-[11px]">{ONBOARDING_STATUS_CONFIG[record.onboarding_status]?.label || record.onboarding_status}</span>}>
+                        <StatusDropdown
+                          current={record.onboarding_status}
+                          onChange={(s) => updateRecord(record.opportunity_id, { onboarding_status: s })}
+                        />
+                      </PermissionGate>
                     </td>
 
                     {/* Assigned Onboarder (editable) */}
@@ -362,38 +365,54 @@ export default function OnboardingManagementPage() {
                       className="px-3 py-2 text-xs border-r border-border cursor-pointer"
                       onClick={() => startEdit(record.opportunity_id, "assigned_onboarder", record.assigned_onboarder || "")}
                     >
-                      {editingCell?.oppId === record.opportunity_id && editingCell?.field === "assigned_onboarder" ? (
-                        <input autoFocus type="text" value={editValue} onChange={(e) => setEditValue(e.target.value)}
-                          onBlur={commitEdit} onKeyDown={(e) => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") cancelEdit(); }}
-                          className="w-full bg-background border border-accent rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none" />
-                      ) : (
-                        <span className={record.assigned_onboarder ? "text-foreground" : "text-muted/40 italic"}>{record.assigned_onboarder || "Click to assign..."}</span>
-                      )}
+                      <PermissionGate module="sales" subModule="sales-onboarding-management" action="canEdit" fallback={
+                        <span className={record.assigned_onboarder ? "text-foreground" : "text-muted/40"}>{record.assigned_onboarder || "-"}</span>
+                      }>
+                        {editingCell?.oppId === record.opportunity_id && editingCell?.field === "assigned_onboarder" ? (
+                          <input autoFocus type="text" value={editValue} onChange={(e) => setEditValue(e.target.value)}
+                            onBlur={commitEdit} onKeyDown={(e) => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") cancelEdit(); }}
+                            className="w-full bg-background border border-accent rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none" />
+                        ) : (
+                          <span className={record.assigned_onboarder ? "text-foreground" : "text-muted/40 italic"}>{record.assigned_onboarder || "Click to assign..."}</span>
+                        )}
+                      </PermissionGate>
                     </td>
 
                     {/* Meeting Date (editable) */}
                     <td className="px-2 py-1.5 border-r border-border">
-                      <input
-                        type="date"
-                        value={record.meeting_date || ""}
-                        onChange={(e) => updateRecord(record.opportunity_id, { meeting_date: e.target.value || null })}
-                        className="w-full bg-transparent border-0 text-xs text-foreground focus:outline-none [color-scheme:dark]"
-                      />
+                      <PermissionGate module="sales" subModule="sales-onboarding-management" action="canEdit" fallback={
+                        <span className="text-xs text-foreground">{record.meeting_date || "-"}</span>
+                      }>
+                        <input
+                          type="date"
+                          value={record.meeting_date || ""}
+                          onChange={(e) => updateRecord(record.opportunity_id, { meeting_date: e.target.value || null })}
+                          className="w-full bg-transparent border-0 text-xs text-foreground focus:outline-none [color-scheme:dark]"
+                        />
+                      </PermissionGate>
                     </td>
 
                     {/* Brand Rating (stars) */}
                     <td className="px-2 py-1.5 border-r border-border">
-                      <div className="flex items-center gap-0.5">
-                        {[1, 2, 3, 4, 5].map((s) => (
-                          <button
-                            key={s}
-                            onClick={() => updateRecord(record.opportunity_id, { brand_rating: s === record.brand_rating ? null : s })}
-                            className="p-0"
-                          >
-                            <Star className={`w-3.5 h-3.5 ${s <= (record.brand_rating || 0) ? "text-amber-400 fill-amber-400" : "text-zinc-600 hover:text-zinc-400"}`} />
-                          </button>
-                        ))}
-                      </div>
+                      <PermissionGate module="sales" subModule="sales-onboarding-management" action="canEdit" fallback={
+                        <div className="flex items-center gap-0.5">
+                          {[1, 2, 3, 4, 5].map((s) => (
+                            <Star key={s} className={`w-3.5 h-3.5 ${s <= (record.brand_rating || 0) ? "text-amber-400 fill-amber-400" : "text-zinc-600"}`} />
+                          ))}
+                        </div>
+                      }>
+                        <div className="flex items-center gap-0.5">
+                          {[1, 2, 3, 4, 5].map((s) => (
+                            <button
+                              key={s}
+                              onClick={() => updateRecord(record.opportunity_id, { brand_rating: s === record.brand_rating ? null : s })}
+                              className="p-0"
+                            >
+                              <Star className={`w-3.5 h-3.5 ${s <= (record.brand_rating || 0) ? "text-amber-400 fill-amber-400" : "text-zinc-600 hover:text-zinc-400"}`} />
+                            </button>
+                          ))}
+                        </div>
+                      </PermissionGate>
                     </td>
 
                     {/* Brand Description (editable) */}
@@ -401,13 +420,17 @@ export default function OnboardingManagementPage() {
                       className="px-3 py-2 text-xs border-r border-border cursor-pointer"
                       onClick={() => startEdit(record.opportunity_id, "brand_description", record.brand_description || "")}
                     >
-                      {editingCell?.oppId === record.opportunity_id && editingCell?.field === "brand_description" ? (
-                        <input autoFocus type="text" value={editValue} onChange={(e) => setEditValue(e.target.value)}
-                          onBlur={commitEdit} onKeyDown={(e) => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") cancelEdit(); }}
-                          className="w-full bg-background border border-accent rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none" />
-                      ) : (
-                        <span className={record.brand_description ? "text-foreground" : "text-muted/40 italic"}>{record.brand_description || "Click to add..."}</span>
-                      )}
+                      <PermissionGate module="sales" subModule="sales-onboarding-management" action="canEdit" fallback={
+                        <span className={record.brand_description ? "text-foreground" : "text-muted/40"}>{record.brand_description || "-"}</span>
+                      }>
+                        {editingCell?.oppId === record.opportunity_id && editingCell?.field === "brand_description" ? (
+                          <input autoFocus type="text" value={editValue} onChange={(e) => setEditValue(e.target.value)}
+                            onBlur={commitEdit} onKeyDown={(e) => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") cancelEdit(); }}
+                            className="w-full bg-background border border-accent rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none" />
+                        ) : (
+                          <span className={record.brand_description ? "text-foreground" : "text-muted/40 italic"}>{record.brand_description || "Click to add..."}</span>
+                        )}
+                      </PermissionGate>
                     </td>
 
                     {/* Meeting Notes (editable) */}
@@ -415,13 +438,17 @@ export default function OnboardingManagementPage() {
                       className="px-3 py-2 text-xs border-r border-border cursor-pointer"
                       onClick={() => startEdit(record.opportunity_id, "meeting_notes", record.meeting_notes || "")}
                     >
-                      {editingCell?.oppId === record.opportunity_id && editingCell?.field === "meeting_notes" ? (
-                        <input autoFocus type="text" value={editValue} onChange={(e) => setEditValue(e.target.value)}
-                          onBlur={commitEdit} onKeyDown={(e) => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") cancelEdit(); }}
-                          className="w-full bg-background border border-accent rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none" />
-                      ) : (
-                        <span className={record.meeting_notes ? "text-foreground" : "text-muted/40 italic"}>{record.meeting_notes || "Click to add..."}</span>
-                      )}
+                      <PermissionGate module="sales" subModule="sales-onboarding-management" action="canEdit" fallback={
+                        <span className={record.meeting_notes ? "text-foreground" : "text-muted/40"}>{record.meeting_notes || "-"}</span>
+                      }>
+                        {editingCell?.oppId === record.opportunity_id && editingCell?.field === "meeting_notes" ? (
+                          <input autoFocus type="text" value={editValue} onChange={(e) => setEditValue(e.target.value)}
+                            onBlur={commitEdit} onKeyDown={(e) => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") cancelEdit(); }}
+                            className="w-full bg-background border border-accent rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none" />
+                        ) : (
+                          <span className={record.meeting_notes ? "text-foreground" : "text-muted/40 italic"}>{record.meeting_notes || "Click to add..."}</span>
+                        )}
+                      </PermissionGate>
                     </td>
 
                     {/* Client Notes (editable) */}
@@ -429,13 +456,17 @@ export default function OnboardingManagementPage() {
                       className="px-3 py-2 text-xs border-r border-border cursor-pointer"
                       onClick={() => startEdit(record.opportunity_id, "client_notes", record.client_notes || "")}
                     >
-                      {editingCell?.oppId === record.opportunity_id && editingCell?.field === "client_notes" ? (
-                        <input autoFocus type="text" value={editValue} onChange={(e) => setEditValue(e.target.value)}
-                          onBlur={commitEdit} onKeyDown={(e) => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") cancelEdit(); }}
-                          className="w-full bg-background border border-accent rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none" />
-                      ) : (
-                        <span className={record.client_notes ? "text-foreground" : "text-muted/40 italic"}>{record.client_notes || "Click to add..."}</span>
-                      )}
+                      <PermissionGate module="sales" subModule="sales-onboarding-management" action="canEdit" fallback={
+                        <span className={record.client_notes ? "text-foreground" : "text-muted/40"}>{record.client_notes || "-"}</span>
+                      }>
+                        {editingCell?.oppId === record.opportunity_id && editingCell?.field === "client_notes" ? (
+                          <input autoFocus type="text" value={editValue} onChange={(e) => setEditValue(e.target.value)}
+                            onBlur={commitEdit} onKeyDown={(e) => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") cancelEdit(); }}
+                            className="w-full bg-background border border-accent rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none" />
+                        ) : (
+                          <span className={record.client_notes ? "text-foreground" : "text-muted/40 italic"}>{record.client_notes || "Click to add..."}</span>
+                        )}
+                      </PermissionGate>
                     </td>
 
                     {/* Fees Quoted (read-only, from Sales Management) */}
@@ -454,12 +485,16 @@ export default function OnboardingManagementPage() {
 
                     {/* Follow-up Date (editable) */}
                     <td className="px-2 py-1.5 border-r border-border">
-                      <input
-                        type="date"
-                        value={record.follow_up_date || ""}
-                        onChange={(e) => updateRecord(record.opportunity_id, { follow_up_date: e.target.value || null })}
-                        className="w-full bg-transparent border-0 text-xs text-foreground focus:outline-none [color-scheme:dark]"
-                      />
+                      <PermissionGate module="sales" subModule="sales-onboarding-management" action="canEdit" fallback={
+                        <span className="text-xs text-foreground">{record.follow_up_date || "-"}</span>
+                      }>
+                        <input
+                          type="date"
+                          value={record.follow_up_date || ""}
+                          onChange={(e) => updateRecord(record.opportunity_id, { follow_up_date: e.target.value || null })}
+                          className="w-full bg-transparent border-0 text-xs text-foreground focus:outline-none [color-scheme:dark]"
+                        />
+                      </PermissionGate>
                     </td>
 
                     {/* Checklist progress */}

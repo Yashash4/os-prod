@@ -10,6 +10,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import PermissionGate from "@/components/PermissionGate";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -311,14 +312,16 @@ export default function SOPTrackerPage() {
               onChange={(e) => setSelectedMonth(e.target.value)}
               className="bg-surface border border-border rounded-lg px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-[#B8860B] [color-scheme:dark]"
             />
-            <button
-              onClick={syncMonth}
-              disabled={syncing}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#B8860B] hover:bg-[#9A7209] text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
-            >
-              {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-              {syncing ? "Syncing..." : "Sync Month"}
-            </button>
+            <PermissionGate module="marketing" subModule="content-sop-tracker" action="canCreate">
+              <button
+                onClick={syncMonth}
+                disabled={syncing}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#B8860B] hover:bg-[#9A7209] text-white text-sm font-medium rounded-lg transition:colors disabled:opacity-50"
+              >
+                {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                {syncing ? "Syncing..." : "Sync Month"}
+              </button>
+            </PermissionGate>
           </div>
         </div>
         {syncMsg && (
@@ -422,30 +425,32 @@ export default function SOPTrackerPage() {
 
                     {/* Actions */}
                     <td className="px-3 py-2">
-                      {deletingId === entry.id ? (
-                        <div className="flex items-center gap-1">
+                      <PermissionGate module="marketing" subModule="content-sop-tracker" action="canDelete">
+                        {deletingId === entry.id ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => deleteEntry(entry.id)}
+                              className="px-1.5 py-0.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-[10px] rounded transition-colors"
+                            >
+                              Yes
+                            </button>
+                            <button
+                              onClick={() => setDeletingId(null)}
+                              className="px-1.5 py-0.5 bg-surface hover:bg-surface-hover text-muted text-[10px] rounded transition-colors border border-border"
+                            >
+                              No
+                            </button>
+                          </div>
+                        ) : (
                           <button
-                            onClick={() => deleteEntry(entry.id)}
-                            className="px-1.5 py-0.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-[10px] rounded transition-colors"
+                            onClick={() => setDeletingId(entry.id)}
+                            className="p-1 rounded hover:bg-red-500/10 text-muted hover:text-red-400 transition-colors"
+                            title="Delete entry"
                           >
-                            Yes
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
-                          <button
-                            onClick={() => setDeletingId(null)}
-                            className="px-1.5 py-0.5 bg-surface hover:bg-surface-hover text-muted text-[10px] rounded transition-colors border border-border"
-                          >
-                            No
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setDeletingId(entry.id)}
-                          className="p-1 rounded hover:bg-red-500/10 text-muted hover:text-red-400 transition-colors"
-                          title="Delete entry"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                        )}
+                      </PermissionGate>
                     </td>
                   </tr>
                 ))
