@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSubModuleAccess } from "@/lib/api-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { scopeQuery } from "@/lib/data-scope";
+import { scopeQuery, verifyScopeAccess } from "@/lib/data-scope";
 
 export async function GET(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "hr", "hr-payroll");
@@ -121,6 +121,9 @@ export async function PUT(req: NextRequest) {
   const { id, ...updates } = body;
 
   if (!id) return NextResponse.json({ error: "ID is required" }, { status: 400 });
+
+  const allowed = await verifyScopeAccess(result.scope, "hr_salary_cycles", id, "employee_id", true);
+  if (!allowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
 
   // Recalculate net if amounts change
   if (updates.base_amount !== undefined || updates.commission_amount !== undefined || updates.deductions !== undefined) {

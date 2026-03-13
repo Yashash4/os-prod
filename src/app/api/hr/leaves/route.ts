@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSubModuleAccess } from "@/lib/api-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { scopeQuery } from "@/lib/data-scope";
+import { scopeQuery, verifyScopeAccess } from "@/lib/data-scope";
 import { sendNotification } from "@/lib/notify";
 
 export async function GET(req: NextRequest) {
@@ -137,6 +137,10 @@ export async function PUT(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Verify scope access on the leave request
+    const scopeAllowed = await verifyScopeAccess(result.scope, "leave_requests", id, "employee_id", true);
+    if (!scopeAllowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
 
     // Get the leave request first
     const { data: leaveReq, error: fetchErr } = await supabaseAdmin

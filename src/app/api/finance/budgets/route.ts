@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSubModuleAccess } from "@/lib/api-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { verifyScopeAccess } from "@/lib/data-scope";
 
 export async function GET(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "finance", "finance-budgets");
@@ -83,6 +84,9 @@ export async function PUT(req: NextRequest) {
 
   if (!id) return NextResponse.json({ error: "ID is required" }, { status: 400 });
 
+  const allowed = await verifyScopeAccess(result.scope, "budgets", id, "created_by");
+  if (!allowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
+
   const { data, error } = await supabaseAdmin
     .from("budgets")
     .update({ ...updates, updated_at: new Date().toISOString() })
@@ -92,4 +96,31 @@ export async function PUT(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ budget: data });
+}
+
+export async function DELETE(req: NextRequest) {
+  const result = await requireSubModuleAccess(req, "finance", "finance-budgets");
+  if ("error" in result) return result.error;
+
+  if (!result.scope.scopeLevel.can_delete) {
+    return NextResponse.json({ error: "Only admins can delete budgets" }, { status: 403 });
+  }
+
+  const id = req.nextUrl.searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "ID is required" }, { status: 400 });
+
+  const { error } = await supabaseAdmin.from("budgets").delete().eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await supabaseAdmin.from("audit_logs").insert({
+    user_id: result.auth.userId,
+    tier: 2,
+    action: "budget_deleted",
+    module: "finance",
+    breadcrumb: "APEX OS > Finance > Budgets",
+    entity_type: "finance_budget",
+    entity_id: id,
+  });
+
+  return NextResponse.json({ success: true });
 }
