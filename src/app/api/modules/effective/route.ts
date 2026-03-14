@@ -12,13 +12,21 @@ export async function GET(req: NextRequest) {
 
     // If a role_id is provided, verify it belongs to the authenticated user
     if (roleId) {
-      const { data: userProfile } = await supabaseAdmin
-        .from("users")
-        .select("role_id")
-        .eq("id", authResult.auth.userId)
-        .single();
+      let userRoleId: string | null = null;
+      try {
+        const { data: userProfile, error } = await supabaseAdmin
+          .from("users")
+          .select("role_id")
+          .eq("id", authResult.auth.userId)
+          .single();
+        if (!error) {
+          userRoleId = userProfile?.role_id ?? null;
+        }
+      } catch {
+        // users table may not exist or lack role_id column — skip verification
+      }
 
-      if (userProfile?.role_id !== roleId && !authResult.auth.isAdmin) {
+      if (userRoleId !== roleId && !authResult.auth.isAdmin) {
         return NextResponse.json(
           { error: "Not authorized to view modules for this role", modules: [] },
           { status: 403 }
@@ -40,12 +48,21 @@ export async function GET(req: NextRequest) {
     }
 
     // Get user overrides (works even without a role — supports override-only access)
-    const { data: overrides } = await supabaseAdmin
-      .from("user_module_overrides")
-      .select("module_id, access_type")
-      .eq("user_id", authResult.auth.userId);
+    // Wrapped in try-catch: if user_module_overrides table doesn't exist yet, continue without overrides
+    let overrides: { module_id: string; access_type: string }[] = [];
+    try {
+      const { data, error } = await supabaseAdmin
+        .from("user_module_overrides")
+        .select("module_id, access_type")
+        .eq("user_id", authResult.auth.userId);
+      if (!error) {
+        overrides = data || [];
+      }
+    } catch {
+      // Table may not exist yet — continue without overrides
+    }
 
-    if (!overrides || overrides.length === 0) {
+    if (overrides.length === 0) {
       return NextResponse.json({ modules: roleModules });
     }
 
