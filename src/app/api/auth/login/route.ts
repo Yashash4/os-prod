@@ -37,8 +37,9 @@ export async function POST(req: NextRequest) {
         breadcrumb_path: "APEX OS > Login",
         details: { email, ip, reason: error.message },
       });
+      // Return generic message to avoid leaking user existence or internal details
       return NextResponse.json(
-        { error: error.message },
+        { error: "Invalid email or password" },
         { status: 401 }
       );
     }
