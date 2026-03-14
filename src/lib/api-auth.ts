@@ -40,6 +40,8 @@ export async function authenticateRequest(
     }
 
     // Try cookie-based session via SSR client (only if cookies are present)
+    // Uses getUser() instead of getSession() — getSession() only decodes
+    // the JWT locally without server verification, which is insecure.
     if (!accessToken) {
       const cookieHeader = req.headers.get("cookie");
       if (cookieHeader) {
@@ -62,10 +64,19 @@ export async function authenticateRequest(
             },
           }
         );
+        // getUser() validates the token server-side (secure)
         const {
-          data: { session },
-        } = await supabaseServer.auth.getSession();
-        accessToken = session?.access_token;
+          data: { user: cookieUser },
+          error: cookieError,
+        } = await supabaseServer.auth.getUser();
+
+        if (!cookieError && cookieUser) {
+          // Get the session to extract the access_token for downstream use
+          const {
+            data: { session },
+          } = await supabaseServer.auth.getSession();
+          accessToken = session?.access_token;
+        }
       }
     }
 

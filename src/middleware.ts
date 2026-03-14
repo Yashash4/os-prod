@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-const PUBLIC_API_ROUTES = [
-  "/api/public/",
-  "/api/auth/",
-];
-
 /** Paths that should never require auth */
 const PUBLIC_PAGE_PATHS = [
   "/login",
@@ -15,27 +10,15 @@ const PUBLIC_PAGE_PATHS = [
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // --- API route protection (existing Bearer token logic) ---
+  // --- API routes: let api-auth.ts handle all authentication ---
+  // api-auth.ts supports both Bearer tokens AND cookie-based sessions,
+  // so middleware must not reject requests missing a Bearer header.
   if (pathname.startsWith("/api/")) {
-    // Skip public API routes
-    if (PUBLIC_API_ROUTES.some((r) => pathname.startsWith(r))) {
-      return NextResponse.next();
-    }
-
-    // For protected API routes, check for Authorization header
-    const authHeader = req.headers.get("authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
-
     return NextResponse.next();
   }
 
   // --- Page route protection for /m/* and /settings/* ---
-  if (pathname.startsWith("/m/") || pathname.startsWith("/m") || pathname.startsWith("/settings")) {
+  if (pathname === "/m" || pathname.startsWith("/m/") || pathname.startsWith("/settings")) {
     // Create a response we can mutate (for cookie refresh)
     let response = NextResponse.next({
       request: { headers: req.headers },
