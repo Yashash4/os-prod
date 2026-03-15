@@ -51,6 +51,7 @@ export async function GET(req: NextRequest) {
     const parentId = searchParams.get("parent_id");
     const limit = parseInt(searchParams.get("limit") || "50", 10);
     const before = searchParams.get("before"); // cursor: created_at timestamp
+    const search = searchParams.get("search");
 
     if (!channelId) {
       return NextResponse.json({ error: "channel_id is required" }, { status: 400 });
@@ -88,6 +89,10 @@ export async function GET(req: NextRequest) {
       query = query.lt("created_at", before);
     }
 
+    if (search) {
+      query = query.ilike("body", `%${search}%`);
+    }
+
     const { data: rawMessages, error: msgErr } = await query;
     if (msgErr) throw msgErr;
 
@@ -115,6 +120,31 @@ export async function GET(req: NextRequest) {
     // Fetch reactions for all messages
     const messageIds = processedMessages.map((m: Record<string, unknown>) => m.id as string);
     const reactionsMap = await fetchReactionsForMessages(messageIds);
+
+    // Fetch pinned status for messages
+    let pinnedSet = new Set<string>();
+    if (messageIds.length > 0) {
+      const { data: pins } = await supabaseAdmin
+        .from("chat_pins")
+        .select("message_id")
+        .in("message_id", messageIds);
+      if (pins) {
+        pinnedSet = new Set(pins.map((p) => p.message_id));
+      }
+    }
+
+    // Fetch saved status for current user
+    let savedSet = new Set<string>();
+    if (messageIds.length > 0) {
+      const { data: savedMessages } = await supabaseAdmin
+        .from("chat_saved")
+        .select("message_id")
+        .eq("user_id", userId)
+        .in("message_id", messageIds);
+      if (savedMessages) {
+        savedSet = new Set(savedMessages.map((s) => s.message_id));
+      }
+    }
 
     // Build thread previews for top-level messages with replies
     let threadPreviews: Record<string, { user_id: string; full_name: string | null }[]> = {};
@@ -176,6 +206,8 @@ export async function GET(req: NextRequest) {
       ...m,
       user: userMap[m.user_id as string] || null,
       reactions: reactionsMap[m.id as string] || [],
+      is_pinned: pinnedSet.has(m.id as string),
+      is_saved: savedSet.has(m.id as string),
       ...((!parentId && (m.reply_count as number) > 0)
         ? { thread_preview: threadPreviews[m.id as string] || [] }
         : {}),
@@ -205,11 +237,12 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { channel_id, body: messageBody, parent_id, mentions } = body as {
+    const { channel_id, body: messageBody, parent_id, mentions, is_silent } = body as {
       channel_id: string;
       body: string;
       parent_id?: string;
       mentions?: string[];
+      is_silent?: boolean;
     };
 
     if (!channel_id || !messageBody) {
@@ -239,6 +272,9 @@ export async function POST(req: NextRequest) {
     };
     if (parent_id) {
       insertData.parent_id = parent_id;
+    }
+    if (is_silent) {
+      insertData.is_silent = true;
     }
 
     const { data: message, error: msgErr } = await supabaseAdmin
@@ -391,7 +427,7 @@ export async function PUT(req: NextRequest) {
     // Fetch the message to verify ownership
     const { data: existing, error: fetchErr } = await supabaseAdmin
       .from("chat_messages")
-      .select("id, user_id, is_deleted")
+      .select("id, user_id, is_deleted, created_at")
       .eq("id", id)
       .single();
 
@@ -405,6 +441,19 @@ export async function PUT(req: NextRequest) {
 
     if (existing.is_deleted) {
       return NextResponse.json({ error: "Cannot edit a deleted message" }, { status: 400 });
+    }
+
+    // Enforce 2-minute edit window (admins exempt)
+    if (!result.auth.isAdmin) {
+      const createdAt = new Date(existing.created_at).getTime();
+      const now = Date.now();
+      const twoMinutesMs = 2 * 60 * 1000;
+      if (now - createdAt > twoMinutesMs) {
+        return NextResponse.json(
+          { error: "Edit window expired (2 minutes)" },
+          { status: 403 }
+        );
+      }
     }
 
     // Update the message

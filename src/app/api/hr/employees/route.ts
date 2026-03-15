@@ -112,12 +112,12 @@ export async function POST(req: NextRequest) {
           // Get role_id from designation if mapped
           let roleId = null;
           if (designation_id) {
-            const { data: desig } = await supabaseAdmin
+            const { data: desig, error: dError } = await supabaseAdmin
               .from("hr_designations")
               .select("role_id")
               .eq("id", designation_id)
-              .single();
-            if (desig?.role_id) roleId = desig.role_id;
+              .maybeSingle();
+            if (!dError && desig?.role_id) roleId = desig.role_id;
           }
 
           // Create user profile row
@@ -214,7 +214,7 @@ export async function PUT(req: NextRequest) {
       .from("hr_employees")
       .select("user_id")
       .eq("id", id)
-      .single();
+      .maybeSingle();
     beforeUserId = before?.user_id || null;
   }
 

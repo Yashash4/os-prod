@@ -116,7 +116,7 @@ export async function PUT(req: NextRequest) {
         .from("users")
         .select("full_name, role_id")
         .eq("id", user_id)
-        .single();
+        .maybeSingle();
 
       const { error } = await supabaseAdmin
         .from("users")

@@ -164,9 +164,8 @@ export default function MeetingAnalysisSheet({ owner, ownerLabel }: Props) {
 
   const stats = useMemo(() => {
     const total = entries.length;
-    const withOutcome = entries.filter((e) => e.outcome);
-    const converted = withOutcome.filter((e) => e.outcome === "converted").length;
-    const conversionRate = withOutcome.length > 0 ? (converted / withOutcome.length) * 100 : 0;
+    const converted = entries.filter((e) => e.outcome === "converted" || e.outcome === "won").length;
+    const conversionRate = total > 0 ? (converted / total) * 100 : 0;
 
     const scored = entries.filter((e) => e.score != null && e.score > 0);
     const avgScore = scored.length > 0 ? scored.reduce((s, e) => s + (e.score || 0), 0) / scored.length : 0;
@@ -375,7 +374,7 @@ export default function MeetingAnalysisSheet({ owner, ownerLabel }: Props) {
         <StatCard
           icon={<TrendingUp className="w-4 h-4" />}
           label="Conversion Rate"
-          value={stats.conversionRate > 0 ? `${stats.conversionRate.toFixed(0)}%` : "—"}
+          value={entries.length > 0 ? `${stats.conversionRate.toFixed(0)}%` : "—"}
           color="text-green-400"
           bg="bg-green-500/10"
         />

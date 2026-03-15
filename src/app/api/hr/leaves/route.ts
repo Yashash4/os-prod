@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
         .from("hr_employees")
         .select("user_id")
         .eq("id", employee.reporting_to)
-        .single();
+        .maybeSingle();
 
       if (manager?.user_id) {
         await sendNotification(manager.user_id, {
@@ -193,7 +193,7 @@ export async function PUT(req: NextRequest) {
         .eq("employee_id", leaveReq.employee_id)
         .eq("leave_type_id", leaveReq.leave_type_id)
         .eq("year", currentYear)
-        .single();
+        .maybeSingle();
 
       if (balance) {
         await supabaseAdmin

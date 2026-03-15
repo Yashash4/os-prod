@@ -14,11 +14,14 @@ import { usePermissions } from "@/hooks/usePermissions";
 export default function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, signOut } = useAuth();
-  const { scope } = usePermissions("admin");
 
+  // Derive the top-level module from the current path (e.g. /m/hr/employees → "hr")
   const pathSegments = pathname.startsWith("/m/")
     ? pathname.replace("/m/", "").split("/").filter(Boolean)
     : [];
+
+  const currentModule = pathSegments[0] || "admin";
+  const { scope } = usePermissions(currentModule);
 
   const breadcrumbItems =
     pathSegments.length > 0

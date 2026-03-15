@@ -8,8 +8,8 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 export async function POST(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "automations", "automations-email");
   if ("error" in result) return result.error;
-  const auth = result;
-  if (!auth.permissions.canCreate) {
+  const { auth } = result;
+  if (!result.permissions.canCreate) {
     return NextResponse.json({ error: "Permission denied: canCreate" }, { status: 403 });
   }
 
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
       .select("*")
       .eq("slug", "invoice-default")
       .eq("is_active", true)
-      .single();
+      .maybeSingle();
 
     if (tplError || !template) {
       return NextResponse.json({ error: "Invoice template not found" }, { status: 500 });
@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
       template_slug: "invoice-default",
       resend_message_id: resendId,
       status: emailStatus,
-      sent_by: auth.auth.userId,
+      sent_by: auth.userId,
     });
 
     // Update sales tracking record with invoice number
@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
 
     // Tier 1 audit log
     await supabaseAdmin.from("audit_logs").insert({
-      user_id: auth.auth.userId,
+      user_id: auth.userId,
       tier: 1,
       action: "invoice_sent",
       module: "automations",

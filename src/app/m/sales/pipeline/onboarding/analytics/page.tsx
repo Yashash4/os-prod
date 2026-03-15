@@ -79,13 +79,25 @@ const PIE_COLORS = ["#3b82f6", "#f59e0b", "#22c55e", "#6b7280", "#8b5cf6", "#ec4
 export default function OnboardingAnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<OnboardingRecord[]>([]);
+  const [userNameMap, setUserNameMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
     async function init() {
       try {
-        const res = await apiFetch("/api/sales/onboarding-tracking");
-        const data = await res.json();
-        setRecords(data.records || []);
+        const [onboardRes, usersRes] = await Promise.all([
+          apiFetch("/api/sales/onboarding-tracking"),
+          apiFetch("/api/ghl/users"),
+        ]);
+        const [onboardData, usersData] = await Promise.all([
+          onboardRes.json(),
+          usersRes.json(),
+        ]);
+        setRecords(onboardData.records || []);
+        const nameMap: Record<string, string> = {};
+        (usersData.users || []).forEach((u: { id: string; name: string }) => {
+          nameMap[u.id] = u.name;
+        });
+        setUserNameMap(nameMap);
       } catch { /* silent */ } finally {
         setLoading(false);
       }
@@ -141,7 +153,8 @@ export default function OnboardingAnalyticsPage() {
   const repData = useMemo(() => {
     const map: Record<string, { total: number; completed: number; avgRating: number; ratingCount: number }> = {};
     records.forEach((r) => {
-      const rep = r.source_rep || "Unknown";
+      const repId = r.source_rep || "Unknown";
+      const rep = userNameMap[repId] || repId;
       if (!map[rep]) map[rep] = { total: 0, completed: 0, avgRating: 0, ratingCount: 0 };
       map[rep].total++;
       if (r.onboarding_status === "completed") map[rep].completed++;
@@ -157,7 +170,7 @@ export default function OnboardingAnalyticsPage() {
       completionRate: d.total > 0 ? Math.round((d.completed / d.total) * 100) : 0,
       avgRating: d.ratingCount > 0 ? Math.round((d.avgRating / d.ratingCount) * 10) / 10 : 0,
     }));
-  }, [records]);
+  }, [records, userNameMap]);
 
   // Checklist progress
   const checklistStats = useMemo(() => {
@@ -381,7 +394,7 @@ export default function OnboardingAnalyticsPage() {
                 <div key={r.opportunity_id} className="flex items-center justify-between py-2 px-3 bg-red-500/5 rounded-lg">
                   <div>
                     <p className="text-sm text-foreground">{r.contact_name}</p>
-                    <p className="text-xs text-muted">{r.source_rep} · {r.assigned_onboarder || "Unassigned"}</p>
+                    <p className="text-xs text-muted">{userNameMap[r.source_rep || ""] || r.source_rep || "-"} · {r.assigned_onboarder || "Unassigned"}</p>
                   </div>
                   <span className="text-xs text-red-400">{daysOverdue}d overdue</span>
                 </div>

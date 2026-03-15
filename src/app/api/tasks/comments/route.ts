@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireModuleAccess, getAccessibleSubModules } from "@/lib/api-auth";
 import { getModulePermissions } from "@/lib/permissions";
+import { logImportant } from "@/lib/logger";
 
 export async function GET(req: NextRequest) {
   const auth = await requireModuleAccess(req, "tasks");
@@ -23,22 +24,40 @@ export async function GET(req: NextRequest) {
 
     // If user only has tasks-my, verify the task is assigned to them
     if (!canSeeBoard && !canSeeTeam && canSeeMy) {
-      const { data: task } = await supabaseAdmin.from("tasks").select("assigned_to").eq("id", taskId).single();
+      const { data: task } = await supabaseAdmin.from("tasks").select("assigned_to").eq("id", taskId).maybeSingle();
       if (!task || task.assigned_to !== auth.auth.userId) {
         return NextResponse.json({ error: "Access denied" }, { status: 403 });
       }
     }
 
-    const { data, error } = await supabaseAdmin
+    const { data: comments, error } = await supabaseAdmin
       .from("task_comments")
-      .select("*, user:users!task_comments_user_id_fkey(id, full_name, email, avatar_url)")
+      .select("*")
       .eq("task_id", taskId)
       .order("created_at", { ascending: true });
 
     if (error) throw error;
 
+    // Fetch user details separately (FK is to auth.users, not public.users)
+    const userIds = [...new Set((comments || []).map((c: { user_id: string }) => c.user_id))];
+    let userMap: Record<string, { id: string; full_name: string | null; email: string; avatar_url: string | null }> = {};
+    if (userIds.length > 0) {
+      const { data: users } = await supabaseAdmin
+        .from("users")
+        .select("id, full_name, email, avatar_url")
+        .in("id", userIds);
+      if (users) {
+        userMap = Object.fromEntries(users.map((u) => [u.id, u]));
+      }
+    }
+
+    const enriched = (comments || []).map((c: Record<string, unknown>) => ({
+      ...c,
+      user: userMap[c.user_id as string] || null,
+    }));
+
     const permissions = await getModulePermissions(auth.auth.userId, auth.auth.roleId, "tasks-board", auth.auth.isAdmin);
-    return NextResponse.json({ comments: data || [], _permissions: permissions });
+    return NextResponse.json({ comments: enriched, _permissions: permissions });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to fetch comments" },
@@ -66,19 +85,19 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { task_id, body: commentBody } = body;
 
-    // If user only has tasks-my, verify the task is assigned to them before commenting
-    if (!canSeeBoard && !canSeeTeam && canSeeMy) {
-      const { data: task } = await supabaseAdmin.from("tasks").select("assigned_to").eq("id", task_id).single();
-      if (!task || task.assigned_to !== auth.auth.userId) {
-        return NextResponse.json({ error: "Access denied" }, { status: 403 });
-      }
-    }
-
     if (!task_id || !commentBody) {
       return NextResponse.json(
         { error: "task_id and body are required" },
         { status: 400 }
       );
+    }
+
+    // If user only has tasks-my, verify the task is assigned to them before commenting
+    if (!canSeeBoard && !canSeeTeam && canSeeMy) {
+      const { data: task } = await supabaseAdmin.from("tasks").select("assigned_to").eq("id", task_id).maybeSingle();
+      if (!task || task.assigned_to !== auth.auth.userId) {
+        return NextResponse.json({ error: "Access denied" }, { status: 403 });
+      }
     }
 
     const { data, error } = await supabaseAdmin
@@ -88,12 +107,32 @@ export async function POST(req: NextRequest) {
         body: commentBody,
         user_id: auth.auth.userId,
       })
-      .select("*, user:users!task_comments_user_id_fkey(id, full_name, email, avatar_url)")
+      .select("*")
       .single();
 
     if (error) throw error;
 
-    return NextResponse.json({ comment: data }, { status: 201 });
+    // Fetch user details separately (FK is to auth.users, not public.users)
+    let user = null;
+    if (data) {
+      const { data: userData } = await supabaseAdmin
+        .from("users")
+        .select("id, full_name, email, avatar_url")
+        .eq("id", auth.auth.userId)
+        .maybeSingle();
+      user = userData;
+    }
+    const commentWithUser = data ? { ...data, user } : data;
+
+    await logImportant(auth.auth.userId, {
+      action: "create",
+      module: "tasks",
+      breadcrumb_path: "APEX OS > Tasks > Comments",
+      details: { task_id, comment_id: data?.id },
+      after_value: { body: commentBody },
+    });
+
+    return NextResponse.json({ comment: commentWithUser }, { status: 201 });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to create comment" },

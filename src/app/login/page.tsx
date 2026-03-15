@@ -35,7 +35,9 @@ export default function LoginPage() {
 
     try {
       await signIn(email, password);
-      router.push("/");
+      // Don't navigate here — the useEffect above handles redirect
+      // once AuthContext fully resolves user + role. Navigating immediately
+      // causes a race where the home page renders before role is loaded.
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invalid email or password");
     } finally {

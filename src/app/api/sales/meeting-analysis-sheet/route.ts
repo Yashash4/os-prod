@@ -45,7 +45,34 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await query;
     if (error) throw error;
-    return NextResponse.json({ records: data || [], _permissions: result.permissions });
+
+    const records = data || [];
+
+    // Cross-reference with sales tracking to auto-tag won deals
+    if (records.length > 0) {
+      const trackingTable = owner === "jobin" ? "jobin_sales_tracking" : "maverick_sales_tracking";
+      const contactEmails = records
+        .map((r: { contact_email: string | null }) => r.contact_email)
+        .filter(Boolean) as string[];
+
+      if (contactEmails.length > 0) {
+        const { data: wonDeals } = await supabaseAdmin
+          .from(trackingTable)
+          .select("contact_email")
+          .in("contact_email", contactEmails);
+
+        if (wonDeals && wonDeals.length > 0) {
+          const wonEmails = new Set(wonDeals.map((d: { contact_email: string }) => d.contact_email?.toLowerCase()));
+          for (const record of records as { contact_email: string | null; outcome: string | null }[]) {
+            if (!record.outcome && record.contact_email && wonEmails.has(record.contact_email.toLowerCase())) {
+              record.outcome = "converted";
+            }
+          }
+        }
+      }
+    }
+
+    return NextResponse.json({ records, _permissions: result.permissions });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch meeting sheet";
     return NextResponse.json({ error: message }, { status: 500 });

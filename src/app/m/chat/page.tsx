@@ -21,7 +21,30 @@ import {
   Pencil,
   Trash2,
   AtSign,
+  Pin,
+  Bookmark,
+  Copy,
+  Forward,
+  Clock,
+  ListTodo,
+  Bell,
+  MailOpen,
+  CheckSquare,
+  Calendar,
+  MoreHorizontal,
+  ChevronRight,
 } from "lucide-react";
+import PinsPanel from "./components/PinsPanel";
+import SavedItems from "./components/SavedItems";
+import QuickSwitcher from "./components/QuickSwitcher";
+import ForwardModal from "./components/ForwardModal";
+import FormatToolbar from "./components/FormatToolbar";
+import {
+  parseMessageBody,
+  formatDateDivider,
+  isSameDay,
+  getRoleColor,
+} from "./components/chat-types";
 
 /* ── Types ───────────────────────────────────────── */
 
@@ -57,6 +80,8 @@ interface ChatChannel {
   name: string;
   description: string | null;
   type: "channel" | "dm";
+  is_private?: boolean;
+  is_announcement?: boolean;
   created_by: string;
   created_at: string;
   last_message: {
@@ -67,6 +92,20 @@ interface ChatChannel {
     user: { full_name: string | null } | null;
   } | null;
   unread_count: number;
+  dm_user?: {
+    id: string;
+    full_name: string | null;
+    email: string;
+    avatar_url: string | null;
+  };
+}
+
+interface DmEligibleUser {
+  id: string;
+  full_name: string | null;
+  email: string;
+  avatar_url?: string | null;
+  is_admin?: boolean;
 }
 
 interface MemberEntry {
@@ -232,65 +271,286 @@ function EmojiPicker({
 /** Floating action bar on message hover */
 function MessageActions({
   isOwn,
+  canEdit,
   hasThread,
   onReply,
   onReact,
   onEdit,
   onDelete,
+  onPin,
+  onSave,
+  onCopy,
+  onForward,
+  onMarkUnread,
+  onCreateTask,
+  onRemindAt,
 }: {
   isOwn: boolean;
+  canEdit?: boolean;
   hasThread?: boolean;
   onReply?: () => void;
   onReact: (emoji: string) => void;
   onEdit: () => void;
   onDelete: () => void;
+  onPin?: () => void;
+  onSave?: () => void;
+  onCopy?: () => void;
+  onForward?: () => void;
+  onMarkUnread?: () => void;
+  onCreateTask?: () => void;
+  onRemindAt?: (remindAt: string) => void;
 }) {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showRemindMenu, setShowRemindMenu] = useState(false);
+
+  const remindOptions = [
+    { label: "20 minutes", getTime: () => new Date(Date.now() + 20 * 60 * 1000).toISOString() },
+    { label: "1 hour", getTime: () => new Date(Date.now() + 60 * 60 * 1000).toISOString() },
+    { label: "3 hours", getTime: () => new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString() },
+    {
+      label: "Tomorrow (9 AM)",
+      getTime: () => {
+        const d = new Date();
+        d.setDate(d.getDate() + 1);
+        d.setHours(9, 0, 0, 0);
+        return d.toISOString();
+      },
+    },
+    {
+      label: "Next week (Monday 9 AM)",
+      getTime: () => {
+        const d = new Date();
+        const dayOfWeek = d.getDay();
+        const daysUntilMonday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek;
+        d.setDate(d.getDate() + daysUntilMonday);
+        d.setHours(9, 0, 0, 0);
+        return d.toISOString();
+      },
+    },
+  ];
+
+  const [showMore, setShowMore] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
+
+  // Close more menu on outside click
+  useEffect(() => {
+    if (!showMore) return;
+    function handleClick(e: MouseEvent) {
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) setShowMore(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showMore]);
+
+  const ActionBtn = ({ icon: Icon, label, onClick, danger }: { icon: React.ElementType; label: string; onClick?: () => void; danger?: boolean }) => (
+    <button
+      onClick={() => { onClick?.(); setShowMore(false); }}
+      className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-left transition-colors ${danger ? "text-red-400 hover:bg-red-500/10" : "text-muted hover:text-foreground hover:bg-surface-hover"}`}
+    >
+      <Icon className="w-3.5 h-3.5 shrink-0" />
+      {label}
+    </button>
+  );
 
   return (
-    <div className="absolute -top-3 right-2 bg-surface border border-border rounded-md shadow-md flex items-center gap-0.5 p-0.5 z-30 opacity-0 group-hover:opacity-100 transition-opacity">
+    <div className={`absolute -top-3 right-2 bg-surface border border-border rounded-md shadow-md flex items-center gap-0.5 p-0.5 z-30 transition-opacity ${showMore || showEmojiPicker || showRemindMenu ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
+      {/* Quick actions — always visible */}
       {onReply && (
-        <button
-          onClick={onReply}
-          title="Reply in thread"
-          className="p-1.5 rounded hover:bg-surface-hover text-muted hover:text-foreground transition-colors"
-        >
+        <button onClick={onReply} title="Reply" className="p-1.5 rounded hover:bg-surface-hover text-muted hover:text-foreground transition-colors">
           <Reply className="w-3.5 h-3.5" />
         </button>
       )}
       <div className="relative">
-        <button
-          onClick={() => setShowEmojiPicker((v) => !v)}
-          title="Add reaction"
-          className="p-1.5 rounded hover:bg-surface-hover text-muted hover:text-foreground transition-colors"
-        >
+        <button onClick={() => setShowEmojiPicker((v) => !v)} title="React" className="p-1.5 rounded hover:bg-surface-hover text-muted hover:text-foreground transition-colors">
           <Smile className="w-3.5 h-3.5" />
         </button>
-        {showEmojiPicker && (
-          <EmojiPicker
-            onSelect={onReact}
-            onClose={() => setShowEmojiPicker(false)}
-          />
+        {showEmojiPicker && <EmojiPicker onSelect={onReact} onClose={() => setShowEmojiPicker(false)} />}
+      </div>
+
+      {/* More menu — everything else */}
+      <div className="relative" ref={moreRef}>
+        <button onClick={() => setShowMore((v) => !v)} title="More actions" className="p-1.5 rounded hover:bg-surface-hover text-muted hover:text-foreground transition-colors">
+          <MoreHorizontal className="w-3.5 h-3.5" />
+        </button>
+        {showMore && (
+          <div className="absolute right-0 bottom-full mb-1 w-48 bg-surface border border-border rounded-lg shadow-xl py-1 z-50">
+            {onPin && <ActionBtn icon={Pin} label="Pin message" onClick={onPin} />}
+            {onSave && <ActionBtn icon={Bookmark} label="Save message" onClick={onSave} />}
+            {onCopy && <ActionBtn icon={Copy} label="Copy text" onClick={onCopy} />}
+            {onForward && <ActionBtn icon={Forward} label="Forward" onClick={onForward} />}
+            {onMarkUnread && <ActionBtn icon={MailOpen} label="Mark unread" onClick={onMarkUnread} />}
+            {onCreateTask && <ActionBtn icon={ListTodo} label="Create task" onClick={onCreateTask} />}
+            {onRemindAt && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowRemindMenu((v) => !v)}
+                  className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-left text-muted hover:text-foreground hover:bg-surface-hover transition-colors"
+                >
+                  <Bell className="w-3.5 h-3.5 shrink-0" />
+                  Remind me
+                  <ChevronRight className="w-3 h-3 ml-auto" />
+                </button>
+                {showRemindMenu && (
+                  <RemindMenu
+                    options={remindOptions}
+                    onSelect={(remindAt) => { onRemindAt(remindAt); setShowMore(false); setShowRemindMenu(false); }}
+                    onClose={() => setShowRemindMenu(false)}
+                  />
+                )}
+              </div>
+            )}
+            {isOwn && canEdit !== false && (
+              <>
+                <div className="h-px bg-border my-1" />
+                <ActionBtn icon={Pencil} label="Edit message" onClick={onEdit} />
+              </>
+            )}
+            {isOwn && (
+              <>
+                {!(isOwn && canEdit !== false) && <div className="h-px bg-border my-1" />}
+                <ActionBtn icon={Trash2} label="Delete message" onClick={onDelete} danger />
+              </>
+            )}
+          </div>
         )}
       </div>
-      {isOwn && (
-        <>
+    </div>
+  );
+}
+
+/** Remind me submenu */
+function RemindMenu({
+  options,
+  onSelect,
+  onClose,
+}: {
+  options: { label: string; getTime: () => string }[];
+  onSelect: (remindAt: string) => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        onClose();
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      className="absolute bottom-full right-0 mb-1 bg-surface border border-border rounded-lg shadow-lg w-52 z-50"
+    >
+      <div className="p-1">
+        <div className="px-2 py-1 text-xs text-muted font-medium">Remind me</div>
+        {options.map((opt) => (
           <button
-            onClick={onEdit}
-            title="Edit message"
-            className="p-1.5 rounded hover:bg-surface-hover text-muted hover:text-foreground transition-colors"
+            key={opt.label}
+            onClick={() => onSelect(opt.getTime())}
+            className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-foreground hover:bg-surface-hover rounded transition-colors text-left"
           >
-            <Pencil className="w-3.5 h-3.5" />
+            <Clock className="w-3.5 h-3.5 text-muted" />
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Create task from message modal */
+function CreateTaskModal({
+  messageBody,
+  members,
+  onClose,
+  onSubmit,
+}: {
+  messageBody: string;
+  members: MemberEntry[];
+  onClose: () => void;
+  onSubmit: (task: { title: string; description: string; assigned_to: string; due_date: string }) => void;
+}) {
+  const firstLine = messageBody.split("\n")[0].slice(0, 100);
+  const [title, setTitle] = useState(firstLine);
+  const [assignee, setAssignee] = useState("");
+  const [dueDate, setDueDate] = useState("");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-surface border border-border rounded-lg w-full max-w-sm mx-4 shadow-xl">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <CheckSquare className="w-4 h-4" />
+            Create Task from Message
+          </h3>
+          <button onClick={onClose} className="p-1 rounded hover:bg-surface-hover text-muted">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-4 space-y-3">
+          <div>
+            <label className="block text-xs text-muted mb-1">Title</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full bg-background border border-border rounded px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-muted mb-1">Assignee</label>
+            <select
+              value={assignee}
+              onChange={(e) => setAssignee(e.target.value)}
+              className="w-full bg-background border border-border rounded px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+            >
+              <option value="">Unassigned</option>
+              {members.map((m) => (
+                <option key={m.user_id} value={m.user_id}>
+                  {m.user?.full_name || m.user?.email || "Unknown"}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-muted mb-1">Due Date</label>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="w-full bg-background border border-border rounded px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+            />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 px-4 py-3 border-t border-border">
+          <button
+            onClick={onClose}
+            className="px-3 py-1.5 rounded text-sm text-muted hover:text-foreground hover:bg-surface-hover transition-colors"
+          >
+            Cancel
           </button>
           <button
-            onClick={onDelete}
-            title="Delete message"
-            className="p-1.5 rounded hover:bg-surface-hover text-muted hover:text-red-400 transition-colors"
+            onClick={() => {
+              if (!title.trim()) return;
+              onSubmit({
+                title: title.trim(),
+                description: messageBody,
+                assigned_to: assignee,
+                due_date: dueDate,
+              });
+            }}
+            disabled={!title.trim()}
+            className="px-3 py-1.5 rounded text-sm bg-accent hover:bg-accent/90 text-white disabled:opacity-50 transition-colors"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            Create Task
           </button>
-        </>
-      )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -381,13 +641,31 @@ function ChatInput({
   members,
   onSend,
   sending,
+  initialDraft,
+  onDraftChange,
+  showAlsoSendToChannel,
+  channelName,
+  onAlsoSendToggle,
+  alsoSendToChannel,
 }: {
   placeholder: string;
   members: MemberEntry[];
-  onSend: (body: string, mentions: string[]) => void;
+  onSend: (body: string, mentions: string[], isSilent?: boolean) => void;
   sending: boolean;
+  initialDraft?: string;
+  onDraftChange?: (body: string) => void;
+  showAlsoSendToChannel?: boolean;
+  channelName?: string;
+  onAlsoSendToggle?: (checked: boolean) => void;
+  alsoSendToChannel?: boolean;
 }) {
   const [draft, setDraft] = useState("");
+  const [showEmojiPickerInput, setShowEmojiPickerInput] = useState(false);
+
+  // Reset draft when channel changes (detected via placeholder change)
+  useEffect(() => {
+    setDraft("");
+  }, [placeholder]);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -399,10 +677,36 @@ function ChatInput({
     el.style.height = Math.min(el.scrollHeight, maxH) + "px";
   }, []);
 
+  /** Insert markdown formatting around selection or at cursor */
+  const applyInlineFormat = useCallback((prefix: string, suffix: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = draft.slice(start, end);
+    let newText: string;
+    let newCursorPos: number;
+    if (selected) {
+      newText = draft.slice(0, start) + prefix + selected + suffix + draft.slice(end);
+      newCursorPos = start + prefix.length + selected.length + suffix.length;
+    } else {
+      newText = draft.slice(0, start) + prefix + suffix + draft.slice(end);
+      newCursorPos = start + prefix.length;
+    }
+    setDraft(newText);
+    onDraftChange?.(newText);
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.selectionStart = newCursorPos;
+      textarea.selectionEnd = newCursorPos;
+    });
+  }, [draft, onDraftChange]);
+
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const val = e.target.value;
       setDraft(val);
+      onDraftChange?.(val);
 
       // Detect @mention — look for @ preceded by space/start, allow spaces in names
       const cursorPos = e.target.selectionStart;
@@ -428,7 +732,7 @@ function ChatInput({
 
       requestAnimationFrame(adjustHeight);
     },
-    [adjustHeight]
+    [adjustHeight, onDraftChange]
   );
 
   const handleMentionSelect = useCallback(
@@ -458,11 +762,11 @@ function ChatInput({
     [draft, adjustHeight]
   );
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback((isSilent = false) => {
     if (!draft.trim() || sending) return;
     const body = draft.trim();
     const mentions = extractMentionIds(body, members);
-    onSend(body, mentions);
+    onSend(body, mentions, isSilent);
     setDraft("");
     setMentionQuery(null);
     requestAnimationFrame(() => {
@@ -474,12 +778,43 @@ function ChatInput({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === "Enter" && !e.shiftKey) {
+      // Enter to send, Shift+Enter for newline
+      if (e.key === "Enter" && !e.shiftKey && !e.altKey) {
         e.preventDefault();
-        handleSend();
+        handleSend(false);
+      }
+      // Alt+Enter for silent send
+      if (e.key === "Enter" && e.altKey) {
+        e.preventDefault();
+        handleSend(true);
+      }
+      // Ctrl+B for bold
+      if ((e.ctrlKey || e.metaKey) && e.key === "b") {
+        e.preventDefault();
+        applyInlineFormat("**", "**");
+      }
+      // Ctrl+I for italic
+      if ((e.ctrlKey || e.metaKey) && e.key === "i") {
+        e.preventDefault();
+        applyInlineFormat("*", "*");
+      }
+      // Ctrl+Shift+X for strikethrough
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "X") {
+        e.preventDefault();
+        applyInlineFormat("~~", "~~");
+      }
+      // Ctrl+Shift+C for inline code
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "C") {
+        e.preventDefault();
+        applyInlineFormat("`", "`");
+      }
+      // Ctrl+E for emoji picker toggle
+      if ((e.ctrlKey || e.metaKey) && e.key === "e") {
+        e.preventDefault();
+        setShowEmojiPickerInput((v) => !v);
       }
     },
-    [handleSend]
+    [handleSend, applyInlineFormat]
   );
 
   return (
@@ -492,27 +827,80 @@ function ChatInput({
             onSelect={handleMentionSelect}
           />
         )}
-        <div className="flex items-end gap-2 bg-surface rounded-lg px-3 py-2 border border-border focus-within:border-accent transition-colors">
-          <textarea
-            ref={textareaRef}
-            value={draft}
-            onChange={handleChange}
-            onKeyDown={handleKeyDown}
-            placeholder={placeholder}
-            rows={1}
-            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted outline-none resize-none leading-6 max-h-[120px]"
-          />
-          <button
-            onClick={handleSend}
-            disabled={!draft.trim() || sending}
-            className="p-1.5 rounded hover:bg-surface-hover text-accent disabled:text-muted disabled:cursor-not-allowed transition-colors shrink-0 mb-0.5"
-          >
-            {sending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4" />
-            )}
-          </button>
+        <div className="bg-surface rounded-lg border border-border focus-within:border-accent transition-colors">
+          {/* Format Toolbar */}
+          <FormatToolbar textareaRef={textareaRef} draft={draft} setDraft={(val) => { setDraft(val); onDraftChange?.(val); }} />
+          <div className="flex items-end gap-2 px-3 py-2">
+            <textarea
+              ref={textareaRef}
+              value={draft}
+              onChange={handleChange}
+              onKeyDown={handleKeyDown}
+              placeholder={placeholder}
+              rows={1}
+              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted outline-none resize-none leading-6 max-h-[120px]"
+            />
+            <div className="relative shrink-0">
+              <button
+                onClick={() => setShowEmojiPickerInput((v) => !v)}
+                title="Emoji (Ctrl+E)"
+                className="p-1.5 rounded hover:bg-surface-hover text-muted hover:text-foreground transition-colors mb-0.5"
+              >
+                <Smile className="w-4 h-4" />
+              </button>
+              {showEmojiPickerInput && (
+                <EmojiPicker
+                  onSelect={(emoji) => {
+                    const textarea = textareaRef.current;
+                    if (textarea) {
+                      const start = textarea.selectionStart;
+                      const newDraft = draft.slice(0, start) + emoji + draft.slice(textarea.selectionEnd);
+                      setDraft(newDraft);
+                      onDraftChange?.(newDraft);
+                      requestAnimationFrame(() => {
+                        textarea.focus();
+                        textarea.selectionStart = start + emoji.length;
+                        textarea.selectionEnd = start + emoji.length;
+                      });
+                    }
+                    setShowEmojiPickerInput(false);
+                  }}
+                  onClose={() => setShowEmojiPickerInput(false)}
+                />
+              )}
+            </div>
+            <div className="flex flex-col items-center shrink-0 mb-0.5">
+              <button
+                onClick={() => handleSend(false)}
+                disabled={!draft.trim() || sending}
+                title="Send (Enter)"
+                className="p-1.5 rounded hover:bg-surface-hover text-accent disabled:text-muted disabled:cursor-not-allowed transition-colors"
+              >
+                {sending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+          </div>
+          {/* Also send to channel checkbox (thread replies) */}
+          {showAlsoSendToChannel && (
+            <div className="px-3 pb-2">
+              <label className="flex items-center gap-2 text-xs text-muted cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={alsoSendToChannel || false}
+                  onChange={(e) => onAlsoSendToggle?.(e.target.checked)}
+                  className="accent-accent"
+                />
+                Also send to #{channelName}
+              </label>
+            </div>
+          )}
+          <div className="px-3 pb-1 text-[10px] text-muted">
+            Alt+Enter for silent send
+          </div>
         </div>
       </div>
     </div>
@@ -574,9 +962,13 @@ export default function ChatPage() {
   const [members, setMembers] = useState<MemberEntry[]>([]);
 
   // Right panel state
-  const [rightPanel, setRightPanel] = useState<"none" | "members" | "thread">(
+  const [rightPanel, setRightPanel] = useState<"none" | "members" | "thread" | "pins" | "saved">(
     "none"
   );
+
+  // Quick switcher + forward modal
+  const [showQuickSwitcher, setShowQuickSwitcher] = useState(false);
+  const [forwardingMessage, setForwardingMessage] = useState<ChatMessage | null>(null);
   const [threadParentId, setThreadParentId] = useState<string | null>(null);
   const [threadReplies, setThreadReplies] = useState<ChatMessage[]>([]);
   const [loadingThread, setLoadingThread] = useState(false);
@@ -595,18 +987,53 @@ export default function ChatPage() {
   const [showNewChannel, setShowNewChannel] = useState(false);
   const [newChName, setNewChName] = useState("");
   const [newChDesc, setNewChDesc] = useState("");
+  const [newChType, setNewChType] = useState<"public" | "private" | "announcement">("public");
   const [allUsers, setAllUsers] = useState<ChatUser[]>([]);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [userSearch, setUserSearch] = useState("");
   const [creatingChannel, setCreatingChannel] = useState(false);
 
+  // DM modal
+  const [showNewDm, setShowNewDm] = useState(false);
+  const [dmUsers, setDmUsers] = useState<DmEligibleUser[]>([]);
+  const [dmSearch, setDmSearch] = useState("");
+  const [loadingDmUsers, setLoadingDmUsers] = useState(false);
+  const [creatingDm, setCreatingDm] = useState(false);
+
   // Delete channel
   const [deletingChannelId, setDeletingChannelId] = useState<string | null>(null);
+
+  // Role color map
+  const [roleMap, setRoleMap] = useState<Record<string, { roleName: string; isAdmin: boolean }>>({});
+
+  // Typing indicators
+  const [typingUsers, setTypingUsers] = useState<{ user_id: string; full_name: string }[]>([]);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTypingSentRef = useRef<number>(0);
+
+  // Draft auto-save
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const draftSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Connection status
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'reconnecting' | 'disconnected'>('connected');
 
   // Add member to existing channel
   const [showAddMember, setShowAddMember] = useState(false);
   const [addMemberSearch, setAddMemberSearch] = useState("");
   const [addingMember, setAddingMember] = useState(false);
+
+  // Search messages
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<ChatMessage[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+
+  // Create task from message
+  const [taskFromMessage, setTaskFromMessage] = useState<ChatMessage | null>(null);
+
+  // Also send to channel (thread replies)
+  const [alsoSendToChannel, setAlsoSendToChannel] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
@@ -657,6 +1084,26 @@ export default function ChatPage() {
   useEffect(() => {
     fetchChannels();
   }, [fetchChannels]);
+
+  /* ── Fetch role map for name colors ─────────── */
+
+  useEffect(() => {
+    async function fetchRoles() {
+      try {
+        const res = await apiFetch("/api/admin/users");
+        if (!res.ok) return;
+        const data = await res.json();
+        const map: Record<string, { roleName: string; isAdmin: boolean }> = {};
+        (data.users || []).forEach((u: { id: string; role?: { name?: string; is_admin?: boolean } }) => {
+          map[u.id] = { roleName: u.role?.name || "", isAdmin: u.role?.is_admin || false };
+        });
+        setRoleMap(map);
+      } catch {
+        // Non-admin users may not have access — silently ignore
+      }
+    }
+    fetchRoles();
+  }, []);
 
   /* ── Fetch messages for active channel ─────── */
 
@@ -787,12 +1234,30 @@ export default function ChatPage() {
             );
             setThreadReplies((prev) => {
               if (prev.some((m) => m.id === enriched.id)) return prev;
+              // Replace optimistic message from same user if exists
+              const optimisticIdx = prev.findIndex(
+                (m) => m.id.startsWith("optimistic-") && m.user_id === enriched.user_id && m.body === enriched.body
+              );
+              if (optimisticIdx >= 0) {
+                const updated = [...prev];
+                updated[optimisticIdx] = enriched;
+                return updated;
+              }
               return [...prev, enriched];
             });
           } else {
             // Top-level message
             setMessages((prev) => {
               if (prev.some((m) => m.id === enriched.id)) return prev;
+              // Replace optimistic message from same user if exists
+              const optimisticIdx = prev.findIndex(
+                (m) => m.id.startsWith("optimistic-") && m.user_id === enriched.user_id && m.body === enriched.body
+              );
+              if (optimisticIdx >= 0) {
+                const updated = [...prev];
+                updated[optimisticIdx] = enriched;
+                return updated;
+              }
               return [...prev, enriched];
             });
           }
@@ -816,12 +1281,125 @@ export default function ChatPage() {
           );
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") setConnectionStatus("connected");
+        else if (status === "CHANNEL_ERROR") setConnectionStatus("disconnected");
+        else if (status === "TIMED_OUT") setConnectionStatus("reconnecting");
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
   }, [activeChannelId]);
+
+  /* ── Typing indicator subscription ──────────── */
+
+  useEffect(() => {
+    if (!activeChannelId || !user) return;
+
+    const presenceChannel = supabase
+      .channel(`presence:${activeChannelId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "chat_presence",
+          filter: `typing_in=eq.${activeChannelId}`,
+        },
+        async () => {
+          // Re-fetch typing users for this channel
+          try {
+            const memberIds = members.map((m) => m.user_id).filter((id) => id !== user.id);
+            if (memberIds.length === 0) return;
+            const res = await apiFetch(`/api/chat/presence?user_ids=${memberIds.join(",")}`);
+            const data = await res.json();
+            if (data.presence) {
+              const typing: { user_id: string; full_name: string }[] = [];
+              for (const [uid, p] of Object.entries(data.presence)) {
+                const pres = p as { typing_in?: string | null };
+                if (pres.typing_in === activeChannelId && uid !== user.id) {
+                  const member = members.find((m) => m.user_id === uid);
+                  typing.push({
+                    user_id: uid,
+                    full_name: member?.user?.full_name || member?.user?.email || "Someone",
+                  });
+                }
+              }
+              setTypingUsers(typing);
+            }
+          } catch {
+            // ignore
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(presenceChannel);
+      setTypingUsers([]);
+    };
+  }, [activeChannelId, user, members]);
+
+  /* ── Draft auto-save and restore ─────────────── */
+
+  const saveDraft = useCallback(
+    async (channelId: string, body: string) => {
+      try {
+        if (body.trim()) {
+          await apiFetch("/api/chat/drafts", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ channel_id: channelId, body }),
+          });
+        } else {
+          await apiFetch(`/api/chat/drafts?channel_id=${channelId}`, {
+            method: "DELETE",
+          });
+        }
+      } catch {
+        // ignore
+      }
+    },
+    []
+  );
+
+  const loadDraft = useCallback(async (channelId: string): Promise<string> => {
+    try {
+      const res = await apiFetch(`/api/chat/drafts?channel_id=${channelId}`);
+      const data = await res.json();
+      return data.draft?.body || "";
+    } catch {
+      return "";
+    }
+  }, []);
+
+  /* ── Typing send helper ──────────────────────── */
+
+  const sendTypingStatus = useCallback(
+    (channelId: string | null) => {
+      apiFetch("/api/chat/presence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ typing_in: channelId }),
+      }).catch(() => {});
+    },
+    []
+  );
+
+  /* ── Keyboard shortcuts ────────────────────── */
+
+  useEffect(() => {
+    function handleGlobalKey(e: KeyboardEvent) {
+      // Ctrl+K — quick switcher
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        setShowQuickSwitcher((prev) => !prev);
+      }
+    }
+    document.addEventListener("keydown", handleGlobalKey);
+    return () => document.removeEventListener("keydown", handleGlobalKey);
+  }, []);
 
   /* ── Auto-scroll ───────────────────────────── */
 
@@ -836,39 +1414,90 @@ export default function ChatPage() {
   /* ── Message actions ───────────────────────── */
 
   const handleSendMain = useCallback(
-    async (body: string, mentions: string[]) => {
-      if (!activeChannelId) return;
+    async (body: string, mentions: string[], isSilent?: boolean) => {
+      if (!activeChannelId || !user) return;
       setSendingMain(true);
+
+      // Optimistic: show the message instantly
+      const optimisticId = `optimistic-${Date.now()}`;
+      const optimisticMsg: ChatMessage = {
+        id: optimisticId,
+        channel_id: activeChannelId,
+        user_id: user.id,
+        body,
+        parent_id: null,
+        is_deleted: false,
+        edited_at: null,
+        reactions: [],
+        reply_count: 0,
+        created_at: new Date().toISOString(),
+        user: { id: user.id, full_name: user.full_name, email: user.email, avatar_url: user.avatar_url || undefined },
+      };
+      setMessages((prev) => [...prev, optimisticMsg]);
+
       try {
-        await apiFetch("/api/chat/messages", {
+        const res = await apiFetch("/api/chat/messages", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             channel_id: activeChannelId,
             body,
             mentions: mentions.length > 0 ? mentions : undefined,
+            is_silent: isSilent || undefined,
           }),
         });
+        const data = await res.json();
+        // Replace optimistic message with real one from server
+        if (data.message) {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === optimisticId ? { ...data.message, user: optimisticMsg.user } : m))
+          );
+        }
         setChannels((prev) =>
           prev.map((ch) =>
             ch.id === activeChannelId ? { ...ch, unread_count: 0 } : ch
           )
         );
       } catch {
-        // ignore
+        // Remove optimistic message on failure
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
       } finally {
         setSendingMain(false);
       }
     },
-    [activeChannelId]
+    [activeChannelId, user]
   );
 
   const handleSendThread = useCallback(
-    async (body: string, mentions: string[]) => {
-      if (!activeChannelId || !threadParentId) return;
+    async (body: string, mentions: string[], isSilent?: boolean) => {
+      if (!activeChannelId || !threadParentId || !user) return;
       setSendingThread(true);
+
+      // Optimistic: show the reply instantly
+      const optimisticId = `optimistic-${Date.now()}`;
+      const optimisticMsg: ChatMessage = {
+        id: optimisticId,
+        channel_id: activeChannelId,
+        user_id: user.id,
+        body,
+        parent_id: threadParentId,
+        is_deleted: false,
+        edited_at: null,
+        reactions: [],
+        reply_count: 0,
+        created_at: new Date().toISOString(),
+        user: { id: user.id, full_name: user.full_name, email: user.email, avatar_url: user.avatar_url || undefined },
+      };
+      setThreadReplies((prev) => [...prev, optimisticMsg]);
+      // Bump reply count on parent
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === threadParentId ? { ...m, reply_count: (m.reply_count || 0) + 1 } : m
+        )
+      );
+
       try {
-        await apiFetch("/api/chat/messages", {
+        const res = await apiFetch("/api/chat/messages", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -876,15 +1505,43 @@ export default function ChatPage() {
             body,
             parent_id: threadParentId,
             mentions: mentions.length > 0 ? mentions : undefined,
+            is_silent: isSilent || undefined,
           }),
         });
+        const data = await res.json();
+        if (data.message) {
+          setThreadReplies((prev) =>
+            prev.map((m) => (m.id === optimisticId ? { ...data.message, user: optimisticMsg.user } : m))
+          );
+        }
+
+        // Also send to channel if checkbox is checked
+        if (alsoSendToChannel) {
+          const channelBody = `> ${body.split("\n")[0].slice(0, 80)}\n\n_replied in thread_`;
+          await apiFetch("/api/chat/messages", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              channel_id: activeChannelId,
+              body: channelBody,
+              mentions: [],
+              is_silent: true,
+            }),
+          });
+        }
       } catch {
-        // ignore
+        // Remove optimistic reply on failure
+        setThreadReplies((prev) => prev.filter((m) => m.id !== optimisticId));
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === threadParentId ? { ...m, reply_count: Math.max(0, (m.reply_count || 1) - 1) } : m
+          )
+        );
       } finally {
         setSendingThread(false);
       }
     },
-    [activeChannelId, threadParentId]
+    [activeChannelId, threadParentId, user, alsoSendToChannel]
   );
 
   const handleReaction = useCallback(
@@ -981,19 +1638,30 @@ export default function ChatPage() {
 
   /* ── Select channel ────────────────────────── */
 
-  const selectChannel = useCallback((id: string) => {
+  const selectChannel = useCallback(async (id: string) => {
+    // Save current draft before switching
+    if (activeChannelId) {
+      const currentDraft = drafts[activeChannelId];
+      if (currentDraft?.trim()) {
+        saveDraft(activeChannelId, currentDraft);
+      }
+    }
+    // Clear typing status
+    sendTypingStatus(null);
+
     setActiveChannelId(id);
     setRightPanel("none");
     setThreadParentId(null);
     setEditingMessageId(null);
-  }, []);
+
+  }, [activeChannelId, drafts, saveDraft, sendTypingStatus]);
 
   /* ── Load all users (for new channel + add member) ── */
 
   const loadAllUsers = useCallback(async () => {
     if (allUsers.length > 0) return; // already loaded
     try {
-      const res = await apiFetch("/api/admin/users");
+      const res = await apiFetch("/api/chat/users?for=all");
       const data = await res.json();
       if (data.users) {
         setAllUsers(data.users.filter((u: ChatUser) => u.id !== user?.id));
@@ -1003,12 +1671,63 @@ export default function ChatPage() {
     }
   }, [allUsers.length, user?.id]);
 
+  /* ── Load DM-eligible users ────────────────── */
+
+  const loadDmUsers = useCallback(async () => {
+    setLoadingDmUsers(true);
+    try {
+      const res = await apiFetch("/api/chat/users?for=dm");
+      const data = await res.json();
+      if (data.users) {
+        setDmUsers(data.users);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingDmUsers(false);
+    }
+  }, []);
+
+  const openNewDmModal = useCallback(async () => {
+    setShowNewDm(true);
+    setDmSearch("");
+    await loadDmUsers();
+  }, [loadDmUsers]);
+
+  const handleCreateDm = useCallback(async (targetUserId: string) => {
+    if (creatingDm) return;
+    setCreatingDm(true);
+    try {
+      const res = await apiFetch("/api/chat/channels", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "dm",
+          member_id: targetUserId,
+        }),
+      });
+      const data = await res.json();
+      if (data.channel) {
+        setShowNewDm(false);
+        await fetchChannels();
+        setActiveChannelId(data.channel.id);
+      } else if (data.error) {
+        alert(data.error);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setCreatingDm(false);
+    }
+  }, [creatingDm, fetchChannels]);
+
   /* ── New channel modal ─────────────────────── */
 
   const openNewChannelModal = async () => {
     setShowNewChannel(true);
     setNewChName("");
     setNewChDesc("");
+    setNewChType("public");
     setSelectedUserIds([]);
     setUserSearch("");
     await loadAllUsers();
@@ -1026,6 +1745,8 @@ export default function ChatPage() {
           name: newChName.trim(),
           description: newChDesc.trim() || null,
           type: "channel",
+          is_private: newChType === "private",
+          is_announcement: newChType === "announcement",
           member_ids: selectedUserIds,
         }),
       });
@@ -1124,6 +1845,119 @@ export default function ChatPage() {
     );
   });
 
+  /* ── Search messages handler ──────────────── */
+
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSearchMessages = useCallback(
+    (query: string) => {
+      setSearchQuery(query);
+      if (!query.trim() || !activeChannelId) {
+        setSearchResults([]);
+        return;
+      }
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+      searchTimeoutRef.current = setTimeout(async () => {
+        setSearchLoading(true);
+        try {
+          const res = await apiFetch(
+            `/api/chat/messages?channel_id=${activeChannelId}&search=${encodeURIComponent(query.trim())}&limit=20`
+          );
+          const data = await res.json();
+          if (data.messages) {
+            setSearchResults(data.messages);
+          }
+        } catch {
+          setSearchResults([]);
+        } finally {
+          setSearchLoading(false);
+        }
+      }, 300);
+    },
+    [activeChannelId]
+  );
+
+  /* ── Mark unread handler ─────────────────── */
+
+  const handleMarkUnread = useCallback(
+    async (msg: ChatMessage) => {
+      if (!activeChannelId) return;
+      // Find the message before this one
+      const msgIndex = messages.findIndex((m) => m.id === msg.id);
+      const prevMsg = msgIndex > 0 ? messages[msgIndex - 1] : null;
+      const lastReadId = prevMsg?.id;
+
+      if (!lastReadId) return;
+
+      try {
+        await apiFetch("/api/chat/read-cursors", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            channel_id: activeChannelId,
+            last_read_message_id: lastReadId,
+          }),
+        });
+        // Update the unread count in sidebar
+        const unreadCount = messages.length - msgIndex;
+        setChannels((prev) =>
+          prev.map((ch) =>
+            ch.id === activeChannelId ? { ...ch, unread_count: unreadCount } : ch
+          )
+        );
+      } catch {
+        // ignore
+      }
+    },
+    [activeChannelId, messages]
+  );
+
+  /* ── Create task from message handler ─────── */
+
+  const handleCreateTask = useCallback(
+    async (task: { title: string; description: string; assigned_to: string; due_date: string }) => {
+      try {
+        await apiFetch("/api/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: task.title,
+            description: task.description,
+            assigned_to: task.assigned_to || null,
+            due_date: task.due_date || null,
+            project_id: null,
+            status: "todo",
+          }),
+        });
+        setTaskFromMessage(null);
+      } catch {
+        // ignore
+      }
+    },
+    []
+  );
+
+  /* ── Remind me handler ─────────────────────── */
+
+  const handleRemind = useCallback(
+    async (messageId: string, channelId: string, remindAt: string) => {
+      try {
+        await apiFetch("/api/chat/reminders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message_id: messageId,
+            channel_id: channelId,
+            remind_at: remindAt,
+          }),
+        });
+      } catch {
+        // ignore
+      }
+    },
+    []
+  );
+
   /* ── Render message (shared by main + thread) ── */
 
   function renderMessage(
@@ -1132,21 +1966,47 @@ export default function ChatPage() {
     options: { allowReply: boolean }
   ) {
     const isMe = msg.user_id === user?.id;
+
+    // Message grouping: show header when user changes, gap > 5min, or day changes
     const showHeader =
       !prevMsg ||
       prevMsg.user_id !== msg.user_id ||
       new Date(msg.created_at).getTime() -
         new Date(prevMsg.created_at).getTime() >
-        MSG_GROUP_GAP_MS;
+        MSG_GROUP_GAP_MS ||
+      (prevMsg && !isSameDay(prevMsg.created_at, msg.created_at));
 
     const isEditing = editingMessageId === msg.id;
 
+    // Date divider: show when previous message was on a different day
+    const showDateDivider =
+      !prevMsg || !isSameDay(prevMsg.created_at, msg.created_at);
+
+    // Role-based name color
+    const roleInfo = roleMap[msg.user_id];
+    const nameColor = getRoleColor(
+      roleInfo ? { userId: msg.user_id, ...roleInfo } : undefined
+    );
+
     return (
-      <div key={msg.id} className="group relative">
+      <div key={msg.id} id={`msg-${msg.id}`}>
+        {/* Date divider */}
+        {showDateDivider && (
+          <div className="flex items-center gap-3 my-4 px-4">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-[11px] text-muted font-medium px-2">
+              {formatDateDivider(msg.created_at)}
+            </span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+        )}
+
+        <div className="group relative transition-colors duration-1000">
         {/* Hover actions */}
         {!msg.is_deleted && !isEditing && (
           <MessageActions
             isOwn={isMe}
+            canEdit={isMe && (isAdmin || (Date.now() - new Date(msg.created_at).getTime() < 120000))}
             hasThread={options.allowReply}
             onReply={
               options.allowReply ? () => openThread(msg.id) : undefined
@@ -1157,6 +2017,29 @@ export default function ChatPage() {
               setEditDraft(msg.body);
             }}
             onDelete={() => setDeletingMessageId(msg.id)}
+            onPin={async () => {
+              try {
+                await apiFetch("/api/chat/pins", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ message_id: msg.id, channel_id: activeChannelId }),
+                });
+              } catch { /* ignore */ }
+            }}
+            onSave={async () => {
+              try {
+                await apiFetch("/api/chat/saved", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ message_id: msg.id }),
+                });
+              } catch { /* ignore */ }
+            }}
+            onCopy={() => navigator.clipboard.writeText(msg.body)}
+            onForward={() => setForwardingMessage(msg)}
+            onMarkUnread={() => handleMarkUnread(msg)}
+            onCreateTask={() => setTaskFromMessage(msg)}
+            onRemindAt={(remindAt) => handleRemind(msg.id, msg.channel_id, remindAt)}
           />
         )}
 
@@ -1167,7 +2050,7 @@ export default function ChatPage() {
               email={msg.user?.email}
               isOwn={isMe}
             />
-            <span className="text-sm font-medium text-foreground">
+            <span className={`text-sm font-medium ${nameColor}`}>
               {msg.user?.full_name || msg.user?.email || "Unknown"}
             </span>
             <span className="text-xs text-muted">
@@ -1223,7 +2106,10 @@ export default function ChatPage() {
                 isMe ? "bg-accent/10" : "bg-transparent"
               }`}
             >
-              {renderBody(msg.body, members)}
+              <span
+                className="text-sm text-foreground leading-relaxed break-words [&_pre]:my-1 [&_code]:text-xs [&_blockquote]:my-1 [&_li]:my-0.5"
+                dangerouslySetInnerHTML={{ __html: parseMessageBody(msg.body) }}
+              />
               {msg.edited_at && (
                 <span className="text-xs text-muted ml-1.5">(edited)</span>
               )}
@@ -1250,6 +2136,7 @@ export default function ChatPage() {
             {msg.reply_count} {msg.reply_count === 1 ? "reply" : "replies"}
           </button>
         )}
+        </div>
       </div>
     );
   }
@@ -1308,6 +2195,9 @@ export default function ChatPage() {
                             <span className="truncate flex-1 text-left">
                               {ch.name}
                             </span>
+                            {drafts[ch.id]?.trim() && (
+                              <span className="shrink-0" aria-label="Draft"><Pencil className="w-3 h-3 text-muted" /></span>
+                            )}
                             {ch.unread_count > 0 && (
                               <span className="bg-accent text-white text-xs rounded-full px-1.5 py-0.5 min-w-[20px] text-center">
                                 {ch.unread_count}
@@ -1331,36 +2221,56 @@ export default function ChatPage() {
                     </div>
                   )}
 
-                  {dmList.length > 0 && (
-                    <div className="py-2">
-                      <div className="px-3 py-1 text-xs font-medium text-muted uppercase tracking-wider">
+                  {/* Direct Messages section — always shown */}
+                  <div className="py-2">
+                    <div className="px-3 py-1 flex items-center justify-between">
+                      <span className="text-xs font-medium text-muted uppercase tracking-wider">
                         Direct Messages
-                      </div>
-                      {dmList.map((ch) => (
-                        <button
-                          key={ch.id}
-                          onClick={() => selectChannel(ch.id)}
-                          className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-surface-hover transition-colors ${
-                            activeChannelId === ch.id
-                              ? "bg-surface-hover text-foreground"
-                              : "text-muted"
-                          }`}
-                        >
-                          <span className="w-5 h-5 rounded-full bg-accent/20 text-accent flex items-center justify-center text-[10px] font-bold shrink-0">
-                            {initials(ch.name)}
-                          </span>
-                          <span className="truncate flex-1 text-left">
-                            {ch.name}
-                          </span>
-                          {ch.unread_count > 0 && (
-                            <span className="bg-accent text-white text-xs rounded-full px-1.5 py-0.5 min-w-[20px] text-center">
-                              {ch.unread_count}
-                            </span>
-                          )}
-                        </button>
-                      ))}
+                      </span>
+                      <button
+                        onClick={openNewDmModal}
+                        className="p-0.5 rounded hover:bg-surface-hover text-muted hover:text-foreground transition-colors"
+                        title="New direct message"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                  )}
+                    {dmList.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-muted">
+                        No conversations yet
+                      </div>
+                    ) : (
+                      dmList.map((ch) => {
+                        const dmDisplayName = ch.dm_user?.full_name || ch.dm_user?.email || ch.name;
+                        return (
+                          <button
+                            key={ch.id}
+                            onClick={() => selectChannel(ch.id)}
+                            className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-surface-hover transition-colors ${
+                              activeChannelId === ch.id
+                                ? "bg-surface-hover text-foreground"
+                                : "text-muted"
+                            }`}
+                          >
+                            <span className="relative shrink-0">
+                              <span className="w-5 h-5 rounded-full bg-accent/20 text-accent flex items-center justify-center text-[10px] font-bold">
+                                {initials(ch.dm_user?.full_name || null, ch.dm_user?.email)}
+                              </span>
+                              {/* Presence dot - would need real presence data */}
+                            </span>
+                            <span className="truncate flex-1 text-left">
+                              {dmDisplayName}
+                            </span>
+                            {ch.unread_count > 0 && (
+                              <span className="bg-accent text-white text-xs rounded-full px-1.5 py-0.5 min-w-[20px] text-center">
+                                {ch.unread_count}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
                 </>
               )}
             </div>
@@ -1379,14 +2289,48 @@ export default function ChatPage() {
                   )}
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-semibold text-foreground">
-                      {activeChannel.name}
+                      {activeChannel.type === "dm"
+                        ? activeChannel.dm_user?.full_name || activeChannel.dm_user?.email || activeChannel.name
+                        : activeChannel.name}
                     </div>
-                    {activeChannel.description && (
+                    {activeChannel.type === "dm" && activeChannel.dm_user?.email ? (
+                      <div className="text-xs text-muted truncate">
+                        {activeChannel.dm_user.email}
+                      </div>
+                    ) : activeChannel.description ? (
                       <div className="text-xs text-muted truncate">
                         {activeChannel.description}
                       </div>
-                    )}
+                    ) : null}
                   </div>
+                  <button
+                    onClick={() => {
+                      setShowSearch((v) => !v);
+                      if (showSearch) {
+                        setSearchQuery("");
+                        setSearchResults([]);
+                      }
+                    }}
+                    className={`p-1.5 rounded transition-colors ${
+                      showSearch
+                        ? "bg-accent/20 text-accent"
+                        : "text-muted hover:text-foreground hover:bg-surface-hover"
+                    }`}
+                    title="Search messages"
+                  >
+                    <Search className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setRightPanel(rightPanel === "pins" ? "none" : "pins")}
+                    className={`p-1.5 rounded transition-colors ${
+                      rightPanel === "pins"
+                        ? "bg-accent/20 text-accent"
+                        : "text-muted hover:text-foreground hover:bg-surface-hover"
+                    }`}
+                    title="Pinned messages"
+                  >
+                    <Pin className="w-3.5 h-3.5" />
+                  </button>
                   <button
                     onClick={toggleMemberPanel}
                     className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${
@@ -1410,8 +2354,100 @@ export default function ChatPage() {
                   )}
                 </div>
 
+                {/* Search bar */}
+                {showSearch && (
+                  <div className="px-4 py-2 border-b border-border bg-surface/50 relative">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted" />
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => handleSearchMessages(e.target.value)}
+                        placeholder="Search messages in this channel..."
+                        autoFocus
+                        className="w-full bg-background border border-border rounded px-3 py-1.5 pl-8 text-sm text-foreground placeholder:text-muted outline-none focus:border-accent"
+                      />
+                      {searchQuery && (
+                        <button
+                          onClick={() => { setSearchQuery(""); setSearchResults([]); }}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                    {/* Search results dropdown */}
+                    {searchQuery.trim() && (
+                      <div className="absolute left-4 right-4 top-full mt-1 bg-surface border border-border rounded-lg shadow-xl max-h-64 overflow-y-auto z-50">
+                        {searchLoading ? (
+                          <div className="flex items-center justify-center py-4">
+                            <Loader2 className="w-4 h-4 animate-spin text-muted" />
+                          </div>
+                        ) : searchResults.length === 0 ? (
+                          <div className="p-3 text-xs text-muted text-center">No messages found</div>
+                        ) : (
+                          searchResults.map((msg) => (
+                            <button
+                              key={msg.id}
+                              onClick={() => {
+                                // Jump to message — scroll it into view
+                                setShowSearch(false);
+                                setSearchQuery("");
+                                setSearchResults([]);
+                                // Find the message in the current messages list and scroll to it
+                                requestAnimationFrame(() => {
+                                  const el = document.getElementById(`msg-${msg.id}`);
+                                  if (el) {
+                                    el.scrollIntoView({ behavior: "smooth", block: "center" });
+                                    el.classList.add("bg-accent/10");
+                                    setTimeout(() => el.classList.remove("bg-accent/10"), 2000);
+                                  }
+                                });
+                              }}
+                              className="w-full flex items-start gap-2 px-3 py-2 text-left hover:bg-surface-hover transition-colors border-b border-border last:border-b-0"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-0.5">
+                                  <span className="text-xs font-medium text-foreground">
+                                    {msg.user?.full_name || msg.user?.email || "Unknown"}
+                                  </span>
+                                  <span className="text-[10px] text-muted">
+                                    {formatTime(msg.created_at)}
+                                  </span>
+                                </div>
+                                <div className="text-xs text-muted truncate">{msg.body}</div>
+                              </div>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Connection status banner */}
+                {connectionStatus !== 'connected' && (
+                  <div className={`text-center text-xs py-1 ${connectionStatus === 'reconnecting' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'}`}>
+                    {connectionStatus === 'reconnecting' ? 'Reconnecting...' : 'Disconnected — check your connection'}
+                  </div>
+                )}
+
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto px-4 py-2">
+                <div
+                  className="flex-1 overflow-y-auto px-4 py-2"
+                  onClick={(e) => {
+                    // Handle #channel link clicks
+                    const target = e.target as HTMLElement;
+                    if (target.tagName === "A" && target.dataset.channel) {
+                      e.preventDefault();
+                      const channelSlug = target.dataset.channel;
+                      const found = channels.find((c) => c.name === channelSlug);
+                      if (found) {
+                        selectChannel(found.id);
+                      }
+                    }
+                  }}
+                >
                   {loadingMessages ? (
                     <div className="flex items-center justify-center h-full">
                       <Loader2 className="w-6 h-6 animate-spin text-muted" />
@@ -1434,12 +2470,54 @@ export default function ChatPage() {
                   )}
                 </div>
 
+                {/* Typing indicator */}
+                {typingUsers.length > 0 && (
+                  <div className="px-4 py-1 text-xs text-muted italic">
+                    {typingUsers.map(u => u.full_name).join(", ")} {typingUsers.length === 1 ? "is" : "are"} typing...
+                  </div>
+                )}
+
                 {/* Input */}
                 <ChatInput
                   placeholder={`Message ${activeChannel.type === "channel" ? "#" : ""}${activeChannel.name}`}
                   members={members}
-                  onSend={handleSendMain}
+                  onSend={(body, mentions, isSilent) => {
+                    handleSendMain(body, mentions, isSilent);
+                    // Clear draft after sending
+                    if (activeChannelId) {
+                      setDrafts((prev) => {
+                        const next = { ...prev };
+                        delete next[activeChannelId];
+                        return next;
+                      });
+                      apiFetch(`/api/chat/drafts?channel_id=${activeChannelId}`, { method: "DELETE" }).catch(() => {});
+                    }
+                    // Clear typing status
+                    sendTypingStatus(null);
+                  }}
                   sending={sendingMain}
+                  initialDraft={activeChannelId ? drafts[activeChannelId] || "" : ""}
+                  onDraftChange={(body) => {
+                    if (!activeChannelId) return;
+                    // Update local drafts
+                    setDrafts((prev) => ({ ...prev, [activeChannelId]: body }));
+                    // Debounced save to server
+                    if (draftSaveTimeoutRef.current) clearTimeout(draftSaveTimeoutRef.current);
+                    draftSaveTimeoutRef.current = setTimeout(() => {
+                      saveDraft(activeChannelId, body);
+                    }, 2000);
+                    // Send typing indicator (throttled to once per 3 seconds)
+                    const now = Date.now();
+                    if (body.trim() && now - lastTypingSentRef.current > 3000) {
+                      lastTypingSentRef.current = now;
+                      sendTypingStatus(activeChannelId);
+                      // Auto-clear typing after 5 seconds of no typing
+                      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                      typingTimeoutRef.current = setTimeout(() => {
+                        sendTypingStatus(null);
+                      }, 5000);
+                    }
+                  }}
                 />
               </>
             ) : (
@@ -1493,7 +2571,10 @@ export default function ChatPage() {
                       [This message was deleted]
                     </span>
                   ) : (
-                    renderBody(threadParent.body, members)
+                    <span
+                      className="text-sm text-foreground leading-relaxed break-words [&_pre]:my-1 [&_code]:text-xs [&_blockquote]:my-1 [&_li]:my-0.5"
+                      dangerouslySetInnerHTML={{ __html: parseMessageBody(threadParent.body) }}
+                    />
                   )}
                 </div>
                 {!threadParent.is_deleted && threadParent.reactions?.length > 0 && (
@@ -1539,8 +2620,12 @@ export default function ChatPage() {
               <ChatInput
                 placeholder="Reply in thread..."
                 members={members}
-                onSend={handleSendThread}
+                onSend={(body, mentions, isSilent) => handleSendThread(body, mentions, isSilent)}
                 sending={sendingThread}
+                showAlsoSendToChannel={true}
+                channelName={activeChannel?.name || ""}
+                alsoSendToChannel={alsoSendToChannel}
+                onAlsoSendToggle={(checked) => setAlsoSendToChannel(checked)}
               />
             </div>
           )}
@@ -1554,7 +2639,7 @@ export default function ChatPage() {
                   Members ({members.length})
                 </span>
                 <div className="flex items-center gap-1">
-                  {canManageChannel(activeChannel) && (
+                  {canManageChannel(activeChannel) && activeChannel?.type !== "dm" && (
                     <button
                       onClick={() => {
                         setShowAddMember(true);
@@ -1637,7 +2722,7 @@ export default function ChatPage() {
                         isOwn={m.user_id === user?.id}
                         size="md"
                       />
-                      <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-500 border-2 border-surface" />
+                      {/* Online indicator — only show for self (always online) */}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm text-foreground truncate">
@@ -1649,7 +2734,7 @@ export default function ChatPage() {
                       <div className="text-xs text-muted truncate">{m.user?.email}</div>
                     </div>
                     {/* Remove button: admin/creator can remove anyone; member can leave (remove self) */}
-                    {(canManageChannel(activeChannel) || m.user_id === user?.id) && (
+                    {activeChannel?.type !== "dm" && (canManageChannel(activeChannel) || m.user_id === user?.id) && (
                       <button
                         onClick={() => handleRemoveMember(m.user_id)}
                         className="opacity-0 group-hover/member:opacity-100 p-1 rounded text-muted hover:text-red-400 transition-all shrink-0"
@@ -1663,7 +2748,7 @@ export default function ChatPage() {
               </div>
 
               {/* Leave channel button for non-admin non-creator */}
-              {activeChannel && !canManageChannel(activeChannel) && (
+              {activeChannel && activeChannel.type !== "dm" && !canManageChannel(activeChannel) && (
                 <div className="px-4 py-3 border-t border-border">
                   <button
                     onClick={() => handleRemoveMember(user!.id)}
@@ -1675,13 +2760,72 @@ export default function ChatPage() {
               )}
             </div>
           )}
+
+          {/* ── Right Panel: Pins ──────────────────── */}
+          {rightPanel === "pins" && activeChannelId && (
+            <div className="w-80 border-l border-border flex-shrink-0 overflow-hidden bg-surface">
+              <PinsPanel
+                channelId={activeChannelId}
+                isAdmin={isAdmin}
+                userId={user?.id || ""}
+                onClose={() => setRightPanel("none")}
+              />
+            </div>
+          )}
+
+          {/* ── Right Panel: Saved Items ───────────── */}
+          {rightPanel === "saved" && (
+            <div className="w-80 border-l border-border flex-shrink-0 overflow-hidden bg-surface">
+              <SavedItems
+                onClose={() => setRightPanel("none")}
+                onJumpToMessage={(channelId, _messageId) => {
+                  setActiveChannelId(channelId);
+                  setRightPanel("none");
+                }}
+              />
+            </div>
+          )}
         </div>
+
+        {/* ── Quick Switcher ───────────────────────── */}
+        {showQuickSwitcher && (
+          <QuickSwitcher
+            channels={channels}
+            onSelect={(id) => {
+              setActiveChannelId(id);
+              setRightPanel("none");
+            }}
+            onClose={() => setShowQuickSwitcher(false)}
+          />
+        )}
+
+        {/* ── Forward Modal ────────────────────────── */}
+        {forwardingMessage && (
+          <ForwardModal
+            messageBody={forwardingMessage.body}
+            messageAuthor={forwardingMessage.user?.full_name || undefined}
+            channels={channels}
+            currentChannelId={forwardingMessage.channel_id}
+            currentChannelName={activeChannel?.name}
+            onClose={() => setForwardingMessage(null)}
+          />
+        )}
 
         {/* ── Delete Confirmation Modal ──────────── */}
         {deletingMessageId && (
           <DeleteConfirmDialog
             onConfirm={handleDeleteConfirm}
             onCancel={() => setDeletingMessageId(null)}
+          />
+        )}
+
+        {/* ── Create Task from Message Modal ──────── */}
+        {taskFromMessage && (
+          <CreateTaskModal
+            messageBody={taskFromMessage.body}
+            members={members}
+            onClose={() => setTaskFromMessage(null)}
+            onSubmit={handleCreateTask}
           />
         )}
 
@@ -1734,6 +2878,21 @@ export default function ChatPage() {
 
               {/* Modal body */}
               <div className="p-4 space-y-3">
+                <div>
+                  <label className="block text-xs text-muted mb-1">
+                    Channel Type
+                  </label>
+                  <select
+                    value={newChType}
+                    onChange={(e) => setNewChType(e.target.value as "public" | "private" | "announcement")}
+                    className="w-full bg-background border border-border rounded px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+                  >
+                    <option value="public">Public Channel</option>
+                    <option value="private">Private Channel</option>
+                    <option value="announcement">Announcement Channel</option>
+                  </select>
+                </div>
+
                 <div>
                   <label className="block text-xs text-muted mb-1">
                     Channel Name
@@ -1831,6 +2990,107 @@ export default function ChatPage() {
                   ) : (
                     "Create Channel"
                   )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* ── New DM Modal ──────────────────────────── */}
+        {showNewDm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="bg-surface border border-border rounded-lg w-full max-w-sm mx-4 shadow-xl">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                <h3 className="text-sm font-semibold text-foreground">
+                  New Direct Message
+                </h3>
+                <button
+                  onClick={() => setShowNewDm(false)}
+                  className="p-1 rounded hover:bg-surface-hover text-muted"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-3 border-b border-border">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted" />
+                  <input
+                    type="text"
+                    value={dmSearch}
+                    onChange={(e) => setDmSearch(e.target.value)}
+                    placeholder="Search by name or email..."
+                    autoFocus
+                    className="w-full bg-background border border-border rounded px-3 py-2 pl-8 text-sm text-foreground placeholder:text-muted outline-none focus:border-accent"
+                  />
+                </div>
+                {!isAdmin && (
+                  <p className="text-xs text-muted mt-2">
+                    You can send direct messages to admins only.
+                  </p>
+                )}
+              </div>
+
+              <div className="max-h-80 overflow-y-auto">
+                {loadingDmUsers ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-5 h-5 animate-spin text-muted" />
+                  </div>
+                ) : (
+                  (() => {
+                    const filtered = dmUsers.filter((u) => {
+                      const q = dmSearch.toLowerCase();
+                      return (
+                        (u.full_name || "").toLowerCase().includes(q) ||
+                        u.email.toLowerCase().includes(q)
+                      );
+                    });
+                    if (filtered.length === 0) {
+                      return (
+                        <div className="p-4 text-xs text-muted text-center">
+                          {dmSearch ? "No matching users" : "No users available"}
+                        </div>
+                      );
+                    }
+                    return filtered.map((u) => (
+                      <button
+                        key={u.id}
+                        onClick={() => handleCreateDm(u.id)}
+                        disabled={creatingDm}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-surface-hover transition-colors text-left disabled:opacity-50"
+                      >
+                        <span className="relative shrink-0">
+                          <span className="w-8 h-8 rounded-full bg-accent/20 text-accent flex items-center justify-center text-xs font-bold">
+                            {initials(u.full_name, u.email)}
+                          </span>
+                          {/* Online indicator — only show for self (always online) */}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-foreground truncate">
+                            {u.full_name || u.email}
+                          </div>
+                          {u.full_name && (
+                            <div className="text-xs text-muted truncate">
+                              {u.email}
+                            </div>
+                          )}
+                        </div>
+                        {u.is_admin && (
+                          <span className="text-[10px] text-accent bg-accent/10 px-1.5 py-0.5 rounded shrink-0">
+                            Admin
+                          </span>
+                        )}
+                      </button>
+                    ));
+                  })()
+                )}
+              </div>
+
+              <div className="px-4 py-3 border-t border-border">
+                <button
+                  onClick={() => setShowNewDm(false)}
+                  className="w-full px-3 py-1.5 rounded text-sm text-muted hover:text-foreground hover:bg-surface-hover transition-colors"
+                >
+                  Cancel
                 </button>
               </div>
             </div>

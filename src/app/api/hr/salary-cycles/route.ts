@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   let query = supabaseAdmin
     .from("hr_salary_cycles")
-    .select("*, employee:hr_employees(id, full_name, department:hr_departments(id, name))")
+    .select("*, employee:hr_employees(id, full_name, department:hr_departments!hr_employees_department_id_fkey(id, name))")
     .order("created_at", { ascending: false });
 
   if (cycle_month) query = query.eq("cycle_month", cycle_month);
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
     // Re-fetch all cycles for the month
     const { data: allCycles } = await supabaseAdmin
       .from("hr_salary_cycles")
-      .select("*, employee:hr_employees(id, full_name, department:hr_departments(id, name))")
+      .select("*, employee:hr_employees(id, full_name, department:hr_departments!hr_employees_department_id_fkey(id, name))")
       .eq("cycle_month", cycle_month);
 
     return NextResponse.json({ cycles: allCycles || [] });
@@ -131,7 +131,7 @@ export async function PUT(req: NextRequest) {
       .from("hr_salary_cycles")
       .select("base_amount, commission_amount, deductions")
       .eq("id", id)
-      .single();
+      .maybeSingle();
 
     if (current) {
       const base = updates.base_amount ?? current.base_amount;

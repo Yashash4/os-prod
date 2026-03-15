@@ -76,7 +76,7 @@ export async function PUT(req: NextRequest) {
         .from("hr_employees")
         .select("id, user_id, full_name")
         .eq("id", employee_id)
-        .single();
+        .maybeSingle();
       if (!emp)
         return NextResponse.json(
           { error: "Employee not found" },
@@ -133,7 +133,7 @@ export async function PUT(req: NextRequest) {
         .from("hr_employees")
         .select("id, user_id")
         .eq("id", employee_id)
-        .single();
+        .maybeSingle();
       if (!emp)
         return NextResponse.json(
           { error: "Employee not found" },
@@ -174,7 +174,7 @@ export async function PUT(req: NextRequest) {
         .from("hr_designations")
         .select("role_id")
         .eq("id", designation_id)
-        .single();
+        .maybeSingle();
 
       const { error } = await supabaseAdmin
         .from("hr_designations")

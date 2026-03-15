@@ -33,8 +33,8 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "opportunityId and pipelineId are required" }, { status: 400 });
     }
 
-    const result = await updateOpportunity(opportunityId, pipelineId, updates);
-    return NextResponse.json({ opportunity: result });
+    const updated = await updateOpportunity(opportunityId, pipelineId, updates);
+    return NextResponse.json({ opportunity: updated });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to update opportunity";
     return NextResponse.json({ error: message }, { status: 500 });

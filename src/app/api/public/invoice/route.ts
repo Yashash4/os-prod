@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
       .from("sent_invoices")
       .select("invoice_number, recipient_name, amount, sent_at")
       .eq("invoice_number", invoiceNumber)
-      .single();
+      .maybeSingle();
 
     if (error || !data) {
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 });

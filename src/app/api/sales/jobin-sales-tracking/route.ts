@@ -69,7 +69,7 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "opportunity_id is required" }, { status: 400 });
     }
 
-    const allowed = await verifyScopeAccess(result.scope, "sales_call_booked_tracking", opportunity_id, "assigned_to", false, "opportunity_id");
+    const allowed = await verifyScopeAccess(result.scope, "jobin_sales_tracking", opportunity_id, "assigned_to", false, "opportunity_id");
     if (!allowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
 
     const { data, error } = await supabaseAdmin

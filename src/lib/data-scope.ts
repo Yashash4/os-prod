@@ -238,7 +238,7 @@ export async function verifyScopeAccess(
     .from(table)
     .select(column)
     .eq(idColumn, id)
-    .single();
+    .maybeSingle();
 
   if (error || !row) {
     return false;

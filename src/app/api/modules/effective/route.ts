@@ -10,6 +10,16 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const roleId = searchParams.get("role_id");
 
+    // Admins see all active modules — no role/override filtering needed
+    if (authResult.auth.isAdmin) {
+      const { data: allModules } = await supabaseAdmin
+        .from("modules")
+        .select("*")
+        .eq("is_active", true)
+        .order("order", { ascending: true });
+      return NextResponse.json({ modules: allModules || [] });
+    }
+
     // If a role_id is provided, verify it belongs to the authenticated user
     if (roleId) {
       let userRoleId: string | null = null;
@@ -18,7 +28,7 @@ export async function GET(req: NextRequest) {
           .from("users")
           .select("role_id")
           .eq("id", authResult.auth.userId)
-          .single();
+          .maybeSingle();
         if (!error) {
           userRoleId = userProfile?.role_id ?? null;
         }

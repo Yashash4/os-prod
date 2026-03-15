@@ -1044,6 +1044,37 @@ export const MODULE_REGISTRY: Omit<Module, "id" | "created_at">[] = [
     order: 4,
     is_active: true,
   },
+  // ── Guides Module ──────────────────────────
+  {
+    name: "Guides",
+    slug: "guides",
+    description: "Help docs, user guides & API reference",
+    icon: "BookOpen",
+    parent_slug: null,
+    path: "/m/guides",
+    order: 11,
+    is_active: true,
+  },
+  {
+    name: "Chat Guide",
+    slug: "guides-chat",
+    description: "How to use the messaging system",
+    icon: "MessageCircle",
+    parent_slug: "guides",
+    path: "/m/guides/chat",
+    order: 1,
+    is_active: true,
+  },
+  {
+    name: "API Reference",
+    slug: "guides-api",
+    description: "API documentation for developers",
+    icon: "Code",
+    parent_slug: "guides",
+    path: "/m/guides/api",
+    order: 2,
+    is_active: true,
+  },
 ];
 
 // Map icon names to actual Lucide icon components (used in components)
@@ -1103,6 +1134,8 @@ export const ICON_MAP: Record<string, string> = {
   FolderOpen: "FolderOpen",
   CalendarOff: "CalendarOff",
   PartyPopper: "PartyPopper",
+  MessageCircle: "MessageCircle",
+  Code: "Code",
 };
 
 export function getModuleBySlug(slug: string) {

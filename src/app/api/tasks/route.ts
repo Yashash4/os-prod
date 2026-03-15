@@ -186,7 +186,7 @@ export async function PUT(req: NextRequest) {
 
     // If user only has tasks-my, verify task is assigned to them before updating
     if (!canSeeBoard && !canSeeTeam && canSeeMy) {
-      const { data: existing } = await supabaseAdmin.from("tasks").select("assigned_to").eq("id", id).single();
+      const { data: existing } = await supabaseAdmin.from("tasks").select("assigned_to").eq("id", id).maybeSingle();
       if (!existing || existing.assigned_to !== auth.auth.userId) {
         return NextResponse.json({ error: "Access denied" }, { status: 403 });
       }
@@ -242,7 +242,7 @@ export async function DELETE(req: NextRequest) {
       .from("tasks")
       .select("*")
       .eq("id", id)
-      .single();
+      .maybeSingle();
 
     const { error } = await supabaseAdmin.from("tasks").delete().eq("id", id);
     if (error) throw error;

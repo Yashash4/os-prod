@@ -109,7 +109,7 @@ export async function authenticateRequest(
       .from("users")
       .select("role_id, role:roles(is_admin)")
       .eq("id", user.id)
-      .single();
+      .maybeSingle();
 
     const roleId = profile?.role_id || null;
     const isAdmin =

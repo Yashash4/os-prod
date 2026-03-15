@@ -1,8 +1,25 @@
 import type { NextConfig } from "next";
 
+const appOrigin = process.env.NEXT_PUBLIC_APP_URL || "https://os.apexfashionlab.com";
+
 const nextConfig: NextConfig = {
+  serverExternalPackages: [],
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "2mb",
+    },
+  },
   async headers() {
     return [
+      {
+        source: "/api/(.*)",
+        headers: [
+          { key: "Access-Control-Allow-Origin", value: appOrigin },
+          { key: "Access-Control-Allow-Methods", value: "GET, POST, PUT, DELETE, OPTIONS" },
+          { key: "Access-Control-Allow-Headers", value: "Content-Type, Authorization" },
+          { key: "Access-Control-Max-Age", value: "86400" },
+        ],
+      },
       {
         source: "/(.*)",
         headers: [
@@ -16,8 +33,8 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              `connect-src 'self' ${process.env.NEXT_PUBLIC_SUPABASE_URL || ""} https://*.supabase.co`,
-              `img-src 'self' data: blob: ${process.env.NEXT_PUBLIC_SUPABASE_URL || ""}`,
+              `connect-src 'self' ${process.env.NEXT_PUBLIC_SUPABASE_URL || ""} https://*.supabase.co wss://*.supabase.co`,
+              `img-src 'self' data: blob: ${process.env.NEXT_PUBLIC_SUPABASE_URL || ""} https://*.fbcdn.net https://*.facebook.com https://*.facebookusercontent.com https://*.cdninstagram.com`,
               "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
               "style-src 'self' 'unsafe-inline'",
               "font-src 'self' data:",

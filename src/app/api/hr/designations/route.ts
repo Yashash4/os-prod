@@ -61,14 +61,14 @@ export async function PUT(req: NextRequest) {
     .from("hr_designations")
     .select("*")
     .eq("id", id)
-    .single();
+    .maybeSingle();
 
   const { data, error } = await supabaseAdmin
     .from("hr_designations")
     .update(updates)
     .eq("id", id)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -97,7 +97,7 @@ export async function DELETE(req: NextRequest) {
     .from("hr_designations")
     .select("*")
     .eq("id", id)
-    .single();
+    .maybeSingle();
 
   const { error } = await supabaseAdmin.from("hr_designations").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

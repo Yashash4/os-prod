@@ -76,15 +76,49 @@ export async function GET(req: NextRequest) {
           unreadCount = count || 0;
         }
 
+        // For DM channels, include the other user's info
+        let dmUser: { id: string; full_name: string | null; email: string; avatar_url: string | null } | null = null;
+        if (ch.type === "dm") {
+          const { data: dmMembers } = await supabaseAdmin
+            .from("chat_members")
+            .select("user_id")
+            .eq("channel_id", ch.id);
+
+          if (dmMembers) {
+            const otherMember = dmMembers.find((m: { user_id: string }) => m.user_id !== userId);
+            if (otherMember) {
+              const { data: otherUserData } = await supabaseAdmin
+                .from("users")
+                .select("id, full_name, email, avatar_url")
+                .eq("id", otherMember.user_id)
+                .single();
+              if (otherUserData) {
+                dmUser = otherUserData;
+              }
+            }
+          }
+        }
+
         return {
           ...ch,
           last_message: lastMessage,
           unread_count: unreadCount,
+          ...(dmUser ? { dm_user: dmUser } : {}),
         };
       })
     );
 
-    return NextResponse.json({ channels: enriched });
+    // Sort DMs by last message time (most recent first), channels by created_at
+    const sortedChannels = enriched.filter((c) => c.type === "channel");
+    const sortedDms = enriched
+      .filter((c) => c.type === "dm")
+      .sort((a, b) => {
+        const aTime = (a.last_message as { created_at?: string } | null)?.created_at || a.created_at;
+        const bTime = (b.last_message as { created_at?: string } | null)?.created_at || b.created_at;
+        return new Date(bTime).getTime() - new Date(aTime).getTime();
+      });
+
+    return NextResponse.json({ channels: [...sortedChannels, ...sortedDms] });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to fetch channels" },
@@ -150,27 +184,49 @@ export async function POST(req: NextRequest) {
   const result = await requireModuleAccess(req, "chat");
   if ("error" in result) return result.error;
 
-  const { userId } = result.auth;
+  const { userId, isAdmin } = result.auth;
 
   try {
     const body = await req.json();
-    const { name, description, type, member_ids } = body as {
+    const { name, description, type, member_ids, member_id, is_private, is_announcement } = body as {
       name?: string;
       description?: string;
       type: "channel" | "dm";
       member_ids?: string[];
+      member_id?: string;
+      is_private?: boolean;
+      is_announcement?: boolean;
     };
 
     if (type === "dm") {
-      // For DMs, check if a DM channel already exists between the two users
-      if (!member_ids || member_ids.length !== 1) {
+      // Support both member_id (single) and member_ids (array with 1 element)
+      const otherUserId = member_id || (member_ids && member_ids.length === 1 ? member_ids[0] : null);
+
+      if (!otherUserId) {
         return NextResponse.json(
           { error: "DM requires exactly one other member" },
           { status: 400 }
         );
       }
 
-      const otherUserId = member_ids[0];
+      // Validate DM permission: at least one participant must be admin
+      let otherIsAdmin = false;
+      const { data: otherRoleData } = await supabaseAdmin
+        .from("users")
+        .select("role:roles(is_admin)")
+        .eq("id", otherUserId)
+        .single();
+
+      if (otherRoleData?.role && typeof otherRoleData.role === "object") {
+        otherIsAdmin = (otherRoleData.role as { is_admin?: boolean }).is_admin === true;
+      }
+
+      if (!isAdmin && !otherIsAdmin) {
+        return NextResponse.json(
+          { error: "DMs are only allowed with admins" },
+          { status: 403 }
+        );
+      }
 
       // Find DM channels the current user is in
       const { data: myDmChannels } = await supabaseAdmin
@@ -179,7 +235,7 @@ export async function POST(req: NextRequest) {
         .eq("user_id", userId);
 
       if (myDmChannels && myDmChannels.length > 0) {
-        const myChannelIds = myDmChannels.map((m) => m.channel_id);
+        const myChannelIds = myDmChannels.map((m: { channel_id: string }) => m.channel_id);
 
         // Check if the other user is also in any of those DM channels
         const { data: sharedChannels } = await supabaseAdmin
@@ -189,7 +245,7 @@ export async function POST(req: NextRequest) {
           .in("channel_id", myChannelIds);
 
         if (sharedChannels && sharedChannels.length > 0) {
-          const sharedIds = sharedChannels.map((m) => m.channel_id);
+          const sharedIds = sharedChannels.map((m: { channel_id: string }) => m.channel_id);
 
           // Check if any of these shared channels are DMs
           const { data: existingDm } = await supabaseAdmin
@@ -205,14 +261,22 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Create new DM channel
+      // Get both users' names for the DM channel name
+      const { data: currentUser } = await supabaseAdmin
+        .from("users")
+        .select("full_name, email")
+        .eq("id", userId)
+        .single();
+
       const { data: otherUser } = await supabaseAdmin
         .from("users")
         .select("full_name, email")
         .eq("id", otherUserId)
         .single();
 
-      const dmName = otherUser?.full_name || otherUser?.email || "DM";
+      const currentName = currentUser?.full_name || currentUser?.email?.split("@")[0] || "User";
+      const otherName = otherUser?.full_name || otherUser?.email?.split("@")[0] || "User";
+      const dmName = `${currentName} & ${otherName}`;
 
       const { data: channel, error: chErr } = await supabaseAdmin
         .from("chat_channels")
@@ -220,6 +284,7 @@ export async function POST(req: NextRequest) {
           name: dmName,
           description: null,
           type: "dm",
+          is_private: true,
           created_by: userId,
         })
         .select()
@@ -249,6 +314,8 @@ export async function POST(req: NextRequest) {
         name,
         description: description || null,
         type: "channel",
+        is_private: is_private || false,
+        is_announcement: is_announcement || false,
         created_by: userId,
       })
       .select()
