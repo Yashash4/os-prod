@@ -1,4 +1,4 @@
-# APEX - OS
+# APEX OS
 
 Internal operating system for **Apex Fashion Lab** — a unified, role-based platform that consolidates 15–20+ SaaS tools into a single dashboard. Each user sees only the modules their role permits.
 
