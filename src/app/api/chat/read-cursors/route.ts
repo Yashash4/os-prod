@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
   try {
     // Get all channels the user is a member of
     const { data: memberships, error: memErr } = await supabaseAdmin
-      .from("chat_members")
+      .from("chat_channel_members")
       .select("channel_id")
       .eq("user_id", userId);
 

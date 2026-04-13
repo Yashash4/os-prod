@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
     const emailStatus = emailError ? "failed" : "sent";
 
     // Log to sent_invoices
-    await supabaseAdmin.from("sent_invoices").insert({
+    await supabaseAdmin.from("sent_emails").insert({
       opportunity_id,
       invoice_number: invoiceNumber,
       recipient_email,
@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
       tier: 1,
       action: "invoice_sent",
       module: "automations",
-      breadcrumb: "APEX OS > Automations > Email",
+      breadcrumb_path: "APEX OS > Automations > Email",
       entity_type: "sent_invoice",
       entity_id: opportunity_id,
       after_value: { invoice_number: invoiceNumber, recipient_email, amount, status: emailStatus },

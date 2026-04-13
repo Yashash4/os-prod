@@ -37,8 +37,8 @@ export default function PermissionGate({
 }: PermissionGateProps) {
   const { canDo, loading } = usePermissions(module);
 
-  // While loading, hide the gated content to avoid flash of unauthorized UI
-  if (loading) return null;
+  // While loading, show fallback (or children for admins) to avoid blank cells
+  if (loading) return <>{fallback ?? children}</>;
 
   if (canDo(subModule, action)) {
     return <>{children}</>;

@@ -32,10 +32,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "owner is required" }, { status: 400 });
     }
 
+    // Look up employee ID from owner name for sales_rep_id filtering
+    const { data: repRow } = await supabaseAdmin.from("hr_employees").select("id").ilike("full_name", "%" + owner + "%").eq("is_sales_rep", true).single();
+    const repEmployeeId = repRow?.id;
+
     let query = supabaseAdmin
-      .from("meeting_analysis_sheet")
+      .from("sales_meeting_analysis")
       .select("*")
-      .eq("owner", owner)
+      .eq("sales_rep_id", repEmployeeId || "")
       .order("meet_date", { ascending: false });
 
     if (from) query = query.gte("meet_date", from);
@@ -50,15 +54,14 @@ export async function GET(req: NextRequest) {
 
     // Cross-reference with sales tracking to auto-tag won deals
     if (records.length > 0) {
-      const trackingTable = owner === "jobin" ? "jobin_sales_tracking" : "maverick_sales_tracking";
       const contactEmails = records
         .map((r: { contact_email: string | null }) => r.contact_email)
         .filter(Boolean) as string[];
 
       if (contactEmails.length > 0) {
-        const { data: wonDeals } = await supabaseAdmin
-          .from(trackingTable)
-          .select("contact_email")
+        let wonQuery = supabaseAdmin.from("sales_deals").select("contact_email");
+        if (repEmployeeId) wonQuery = wonQuery.eq("sales_rep_id", repEmployeeId);
+        const { data: wonDeals } = await wonQuery
           .in("contact_email", contactEmails);
 
         if (wonDeals && wonDeals.length > 0) {
@@ -73,8 +76,10 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({ records, _permissions: result.permissions });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to fetch meeting sheet";
+  } catch (error: unknown) {
+    const e = error as { message?: string; details?: string; hint?: string; code?: string };
+    console.error("SALES ROUTE ERROR in meeting-analysis-sheet:", e.message, "| details:", e.details, "| hint:", e.hint, "| code:", e.code);
+    const message = e.message || "Failed to fetch meeting sheet";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -98,6 +103,10 @@ export async function POST(req: NextRequest) {
       if (!owner || !month || !ghlUserId) {
         return NextResponse.json({ error: "owner, month, and ghlUserId are required" }, { status: 400 });
       }
+
+      // Look up employee ID from owner name
+      const { data: syncRepRow } = await supabaseAdmin.from("hr_employees").select("id").ilike("full_name", "%" + owner + "%").eq("is_sales_rep", true).single();
+      const syncRepId = syncRepRow?.id;
 
       const [year, mon] = month.split("-").map(Number);
       const lastDay = new Date(year, mon, 0).getDate();
@@ -149,54 +158,37 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ synced: 0, message: "No past meetings found for this month" });
       }
 
-      // Check existing rows to avoid duplicates
-      const { data: existing } = await supabaseAdmin
-        .from("meeting_analysis_sheet")
-        .select("calendar_event_id")
-        .eq("owner", owner)
-        .gte("meet_date", `${month}-01`)
-        .lte("meet_date", to);
+      // Fetch contact info for ALL past events (not just new ones)
+      const allContactIds = [...new Set(pastEvents.map((ev) => ev.contactId).filter(Boolean))] as string[];
+      const { data: contacts } = allContactIds.length > 0
+        ? await supabaseAdmin.from("sales_opportunities").select("contact_id, contact_name, contact_email, contact_phone, id").in("contact_id", allContactIds)
+        : { data: [] as { contact_id: string; contact_name: string; contact_email: string; contact_phone: string; id: string }[] };
 
-      const existingEventIds = new Set((existing || []).map((r: { calendar_event_id: string }) => r.calendar_event_id));
-
-      const newEvents = pastEvents.filter((ev) => !existingEventIds.has(ev.id));
-
-      if (newEvents.length === 0) {
-        return NextResponse.json({ synced: 0, message: "All meetings already synced" });
-      }
-
-      // Fetch contact info from sales_call_booked_tracking for each unique contactId
-      const contactIds = [...new Set(newEvents.map((ev) => ev.contactId).filter(Boolean))] as string[];
-      const { data: contacts } = await supabaseAdmin
-        .from("sales_call_booked_tracking")
-        .select("contact_id, contact_name, contact_email, contact_phone, opportunity_id")
-        .in("contact_id", contactIds);
-
-      const contactMap = new Map<string, { contact_name: string; contact_email: string; contact_phone: string; opportunity_id: string }>();
-      (contacts || []).forEach((c: { contact_id: string; contact_name: string; contact_email: string; contact_phone: string; opportunity_id: string }) => {
+      const contactMap = new Map<string, { contact_name: string; contact_email: string; contact_phone: string; id: string }>();
+      (contacts || []).forEach((c: { contact_id: string; contact_name: string; contact_email: string; contact_phone: string; id: string }) => {
         contactMap.set(c.contact_id, c);
       });
 
-      // Build rows
-      const rows = newEvents.map((ev) => {
+      // Build rows for ALL past events — upsert will update existing + insert new
+      const rows = pastEvents.map((ev) => {
         const contact = ev.contactId ? contactMap.get(ev.contactId) : null;
         return {
-          owner,
-          opportunity_id: contact?.opportunity_id || null,
-          contact_id: ev.contactId || null,
+          sales_rep_id: syncRepId,
+          opportunity_id: contact?.id || null,
+          contact_id: ev.contactId || "",
           calendar_event_id: ev.id,
           meet_date: ev.startTime,
-          contact_name: contact?.contact_name || null,
-          contact_email: contact?.contact_email || null,
-          contact_phone: contact?.contact_phone || null,
+          contact_name: contact?.contact_name || "",
+          contact_email: contact?.contact_email || "",
+          contact_phone: contact?.contact_phone || "",
           meeting_link: ev.address || null,
           created_by: result.auth.userId,
         };
       });
 
       const { data: inserted, error } = await supabaseAdmin
-        .from("meeting_analysis_sheet")
-        .insert(rows)
+        .from("sales_meeting_analysis")
+        .upsert(rows, { onConflict: "calendar_event_id" })
         .select();
 
       if (error) throw error;
@@ -205,8 +197,10 @@ export async function POST(req: NextRequest) {
         synced: (inserted || []).length,
         message: `Synced ${(inserted || []).length} meetings`,
       });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to sync meetings";
+    } catch (error: unknown) {
+      const e = error as { message?: string; details?: string; hint?: string; code?: string };
+    console.error("SALES ROUTE ERROR in meeting-analysis-sheet:", e.message, "| details:", e.details, "| hint:", e.hint, "| code:", e.code);
+    const message = e.message || "Failed to sync meetings";
       return NextResponse.json({ error: message }, { status: 500 });
     }
   }
@@ -214,16 +208,23 @@ export async function POST(req: NextRequest) {
   // ── Regular create ──
   try {
     const body = await req.json();
+    // Sanitize TEXT NOT NULL fields — null violates NOT NULL constraint
+    if (body.contact_id === null || body.contact_id === undefined) body.contact_id = "";
+    if (body.contact_name === null || body.contact_name === undefined) body.contact_name = "";
+    if (body.contact_email === null || body.contact_email === undefined) body.contact_email = "";
+    if (body.contact_phone === null || body.contact_phone === undefined) body.contact_phone = "";
     const { data, error } = await supabaseAdmin
-      .from("meeting_analysis_sheet")
+      .from("sales_meeting_analysis")
       .insert(body)
       .select()
       .single();
 
     if (error) throw error;
     return NextResponse.json({ record: data });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to create entry";
+  } catch (error: unknown) {
+    const e = error as { message?: string; details?: string; hint?: string; code?: string };
+    console.error("SALES ROUTE ERROR in meeting-analysis-sheet:", e.message, "| details:", e.details, "| hint:", e.hint, "| code:", e.code);
+    const message = e.message || "Failed to create entry";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -244,11 +245,11 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "id is required" }, { status: 400 });
     }
 
-    const allowed = await verifyScopeAccess(result.scope, "meeting_analysis_sheet", id, "created_by");
+    const allowed = await verifyScopeAccess(result.scope, "sales_meeting_analysis", id, "created_by");
     if (!allowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
 
     const { data, error } = await supabaseAdmin
-      .from("meeting_analysis_sheet")
+      .from("sales_meeting_analysis")
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq("id", id)
       .select()
@@ -256,8 +257,10 @@ export async function PUT(req: NextRequest) {
 
     if (error) throw error;
     return NextResponse.json({ record: data });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to update entry";
+  } catch (error: unknown) {
+    const e = error as { message?: string; details?: string; hint?: string; code?: string };
+    console.error("SALES ROUTE ERROR in meeting-analysis-sheet:", e.message, "| details:", e.details, "| hint:", e.hint, "| code:", e.code);
+    const message = e.message || "Failed to update entry";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -276,18 +279,20 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "id is required" }, { status: 400 });
     }
 
-    const allowed = await verifyScopeAccess(result.scope, "meeting_analysis_sheet", id, "created_by");
+    const allowed = await verifyScopeAccess(result.scope, "sales_meeting_analysis", id, "created_by");
     if (!allowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
 
     const { error } = await supabaseAdmin
-      .from("meeting_analysis_sheet")
+      .from("sales_meeting_analysis")
       .delete()
       .eq("id", id);
 
     if (error) throw error;
     return NextResponse.json({ success: true });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to delete entry";
+  } catch (error: unknown) {
+    const e = error as { message?: string; details?: string; hint?: string; code?: string };
+    console.error("SALES ROUTE ERROR in meeting-analysis-sheet:", e.message, "| details:", e.details, "| hint:", e.hint, "| code:", e.code);
+    const message = e.message || "Failed to delete entry";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   if ("error" in result) return result.error;
 
   const { data, error } = await supabaseAdmin
-    .from("expense_categories")
+    .from("finance_expense_categories")
     .select("*")
     .order("name");
 
@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
 
   // Get expense count per category
   const { data: counts } = await supabaseAdmin
-    .from("expenses")
+    .from("finance_expenses")
     .select("category_id");
 
   const countMap: Record<string, number> = {};
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
   if (!name) return NextResponse.json({ error: "Name is required" }, { status: 400 });
 
   const { data, error } = await supabaseAdmin
-    .from("expense_categories")
+    .from("finance_expense_categories")
     .insert({ name, icon: icon || null })
     .select()
     .single();
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
     tier: 2,
     action: "expense_category_created",
     module: "finance",
-    breadcrumb: "APEX OS > Finance > Categories",
+    breadcrumb_path: "APEX OS > Finance > Categories",
     entity_type: "expense_category",
     entity_id: data.id,
     after_value: { name, icon },
@@ -78,7 +78,7 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "ID is required" }, { status: 400 });
 
   const { error } = await supabaseAdmin
-    .from("expense_categories")
+    .from("finance_expense_categories")
     .delete()
     .eq("id", id);
 
@@ -89,7 +89,7 @@ export async function DELETE(req: NextRequest) {
     tier: 2,
     action: "expense_category_deleted",
     module: "finance",
-    breadcrumb: "APEX OS > Finance > Categories",
+    breadcrumb_path: "APEX OS > Finance > Categories",
     entity_type: "expense_category",
     entity_id: id,
   });

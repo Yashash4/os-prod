@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiFetch } from "@/lib/api-fetch";
 import { supabase } from "@/lib/supabase";
@@ -946,12 +947,25 @@ function DeleteConfirmDialog({
 /* ── Main Component ──────────────────────────────── */
 
 export default function ChatPage() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, role } = useAuth();
+  // Fallback: check role directly in case isAdmin has timing issues
+  const adminCheck = isAdmin || role?.is_admin === true;
+  const router = useRouter();
+  const pathname = usePathname();
 
   // Channel state
   const [channels, setChannels] = useState<ChatChannel[]>([]);
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [loadingChannels, setLoadingChannels] = useState(true);
+
+  // URL sync helper — called from the existing selectChannel function
+  const updateChannelUrl = useCallback((id: string | null) => {
+    if (id) {
+      router.replace(`${pathname}?channel=${id}`, { scroll: false });
+    } else {
+      router.replace(pathname, { scroll: false });
+    }
+  }, [router, pathname]);
 
   // Messages state
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -1002,6 +1016,7 @@ export default function ChatPage() {
 
   // Delete channel
   const [deletingChannelId, setDeletingChannelId] = useState<string | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   // Role color map
   const [roleMap, setRoleMap] = useState<Record<string, { roleName: string; isAdmin: boolean }>>({});
@@ -1047,9 +1062,9 @@ export default function ChatPage() {
   const canManageChannel = useCallback(
     (ch: ChatChannel | null) => {
       if (!ch || !user) return false;
-      return isAdmin || ch.created_by === user.id;
+      return adminCheck || ch.created_by === user.id;
     },
-    [isAdmin, user]
+    [adminCheck, user]
   );
 
   const threadParent = useMemo(
@@ -1084,6 +1099,16 @@ export default function ChatPage() {
   useEffect(() => {
     fetchChannels();
   }, [fetchChannels]);
+
+  // Auto-select channel from URL on initial load
+  useEffect(() => {
+    if (loadingChannels || channels.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const urlChannel = params.get("channel");
+    if (urlChannel && channels.some((c) => c.id === urlChannel)) {
+      setActiveChannelId(urlChannel);
+    }
+  }, [loadingChannels, channels]);
 
   /* ── Fetch role map for name colors ─────────── */
 
@@ -1653,8 +1678,9 @@ export default function ChatPage() {
     setRightPanel("none");
     setThreadParentId(null);
     setEditingMessageId(null);
+    updateChannelUrl(id);
 
-  }, [activeChannelId, drafts, saveDraft, sendTypingStatus]);
+  }, [activeChannelId, drafts, saveDraft, sendTypingStatus, updateChannelUrl]);
 
   /* ── Load all users (for new channel + add member) ── */
 
@@ -2006,7 +2032,7 @@ export default function ChatPage() {
         {!msg.is_deleted && !isEditing && (
           <MessageActions
             isOwn={isMe}
-            canEdit={isMe && (isAdmin || (Date.now() - new Date(msg.created_at).getTime() < 120000))}
+            canEdit={isMe && (adminCheck || (Date.now() - new Date(msg.created_at).getTime() < 120000))}
             hasThread={options.allowReply}
             onReply={
               options.allowReply ? () => openThread(msg.id) : undefined
@@ -2154,7 +2180,7 @@ export default function ChatPage() {
               <span className="text-sm font-semibold text-foreground">
                 Chat
               </span>
-              {isAdmin && (
+              {adminCheck && (
                 <button
                   onClick={openNewChannelModal}
                   className="p-1.5 rounded hover:bg-surface-hover text-muted hover:text-foreground transition-colors"
@@ -2443,7 +2469,7 @@ export default function ChatPage() {
                       const channelSlug = target.dataset.channel;
                       const found = channels.find((c) => c.name === channelSlug);
                       if (found) {
-                        selectChannel(found.id);
+                        setActiveChannelId(found.id);
                       }
                     }
                   }}
@@ -2766,7 +2792,7 @@ export default function ChatPage() {
             <div className="w-80 border-l border-border flex-shrink-0 overflow-hidden bg-surface">
               <PinsPanel
                 channelId={activeChannelId}
-                isAdmin={isAdmin}
+                isAdmin={adminCheck}
                 userId={user?.id || ""}
                 onClose={() => setRightPanel("none")}
               />
@@ -2829,35 +2855,58 @@ export default function ChatPage() {
           />
         )}
 
-        {/* ── Delete Channel Confirmation ────────── */}
-        {deletingChannelId && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="bg-surface border border-border rounded-lg w-full max-w-sm mx-4 shadow-xl p-5">
-              <h3 className="text-sm font-semibold text-foreground mb-2">Delete channel</h3>
-              <p className="text-sm text-muted mb-4">
-                Are you sure you want to delete{" "}
-                <span className="font-medium text-foreground">
-                  #{channels.find((c) => c.id === deletingChannelId)?.name}
-                </span>
-                ? All messages will be permanently removed.
-              </p>
-              <div className="flex justify-end gap-2">
-                <button
-                  onClick={() => setDeletingChannelId(null)}
-                  className="px-3 py-1.5 rounded text-sm text-muted hover:text-foreground hover:bg-surface-hover transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => handleDeleteChannel(deletingChannelId)}
-                  className="px-3 py-1.5 rounded text-sm bg-red-600 hover:bg-red-700 text-white transition-colors"
-                >
-                  Delete
-                </button>
+        {/* ── Delete Channel Confirmation (type name to confirm) ── */}
+        {deletingChannelId && (() => {
+          const channelName = channels.find((c) => c.id === deletingChannelId)?.name || "";
+          const isMatch = deleteConfirmText.trim().toLowerCase() === channelName.toLowerCase();
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+              <div className="bg-surface border border-border rounded-xl w-full max-w-md mx-4 shadow-2xl p-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-8 h-8 rounded-full bg-red-500/15 flex items-center justify-center">
+                    <Trash2 className="w-4 h-4 text-red-400" />
+                  </div>
+                  <h3 className="text-base font-semibold text-foreground">Delete channel</h3>
+                </div>
+                <p className="text-sm text-muted mb-1">
+                  This will permanently delete{" "}
+                  <span className="font-semibold text-foreground">#{channelName}</span>{" "}
+                  and all its messages. This action cannot be undone.
+                </p>
+                <p className="text-sm text-muted mb-4">
+                  Type <span className="font-mono text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded text-xs">{channelName}</span> to confirm.
+                </p>
+                <input
+                  type="text"
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  placeholder={channelName}
+                  className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm text-foreground placeholder:text-muted/40 focus:outline-none focus:border-red-500/50 mb-4"
+                  autoFocus
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => { setDeletingChannelId(null); setDeleteConfirmText(""); }}
+                    className="px-4 py-2 rounded-lg text-sm text-muted hover:text-foreground hover:bg-surface-hover transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => { handleDeleteChannel(deletingChannelId); setDeleteConfirmText(""); }}
+                    disabled={!isMatch}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      isMatch
+                        ? "bg-red-600 hover:bg-red-700 text-white"
+                        : "bg-red-600/30 text-red-300/50 cursor-not-allowed"
+                    }`}
+                  >
+                    Delete Channel
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* ── New Channel Modal ──────────────────── */}
         {showNewChannel && (
@@ -3023,7 +3072,7 @@ export default function ChatPage() {
                     className="w-full bg-background border border-border rounded px-3 py-2 pl-8 text-sm text-foreground placeholder:text-muted outline-none focus:border-accent"
                   />
                 </div>
-                {!isAdmin && (
+                {!adminCheck && (
                   <p className="text-xs text-muted mt-2">
                     You can send direct messages to admins only.
                   </p>

@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     const date = req.nextUrl.searchParams.get("date");
 
     let query = supabaseAdmin
-      .from("daily_collection_log")
+      .from("payments_daily_collection")
       .select("*")
       .order("created_at", { ascending: false });
 
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { data, error } = await supabaseAdmin
-      .from("daily_collection_log")
+      .from("payments_daily_collection")
       .insert({
         log_date,
         customer_name,
@@ -87,7 +87,7 @@ export async function PUT(req: NextRequest) {
     if (!allowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
 
     const { data, error } = await supabaseAdmin
-      .from("daily_collection_log")
+      .from("payments_daily_collection")
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq("id", id)
       .select()
@@ -119,7 +119,7 @@ export async function DELETE(req: NextRequest) {
     if (!allowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
 
     const { error } = await supabaseAdmin
-      .from("daily_collection_log")
+      .from("payments_daily_collection")
       .delete()
       .eq("id", id);
 

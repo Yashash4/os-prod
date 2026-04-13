@@ -10,9 +10,11 @@ export async function GET(req: NextRequest) {
   const result = await requireSubModuleAccess(req, "sales", "maverick");
   if ("error" in result) return result.error;
   try {
+    const { data: repRow } = await supabaseAdmin.from("hr_employees").select("id").ilike("full_name", "%maverick%").eq("is_sales_rep", true).single();
+    const maverickRepId = repRow?.id;
     // Fetch call_booked_tracking records with ghl_status = 'won'
     let cbQuery = supabaseAdmin
-      .from("sales_call_booked_tracking")
+      .from("sales_opportunities")
       .select("*")
       .eq("ghl_status", "won")
       .order("created_at", { ascending: false });
@@ -24,9 +26,9 @@ export async function GET(req: NextRequest) {
     if (cbError) throw cbError;
 
     // Fetch maverick sales tracking records
-    const { data: salesData, error: salesError } = await supabaseAdmin
-      .from("maverick_sales_tracking")
-      .select("*");
+    let salesQ = supabaseAdmin.from("sales_deals").select("*");
+    if (maverickRepId) salesQ = salesQ.eq("sales_rep_id", maverickRepId);
+    const { data: salesData, error: salesError } = await salesQ;
 
     if (salesError) throw salesError;
 
@@ -38,21 +40,24 @@ export async function GET(req: NextRequest) {
 
     // Merge
     const merged = (callBooked || []).map((cb) => ({
+      opportunity_id: cb.id,
       ...cb,
-      closed_date: salesMap[cb.opportunity_id]?.closed_date || null,
-      fees_quoted: salesMap[cb.opportunity_id]?.fees_quoted || 0,
-      fees_collected: salesMap[cb.opportunity_id]?.fees_collected || 0,
-      pending_amount: salesMap[cb.opportunity_id]?.pending_amount || 0,
-      payment_mode: salesMap[cb.opportunity_id]?.payment_mode || null,
-      invoice_number: salesMap[cb.opportunity_id]?.invoice_number || null,
-      collection_status: salesMap[cb.opportunity_id]?.collection_status || "pending",
-      onboarding_status: salesMap[cb.opportunity_id]?.onboarding_status || "not_started",
-      sales_notes: salesMap[cb.opportunity_id]?.notes || null,
+      closed_date: salesMap[cb.id]?.closed_date || null,
+      fees_quoted: salesMap[cb.id]?.fees_quoted || 0,
+      fees_collected: salesMap[cb.id]?.fees_collected || 0,
+      pending_amount: salesMap[cb.id]?.pending_amount || 0,
+      payment_mode: salesMap[cb.id]?.payment_mode || null,
+      invoice_number: salesMap[cb.id]?.invoice_number || null,
+      collection_status: salesMap[cb.id]?.collection_status || "pending",
+      onboarding_status: salesMap[cb.id]?.onboarding_status || "not_started",
+      sales_notes: salesMap[cb.id]?.notes || null,
     }));
 
     return NextResponse.json({ records: merged, _permissions: result.permissions });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to fetch sales data";
+  } catch (error: unknown) {
+    const e = error as { message?: string; details?: string; hint?: string; code?: string };
+    console.error("SALES ROUTE ERROR in maverick-sales-tracking:", e.message, "| details:", e.details, "| hint:", e.hint, "| code:", e.code);
+    const message = e.message || "Failed to fetch sales data";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -74,13 +79,18 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "opportunity_id is required" }, { status: 400 });
     }
 
-    const allowed = await verifyScopeAccess(result.scope, "sales_call_booked_tracking", opportunity_id, "assigned_to", false, "opportunity_id");
+    const allowed = await verifyScopeAccess(result.scope, "sales_opportunities", opportunity_id, "assigned_to", false, "opportunity_id");
     if (!allowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
 
+    const { data: repRow2 } = await supabaseAdmin.from("hr_employees").select("id").ilike("full_name", "%maverick%").eq("is_sales_rep", true).single();
+    // Sanitize TEXT NOT NULL fields — null violates NOT NULL constraint
+    if (updates.payment_mode === null || updates.payment_mode === undefined) updates.payment_mode = "";
+    if (updates.notes === null || updates.notes === undefined) updates.notes = "";
+    if (updates.contact_email === null || updates.contact_email === undefined) updates.contact_email = "";
     const { data, error } = await supabaseAdmin
-      .from("maverick_sales_tracking")
+      .from("sales_deals")
       .upsert(
-        { opportunity_id, ...updates },
+        { opportunity_id, sales_rep_id: repRow2?.id, ...updates },
         { onConflict: "opportunity_id" }
       )
       .select()
@@ -88,8 +98,10 @@ export async function PUT(req: NextRequest) {
 
     if (error) throw error;
     return NextResponse.json({ record: data });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to update sales tracking";
+  } catch (error: unknown) {
+    const e = error as { message?: string; details?: string; hint?: string; code?: string };
+    console.error("SALES ROUTE ERROR in maverick-sales-tracking:", e.message, "| details:", e.details, "| hint:", e.hint, "| code:", e.code);
+    const message = e.message || "Failed to update sales tracking";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

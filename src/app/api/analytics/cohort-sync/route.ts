@@ -60,8 +60,8 @@ async function runSync(req: NextRequest) {
     let meetRecords: MeetRecord[] = [];
     try {
       const [mavRes, jobRes] = await Promise.all([
-        supabaseAdmin.from("maverick_meet_tracking").select("*"),
-        supabaseAdmin.from("jobin_meet_tracking").select("*"),
+        supabaseAdmin.from("sales_meetings").select("*"),
+        supabaseAdmin.from("sales_meetings").select("*"),
       ]);
       meetRecords = [
         ...((mavRes.data || []) as MeetRecord[]),
@@ -75,7 +75,7 @@ async function runSync(req: NextRequest) {
     let callBookedRecords: { created_at?: string }[] = [];
     try {
       const { data } = await supabaseAdmin
-        .from("sales_call_booked_tracking")
+        .from("sales_opportunities")
         .select("created_at");
       callBookedRecords = (data || []) as { created_at?: string }[];
     } catch (e) {
@@ -86,13 +86,13 @@ async function runSync(req: NextRequest) {
     let wonDeals: { opportunity_id: string; created_at?: string; fees_collected?: number }[] = [];
     try {
       const { data: wonData } = await supabaseAdmin
-        .from("sales_call_booked_tracking")
+        .from("sales_opportunities")
         .select("opportunity_id, created_at")
         .eq("ghl_status", "won");
 
       const [mavSales, jobSales] = await Promise.all([
-        supabaseAdmin.from("maverick_sales_tracking").select("opportunity_id, fees_collected"),
-        supabaseAdmin.from("jobin_sales_tracking").select("opportunity_id, fees_collected"),
+        supabaseAdmin.from("sales_deals").select("opportunity_id, fees_collected"),
+        supabaseAdmin.from("sales_deals").select("opportunity_id, fees_collected"),
       ]);
       const feesMap: Record<string, number> = {};
       for (const r of [...(mavSales.data || []), ...(jobSales.data || [])]) {
@@ -112,7 +112,7 @@ async function runSync(req: NextRequest) {
     let optinRecords: { created_at?: string }[] = [];
     try {
       const { data } = await supabaseAdmin
-        .from("sales_optin_tracking")
+        .from("sales_optins")
         .select("created_at");
       optinRecords = (data || []) as { created_at?: string }[];
     } catch (e) {
@@ -123,7 +123,7 @@ async function runSync(req: NextRequest) {
     let paymentRecords: { created_at?: string }[] = [];
     try {
       const { data } = await supabaseAdmin
-        .from("sales_payment_done_tracking")
+        .from("sales_payment_done")
         .select("created_at");
       paymentRecords = (data || []) as { created_at?: string }[];
     } catch (e) {
@@ -196,7 +196,7 @@ async function runSync(req: NextRequest) {
     // ── 8. Upsert into DB ─────────────────────────────
     if (upsertRows.length > 0) {
       const { error } = await supabaseAdmin
-        .from("cohort_daily_metrics")
+        .from("analytics_cohort_metrics")
         .upsert(upsertRows, { onConflict: "date" });
 
       if (error) throw error;

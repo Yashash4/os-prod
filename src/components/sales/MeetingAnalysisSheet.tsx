@@ -41,7 +41,7 @@ interface GHLUser {
 }
 
 interface Props {
-  owner: "maverick" | "jobin";
+  owner: string;
   ownerLabel: string;
 }
 

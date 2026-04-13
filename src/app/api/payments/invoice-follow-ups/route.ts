@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   if ("error" in result) return result.error;
   try {
     let query = supabaseAdmin
-      .from("invoice_follow_ups")
+      .from("payments_invoice_follow_ups")
       .select("*")
       .order("created_at", { ascending: false });
 
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { data, error } = await supabaseAdmin
-      .from("invoice_follow_ups")
+      .from("payments_invoice_follow_ups")
       .upsert(
         {
           razorpay_invoice_id,
@@ -92,7 +92,7 @@ export async function PUT(req: NextRequest) {
     }
 
     const { data, error } = await supabaseAdmin
-      .from("invoice_follow_ups")
+      .from("payments_invoice_follow_ups")
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq("id", id)
       .select()

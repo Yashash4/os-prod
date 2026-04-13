@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   if ("error" in result) return result.error;
   try {
     const { data, error } = await supabaseAdmin
-      .from("payment_amount_groups")
+      .from("payments_amount_groups")
       .select("*")
       .order("created_at", { ascending: false });
 
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { data, error } = await supabaseAdmin
-      .from("payment_amount_groups")
+      .from("payments_amount_groups")
       .insert({
         name,
         min_amount: min_amount != null ? Math.round(min_amount) : null,
@@ -74,7 +74,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     const { error } = await supabaseAdmin
-      .from("payment_amount_groups")
+      .from("payments_amount_groups")
       .delete()
       .eq("id", id);
 

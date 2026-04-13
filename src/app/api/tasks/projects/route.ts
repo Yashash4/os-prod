@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const status = searchParams.get("status");
 
-    let query = supabaseAdmin.from("projects").select("*");
+    let query = supabaseAdmin.from("task_projects").select("*");
 
     // Scope on created_by (owner_id)
     query = scopeQuery(query, scope, "owner_id");
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { data, error } = await supabaseAdmin
-      .from("projects")
+      .from("task_projects")
       .insert({
         name,
         description: description || null,
@@ -117,7 +117,7 @@ export async function PUT(req: NextRequest) {
     allowed.updated_at = new Date().toISOString();
 
     const { data, error } = await supabaseAdmin
-      .from("projects")
+      .from("task_projects")
       .update(allowed)
       .eq("id", id)
       .select()
@@ -155,7 +155,7 @@ export async function DELETE(req: NextRequest) {
     const scopeAllowed = await verifyScopeAccess(scope, "projects", id, "owner_id");
     if (!scopeAllowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
 
-    const { error } = await supabaseAdmin.from("projects").delete().eq("id", id);
+    const { error } = await supabaseAdmin.from("task_projects").delete().eq("id", id);
     if (error) throw error;
 
     return NextResponse.json({ success: true });

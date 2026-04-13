@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
 
     // Only select non-sensitive fields — exclude recipient_email
     const { data, error } = await supabaseAdmin
-      .from("sent_invoices")
+      .from("sent_emails")
       .select("invoice_number, recipient_name, amount, sent_at")
       .eq("invoice_number", invoiceNumber)
       .maybeSingle();

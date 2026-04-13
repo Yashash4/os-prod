@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   try {
     // Get channels the user is a member of
     const { data: memberships, error: memErr } = await supabaseAdmin
-      .from("chat_members")
+      .from("chat_channel_members")
       .select("channel_id, last_read_at")
       .eq("user_id", userId);
 
@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
         let dmUser: { id: string; full_name: string | null; email: string; avatar_url: string | null } | null = null;
         if (ch.type === "dm") {
           const { data: dmMembers } = await supabaseAdmin
-            .from("chat_members")
+            .from("chat_channel_members")
             .select("user_id")
             .eq("channel_id", ch.id);
 
@@ -230,7 +230,7 @@ export async function POST(req: NextRequest) {
 
       // Find DM channels the current user is in
       const { data: myDmChannels } = await supabaseAdmin
-        .from("chat_members")
+        .from("chat_channel_members")
         .select("channel_id")
         .eq("user_id", userId);
 
@@ -239,7 +239,7 @@ export async function POST(req: NextRequest) {
 
         // Check if the other user is also in any of those DM channels
         const { data: sharedChannels } = await supabaseAdmin
-          .from("chat_members")
+          .from("chat_channel_members")
           .select("channel_id")
           .eq("user_id", otherUserId)
           .in("channel_id", myChannelIds);
@@ -293,7 +293,7 @@ export async function POST(req: NextRequest) {
       if (chErr) throw chErr;
 
       // Add both users as members
-      const { error: memErr } = await supabaseAdmin.from("chat_members").insert([
+      const { error: memErr } = await supabaseAdmin.from("chat_channel_members").insert([
         { channel_id: channel.id, user_id: userId },
         { channel_id: channel.id, user_id: otherUserId },
       ]);
@@ -325,7 +325,7 @@ export async function POST(req: NextRequest) {
 
     // Add creator + additional members
     const allMemberIds = Array.from(new Set([userId, ...(member_ids || [])]));
-    const { error: memErr } = await supabaseAdmin.from("chat_members").insert(
+    const { error: memErr } = await supabaseAdmin.from("chat_channel_members").insert(
       allMemberIds.map((uid) => ({ channel_id: channel.id, user_id: uid }))
     );
 

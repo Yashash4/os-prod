@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
     if ("error" in result) return result.error;
 
     const { data: holidays, error } = await supabaseAdmin
-      .from("holidays")
+      .from("hr_holidays")
       .select("id, name, date, is_optional")
       .order("date");
 
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { data, error } = await supabaseAdmin
-      .from("holidays")
+      .from("hr_holidays")
       .insert({
         name,
         date,
@@ -84,13 +84,13 @@ export async function DELETE(req: NextRequest) {
 
     // Fetch before deletion for audit snapshot
     const { data: before } = await supabaseAdmin
-      .from("holidays")
+      .from("hr_holidays")
       .select("*")
       .eq("id", id)
       .single();
 
     const { error } = await supabaseAdmin
-      .from("holidays")
+      .from("hr_holidays")
       .delete()
       .eq("id", id);
 

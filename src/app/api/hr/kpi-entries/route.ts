@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     tier: 2,
     action: "kpi_entry_logged",
     module: "hr",
-    breadcrumb: "APEX OS > HR > KPIs",
+    breadcrumb_path: "APEX OS > HR > KPIs",
     entity_type: "hr_kpi_entry",
     entity_id: data.id,
     after_value: { kpi_id, employee_id, period, actual_value },

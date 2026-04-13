@@ -23,8 +23,8 @@ export async function GET(req: NextRequest) {
 
   // Get expenses in range
   let expenseQuery = supabaseAdmin
-    .from("expenses")
-    .select("amount, category_id, category:expense_categories(name)")
+    .from("finance_expenses")
+    .select("amount, category_id, category:finance_expense_categories(name)")
     .gte("date", from)
     .lte("date", to);
 

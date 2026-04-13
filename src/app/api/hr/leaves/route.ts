@@ -14,9 +14,9 @@ export async function GET(req: NextRequest) {
     const year = req.nextUrl.searchParams.get("year");
 
     let query = supabaseAdmin
-      .from("leave_requests")
+      .from("hr_leave_requests")
       .select(
-        "id, employee_id, leave_type_id, start_date, end_date, days, reason, status, approved_by, created_at, leave_type:leave_types(id, name), employee:hr_employees(id, full_name, user_id)"
+        "id, employee_id, leave_type_id, start_date, end_date, days, reason, status, approved_by, created_at, leave_type:hr_leave_types(id, name), employee:hr_employees(id, full_name, user_id)"
       )
       .order("created_at", { ascending: false });
 
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { data, error } = await supabaseAdmin
-      .from("leave_requests")
+      .from("hr_leave_requests")
       .insert({
         employee_id,
         leave_type_id,
@@ -144,7 +144,7 @@ export async function PUT(req: NextRequest) {
 
     // Get the leave request first
     const { data: leaveReq, error: fetchErr } = await supabaseAdmin
-      .from("leave_requests")
+      .from("hr_leave_requests")
       .select("id, employee_id, leave_type_id, days, employee:hr_employees(id, full_name, user_id, reporting_to)")
       .eq("id", id)
       .single();
@@ -173,7 +173,7 @@ export async function PUT(req: NextRequest) {
 
     // Update the leave request
     const { data, error } = await supabaseAdmin
-      .from("leave_requests")
+      .from("hr_leave_requests")
       .update({ status, approved_by: approved_by || null })
       .eq("id", id)
       .select()
@@ -188,7 +188,7 @@ export async function PUT(req: NextRequest) {
     if (status === "approved") {
       const currentYear = new Date().getFullYear();
       const { data: balance } = await supabaseAdmin
-        .from("leave_balances")
+        .from("hr_leave_balances")
         .select("id, used")
         .eq("employee_id", leaveReq.employee_id)
         .eq("leave_type_id", leaveReq.leave_type_id)
@@ -197,7 +197,7 @@ export async function PUT(req: NextRequest) {
 
       if (balance) {
         await supabaseAdmin
-          .from("leave_balances")
+          .from("hr_leave_balances")
           .update({ used: (balance.used || 0) + leaveReq.days })
           .eq("id", balance.id);
       }

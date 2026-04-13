@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     const opportunityId = req.nextUrl.searchParams.get("opportunity_id");
 
     let query = supabaseAdmin
-      .from("sent_invoices")
+      .from("sent_emails")
       .select("*")
       .order("sent_at", { ascending: false });
 

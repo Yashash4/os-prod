@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
 
   try {
     let query = supabaseAdmin
-      .from("sales_optin_tracking")
+      .from("sales_optins")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(1000);
@@ -20,9 +20,10 @@ export async function GET(req: NextRequest) {
 
     if (error) throw error;
     return NextResponse.json({ records: data || [], _permissions: result.permissions });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to fetch opt-in tracking";
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch (error: unknown) {
+    const e = error as { message?: string; details?: string; hint?: string; code?: string };
+    console.error("OPTIN GET ERROR:", e.message, "| details:", e.details, "| hint:", e.hint, "| code:", e.code);
+    return NextResponse.json({ error: e.message || "Failed to fetch opt-in tracking" }, { status: 500 });
   }
 }
 
@@ -38,9 +39,28 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const records = Array.isArray(body) ? body : [body];
 
-    const oppIds = records.map((r: Record<string, unknown>) => r.opportunity_id as string);
+    const oppIds = records.map((r: Record<string, unknown>) => r.opportunity_id as string).filter(Boolean);
+
+    // Ensure parent rows exist in sales_opportunities (FK requirement)
+    if (oppIds.length > 0) {
+      const parentRows = oppIds.map((oid) => {
+        const r = records.find((rec: Record<string, unknown>) => rec.opportunity_id === oid);
+        return {
+          id: oid,
+          contact_name: (r?.contact_name as string) || "",
+          contact_email: (r?.contact_email as string) || "",
+          contact_phone: (r?.contact_phone as string) || "",
+          pipeline_name: (r?.pipeline_name as string) || "",
+          stage_name: (r?.stage_name as string) || "",
+          source: (r?.source as string) || "",
+          assigned_to: (r?.assigned_to as string) || null,
+        };
+      });
+      await supabaseAdmin.from("sales_opportunities").upsert(parentRows, { onConflict: "id", ignoreDuplicates: true });
+    }
+
     const { data: existing } = await supabaseAdmin
-      .from("sales_optin_tracking")
+      .from("sales_optins")
       .select("opportunity_id, status, notes, last_contacted_at")
       .in("opportunity_id", oppIds);
 
@@ -49,21 +69,21 @@ export async function POST(req: NextRequest) {
     );
 
     const { data, error } = await supabaseAdmin
-      .from("sales_optin_tracking")
+      .from("sales_optins")
       .upsert(
         records.map((r: Record<string, unknown>) => {
           const prev = existingMap.get(r.opportunity_id as string);
           return {
             opportunity_id: r.opportunity_id,
-            contact_name: r.contact_name,
-            contact_email: r.contact_email,
-            contact_phone: r.contact_phone,
-            pipeline_name: r.pipeline_name,
-            stage_name: r.stage_name,
-            source: r.source,
+            contact_name: r.contact_name || "",
+            contact_email: r.contact_email || "",
+            contact_phone: r.contact_phone || "",
+            pipeline_name: r.pipeline_name || "",
+            stage_name: r.stage_name || "",
+            source: r.source || "",
             monetary_value: r.monetary_value || 0,
             status: prev?.status || (r.status as string) || "new",
-            notes: prev?.notes ?? (r.notes as string) ?? null,
+            notes: prev?.notes ?? (r.notes as string) ?? "",
             last_contacted_at: prev?.last_contacted_at ?? null,
             assigned_to: r.assigned_to || null,
           };
@@ -74,9 +94,10 @@ export async function POST(req: NextRequest) {
 
     if (error) throw error;
     return NextResponse.json({ records: data });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to save opt-in tracking";
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch (error: unknown) {
+    const e = error as { message?: string; details?: string; hint?: string; code?: string };
+    console.error("OPTIN POST ERROR:", e.message, "| details:", e.details, "| hint:", e.hint, "| code:", e.code);
+    return NextResponse.json({ error: e.message || "Failed to save opt-in tracking" }, { status: 500 });
   }
 }
 
@@ -89,26 +110,40 @@ export async function DELETE(req: NextRequest) {
   }
 
   try {
+    // Support single delete by opportunity_id in body
+    const contentType = req.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      const body = await req.json();
+      if (body.opportunity_id) {
+        const { error } = await supabaseAdmin
+          .from("sales_optins")
+          .delete()
+          .eq("opportunity_id", body.opportunity_id);
+        if (error) throw error;
+        return NextResponse.json({ success: true });
+      }
+    }
+
     const oppIds = req.nextUrl.searchParams.get("keep_ids");
 
     if (oppIds) {
       const keepSet = new Set(oppIds.split(",").map((id) => id.trim()).filter(Boolean));
       const { data: allRecords } = await supabaseAdmin
-        .from("sales_optin_tracking")
+        .from("sales_optins")
         .select("opportunity_id");
       const toDelete = (allRecords || [])
         .map((r) => r.opportunity_id as string)
         .filter((id) => !keepSet.has(id));
       if (toDelete.length > 0) {
         const { error } = await supabaseAdmin
-          .from("sales_optin_tracking")
+          .from("sales_optins")
           .delete()
           .in("opportunity_id", toDelete);
         if (error) throw error;
       }
     } else {
       const { error } = await supabaseAdmin
-        .from("sales_optin_tracking")
+        .from("sales_optins")
         .delete()
         .neq("opportunity_id", "");
       if (error) throw error;
@@ -137,16 +172,28 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "opportunity_id is required" }, { status: 400 });
     }
 
-    const allowed = await verifyScopeAccess(result.scope, "sales_optin_tracking", opportunity_id, "assigned_to", false, "opportunity_id");
+    const allowed = await verifyScopeAccess(result.scope, "sales_optins", opportunity_id, "assigned_to", false, "opportunity_id");
     if (!allowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
 
     if (updates.status === "contacted") {
       updates.last_contacted_at = new Date().toISOString();
     }
 
+    // Only allow updating known mutable columns, coalesce nulls for NOT NULL columns
+    const safeUpdates: Record<string, unknown> = {};
+    if (updates.status !== undefined) safeUpdates.status = updates.status || "new";
+    if (updates.notes !== undefined) safeUpdates.notes = updates.notes ?? "";
+    if (updates.last_contacted_at !== undefined) safeUpdates.last_contacted_at = updates.last_contacted_at;
+    if (updates.assigned_to !== undefined) safeUpdates.assigned_to = updates.assigned_to || null;
+    if (updates.monetary_value !== undefined) safeUpdates.monetary_value = updates.monetary_value || 0;
+    if (updates.contact_name !== undefined) safeUpdates.contact_name = updates.contact_name || "";
+    if (updates.contact_email !== undefined) safeUpdates.contact_email = updates.contact_email || "";
+    if (updates.contact_phone !== undefined) safeUpdates.contact_phone = updates.contact_phone || "";
+    safeUpdates.updated_at = new Date().toISOString();
+
     const { data, error } = await supabaseAdmin
-      .from("sales_optin_tracking")
-      .update(updates)
+      .from("sales_optins")
+      .update(safeUpdates)
       .eq("opportunity_id", opportunity_id)
       .select()
       .maybeSingle();
@@ -155,9 +202,55 @@ export async function PUT(req: NextRequest) {
     if (!data) {
       return NextResponse.json({ error: "Record not found" }, { status: 404 });
     }
+
+    // Lead promotion: auto-create records in target tables when status changes
+    const newStatus = data.status;
+    try {
+      if (newStatus === "call_booked") {
+        // Promote to sales_opportunities with status "pending_review"
+        await supabaseAdmin.from("sales_opportunities").upsert(
+          {
+            id: data.opportunity_id,
+            contact_name: data.contact_name || "",
+            contact_email: data.contact_email || "",
+            contact_phone: data.contact_phone || "",
+            pipeline_name: data.pipeline_name || "",
+            stage_name: "Call Booked",
+            source: data.source || "",
+            status: "pending_review",
+            assigned_to: data.assigned_to || null,
+          },
+          { onConflict: "id" }
+        );
+        console.log(`OPTIN PROMOTION: ${data.opportunity_id} promoted to sales_opportunities (call_booked)`);
+      } else if (newStatus === "payment_done") {
+        // Promote to sales_payment_done
+        await supabaseAdmin.from("sales_payment_done").upsert(
+          {
+            opportunity_id: data.opportunity_id,
+            contact_name: data.contact_name || "",
+            contact_email: data.contact_email || "",
+            contact_phone: data.contact_phone || "",
+            pipeline_name: data.pipeline_name || "",
+            stage_name: "Payment Done",
+            source: data.source || "",
+            status: "new",
+            assigned_to: data.assigned_to || null,
+          },
+          { onConflict: "opportunity_id" }
+        );
+        console.log(`OPTIN PROMOTION: ${data.opportunity_id} promoted to sales_payment_done (payment_done)`);
+      }
+    } catch (promoError: unknown) {
+      // Log but don't fail the main update — promotion is best-effort
+      const pe = promoError as { message?: string };
+      console.error(`OPTIN PROMOTION ERROR (${newStatus}):`, pe.message);
+    }
+
     return NextResponse.json({ record: data });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to update opt-in tracking";
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch (error: unknown) {
+    const e = error as { message?: string; details?: string; hint?: string; code?: string };
+    console.error("OPTIN PUT ERROR:", e.message, "| details:", e.details, "| hint:", e.hint, "| code:", e.code);
+    return NextResponse.json({ error: e.message || "Failed to update opt-in tracking" }, { status: 500 });
   }
 }

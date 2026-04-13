@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
     const periodType = req.nextUrl.searchParams.get("period_type");
 
     let query = supabaseAdmin
-      .from("revenue_targets")
+      .from("payments_revenue_targets")
       .select("*")
       .order("period_start", { ascending: false });
 
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { data, error } = await supabaseAdmin
-      .from("revenue_targets")
+      .from("payments_revenue_targets")
       .upsert(
         { period_type, period_start, target_amount: Math.round(target_amount), created_by: result.auth.userId },
         { onConflict: "period_type,period_start" }
@@ -76,7 +76,7 @@ export async function PUT(req: NextRequest) {
     }
 
     const { data, error } = await supabaseAdmin
-      .from("revenue_targets")
+      .from("payments_revenue_targets")
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq("id", id)
       .select()
@@ -105,7 +105,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     const { error } = await supabaseAdmin
-      .from("revenue_targets")
+      .from("payments_revenue_targets")
       .delete()
       .eq("id", id);
 

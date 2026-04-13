@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   const { permissions } = result;
   try {
     const { data, error } = await supabaseAdmin
-      .from("cohort_daily_metrics")
+      .from("analytics_cohort_metrics")
       .select("*")
       .order("date", { ascending: true });
 

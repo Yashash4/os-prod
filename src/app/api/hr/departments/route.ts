@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
     tier: 2,
     action: "department_created",
     module: "hr",
-    breadcrumb: "APEX OS > HR > Departments",
+    breadcrumb_path: "APEX OS > HR > Departments",
     entity_type: "hr_department",
     entity_id: data.id,
     after_value: { name, description },
@@ -106,7 +106,7 @@ export async function DELETE(req: NextRequest) {
     tier: 2,
     action: "department_deleted",
     module: "hr",
-    breadcrumb: "APEX OS > HR > Departments",
+    breadcrumb_path: "APEX OS > HR > Departments",
     entity_type: "hr_department",
     entity_id: id,
   });

@@ -156,7 +156,7 @@ export async function PUT(req: NextRequest) {
       tier: 1,
       action: "salary_paid",
       module: "hr",
-      breadcrumb: "APEX OS > HR > Payroll Tracker",
+      breadcrumb_path: "APEX OS > HR > Payroll Tracker",
       entity_type: "hr_salary_cycle",
       entity_id: id,
       after_value: updates,

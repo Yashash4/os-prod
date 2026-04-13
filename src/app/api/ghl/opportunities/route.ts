@@ -7,9 +7,10 @@ export async function GET(req: NextRequest) {
   if ("error" in result) return result.error;
   const { permissions } = result;
   try {
-    const pipelineId = req.nextUrl.searchParams.get("pipeline_id");
+    const pipelineId = req.nextUrl.searchParams.get("pipeline_id") || req.nextUrl.searchParams.get("pipelineId");
     if (!pipelineId) {
-      return NextResponse.json({ error: "pipeline_id is required" }, { status: 400 });
+      // Return empty if no pipeline specified (overview pages call without pipeline_id)
+      return NextResponse.json({ opportunities: [], _permissions: permissions });
     }
     const opportunities = await searchOpportunities(pipelineId);
     return NextResponse.json({ opportunities, _permissions: permissions });

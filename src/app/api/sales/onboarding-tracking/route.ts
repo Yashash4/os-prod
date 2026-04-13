@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   try {
     // 1. Fetch all won deals from call_booked_tracking (scoped by assigned_to)
     let wonQuery = supabaseAdmin
-      .from("sales_call_booked_tracking")
+      .from("sales_opportunities")
       .select("*")
       .eq("ghl_status", "won")
       .order("created_at", { ascending: false });
@@ -32,11 +32,11 @@ export async function GET(req: NextRequest) {
     if (wonErr) throw wonErr;
 
     const wonList = wonDeals || [];
-    const wonIds = wonList.map((d) => d.opportunity_id);
+    const wonIds = wonList.map((d) => d.id);
 
     // 2. Fetch existing onboarding records
     const { data: onboardingData, error: obErr } = await supabaseAdmin
-      .from("onboarding_tracking")
+      .from("sales_onboarding")
       .select("*");
 
     if (obErr) throw obErr;
@@ -48,13 +48,13 @@ export async function GET(req: NextRequest) {
 
     // 3. Auto-create onboarding records for new won deals
     const newRecords = wonList
-      .filter((d) => !existingMap[d.opportunity_id])
+      .filter((d) => !existingMap[d.id])
       .map((d) => ({
-        opportunity_id: d.opportunity_id,
-        contact_name: d.contact_name,
-        contact_email: d.contact_email,
-        contact_phone: d.contact_phone,
-        source_rep: d.assigned_to || null,
+        opportunity_id: d.id,
+        contact_name: d.contact_name || "",
+        contact_email: d.contact_email || "",
+        contact_phone: d.contact_phone || "",
+        source_rep_id: d.assigned_to || null,
         fees_quoted: 0,
         fees_collected: 0,
         onboarding_status: "scheduled",
@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
 
     if (newRecords.length > 0) {
       const { error: insertErr } = await supabaseAdmin
-        .from("onboarding_tracking")
+        .from("sales_onboarding")
         .upsert(newRecords, { onConflict: "opportunity_id" });
       if (insertErr) throw insertErr;
     }
@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
 
     if (staleIds.length > 0) {
       const { error: delErr } = await supabaseAdmin
-        .from("onboarding_tracking")
+        .from("sales_onboarding")
         .delete()
         .in("opportunity_id", staleIds);
       if (delErr) throw delErr;
@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
 
     // 5. Re-fetch the final merged state
     const { data: finalData, error: finalErr } = await supabaseAdmin
-      .from("onboarding_tracking")
+      .from("sales_onboarding")
       .select("*")
       .order("created_at", { ascending: false });
 
@@ -93,8 +93,8 @@ export async function GET(req: NextRequest) {
     const oppIds = (finalData || []).map((r) => r.opportunity_id);
 
     const [{ data: mavSales }, { data: jobSales }] = await Promise.all([
-      supabaseAdmin.from("maverick_sales_tracking").select("opportunity_id, fees_quoted, fees_collected").in("opportunity_id", oppIds.length > 0 ? oppIds : [""]),
-      supabaseAdmin.from("jobin_sales_tracking").select("opportunity_id, fees_quoted, fees_collected").in("opportunity_id", oppIds.length > 0 ? oppIds : [""]),
+      supabaseAdmin.from("sales_deals").select("opportunity_id, fees_quoted, fees_collected").in("opportunity_id", oppIds.length > 0 ? oppIds : [""]),
+      supabaseAdmin.from("sales_deals").select("opportunity_id, fees_quoted, fees_collected").in("opportunity_id", oppIds.length > 0 ? oppIds : [""]),
     ]);
 
     const feesMap: Record<string, { fees_quoted: number; fees_collected: number }> = {};
@@ -104,7 +104,7 @@ export async function GET(req: NextRequest) {
 
     // 7. Merge with call_booked data for contact info freshness
     const wonMap: Record<string, (typeof wonList)[0]> = {};
-    wonList.forEach((d) => { wonMap[d.opportunity_id] = d; });
+    wonList.forEach((d) => { wonMap[d.id] = d; });
 
     const merged = (finalData || []).map((ob) => {
       const won = wonMap[ob.opportunity_id];
@@ -116,7 +116,7 @@ export async function GET(req: NextRequest) {
         contact_email: won?.contact_email || ob.contact_email,
         contact_phone: won?.contact_phone || ob.contact_phone,
         // Pass through assigned_to for client-side name resolution
-        assigned_to: won?.assigned_to || ob.source_rep,
+        assigned_to: won?.assigned_to || ob.source_rep_id,
         pipeline_name: won?.pipeline_name || null,
         source: won?.source || null,
         // Fees from sales management (read-only in onboarding)
@@ -126,8 +126,10 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({ records: merged, _permissions: result.permissions });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to fetch onboarding data";
+  } catch (error: unknown) {
+    const e = error as { message?: string; details?: string; hint?: string; code?: string };
+    console.error("SALES ROUTE ERROR in onboarding-tracking:", e.message, "| details:", e.details, "| hint:", e.hint, "| code:", e.code);
+    const message = e.message || "Failed to fetch onboarding data";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -149,11 +151,11 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "opportunity_id is required" }, { status: 400 });
     }
 
-    const allowed = await verifyScopeAccess(result.scope, "sales_call_booked_tracking", opportunity_id, "assigned_to", false, "opportunity_id");
+    const allowed = await verifyScopeAccess(result.scope, "sales_onboarding", opportunity_id, "assigned_to", false, "opportunity_id");
     if (!allowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
 
     const { data, error } = await supabaseAdmin
-      .from("onboarding_tracking")
+      .from("sales_onboarding")
       .upsert(
         { opportunity_id, ...updates },
         { onConflict: "opportunity_id" }
@@ -163,8 +165,10 @@ export async function PUT(req: NextRequest) {
 
     if (error) throw error;
     return NextResponse.json({ record: data });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to update onboarding record";
+  } catch (error: unknown) {
+    const e = error as { message?: string; details?: string; hint?: string; code?: string };
+    console.error("SALES ROUTE ERROR in onboarding-tracking:", e.message, "| details:", e.details, "| hint:", e.hint, "| code:", e.code);
+    const message = e.message || "Failed to update onboarding record";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

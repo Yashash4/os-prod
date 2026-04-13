@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
 
   try {
     let query = supabaseAdmin
-      .from("sales_payment_done_tracking")
+      .from("sales_payment_done")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(1000);
@@ -20,8 +20,10 @@ export async function GET(req: NextRequest) {
 
     if (error) throw error;
     return NextResponse.json({ records: data || [], _permissions: result.permissions });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to fetch payment done tracking";
+  } catch (error: unknown) {
+    const e = error as { message?: string; details?: string; hint?: string; code?: string };
+    console.error("SALES ROUTE ERROR in payment-done-tracking:", e.message, "| details:", e.details, "| hint:", e.hint, "| code:", e.code);
+    const message = e.message || "Failed to fetch payment done tracking";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -38,9 +40,28 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const records = Array.isArray(body) ? body : [body];
 
-    const oppIds = records.map((r: Record<string, unknown>) => r.opportunity_id as string);
+    const oppIds = records.map((r: Record<string, unknown>) => r.opportunity_id as string).filter(Boolean);
+
+    // Ensure parent rows exist in sales_opportunities (FK requirement)
+    if (oppIds.length > 0) {
+      const parentRows = oppIds.map((oid) => {
+        const r = records.find((rec: Record<string, unknown>) => rec.opportunity_id === oid);
+        return {
+          id: oid,
+          contact_name: (r?.contact_name as string) || "",
+          contact_email: (r?.contact_email as string) || "",
+          contact_phone: (r?.contact_phone as string) || "",
+          pipeline_name: (r?.pipeline_name as string) || "",
+          stage_name: (r?.stage_name as string) || "",
+          source: (r?.source as string) || "",
+          assigned_to: (r?.assigned_to as string) || null,
+        };
+      });
+      await supabaseAdmin.from("sales_opportunities").upsert(parentRows, { onConflict: "id", ignoreDuplicates: true });
+    }
+
     const { data: existing } = await supabaseAdmin
-      .from("sales_payment_done_tracking")
+      .from("sales_payment_done")
       .select("opportunity_id, status, notes, last_contacted_at, call_scheduled_at")
       .in("opportunity_id", oppIds);
 
@@ -49,20 +70,20 @@ export async function POST(req: NextRequest) {
     );
 
     const { data, error } = await supabaseAdmin
-      .from("sales_payment_done_tracking")
+      .from("sales_payment_done")
       .upsert(
         records.map((r: Record<string, unknown>) => {
           const prev = existingMap.get(r.opportunity_id as string);
           return {
             opportunity_id: r.opportunity_id,
-            contact_name: r.contact_name,
-            contact_email: r.contact_email,
-            contact_phone: r.contact_phone,
-            pipeline_name: r.pipeline_name,
-            stage_name: r.stage_name,
-            source: r.source,
+            contact_name: r.contact_name || "",
+            contact_email: r.contact_email || "",
+            contact_phone: r.contact_phone || "",
+            pipeline_name: r.pipeline_name || "",
+            stage_name: r.stage_name || "",
+            source: r.source || "",
             status: prev?.status || (r.status as string) || "new",
-            notes: prev?.notes ?? (r.notes as string) ?? null,
+            notes: prev?.notes ?? (r.notes as string) ?? "",
             last_contacted_at: prev?.last_contacted_at ?? null,
             call_scheduled_at: prev?.call_scheduled_at ?? null,
             assigned_to: r.assigned_to || null,
@@ -74,8 +95,10 @@ export async function POST(req: NextRequest) {
 
     if (error) throw error;
     return NextResponse.json({ records: data });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to save payment done tracking";
+  } catch (error: unknown) {
+    const e = error as { message?: string; details?: string; hint?: string; code?: string };
+    console.error("SALES ROUTE ERROR in payment-done-tracking:", e.message, "| details:", e.details, "| hint:", e.hint, "| code:", e.code);
+    const message = e.message || "Failed to save payment done tracking";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -94,29 +117,31 @@ export async function DELETE(req: NextRequest) {
     if (oppIds) {
       const keepSet = new Set(oppIds.split(",").map((id) => id.trim()).filter(Boolean));
       const { data: allRecords } = await supabaseAdmin
-        .from("sales_payment_done_tracking")
+        .from("sales_payment_done")
         .select("opportunity_id");
       const toDelete = (allRecords || [])
         .map((r) => r.opportunity_id as string)
         .filter((id) => !keepSet.has(id));
       if (toDelete.length > 0) {
         const { error } = await supabaseAdmin
-          .from("sales_payment_done_tracking")
+          .from("sales_payment_done")
           .delete()
           .in("opportunity_id", toDelete);
         if (error) throw error;
       }
     } else {
       const { error } = await supabaseAdmin
-        .from("sales_payment_done_tracking")
+        .from("sales_payment_done")
         .delete()
         .neq("opportunity_id", "");
       if (error) throw error;
     }
 
     return NextResponse.json({ success: true });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to delete records";
+  } catch (error: unknown) {
+    const e = error as { message?: string; details?: string; hint?: string; code?: string };
+    console.error("SALES ROUTE ERROR in payment-done-tracking:", e.message, "| details:", e.details, "| hint:", e.hint, "| code:", e.code);
+    const message = e.message || "Failed to delete records";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -137,19 +162,25 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "opportunity_id is required" }, { status: 400 });
     }
 
-    const allowed = await verifyScopeAccess(result.scope, "sales_payment_done_tracking", opportunity_id, "assigned_to", false, "opportunity_id");
+    const allowed = await verifyScopeAccess(result.scope, "sales_payment_done", opportunity_id, "assigned_to", false, "opportunity_id");
     if (!allowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
 
-    if (updates.status === "contacted") {
-      updates.last_contacted_at = new Date().toISOString();
-    }
-    if (updates.status === "call_scheduled" && !updates.call_scheduled_at) {
-      updates.call_scheduled_at = new Date().toISOString();
-    }
+    const safeUpdates: Record<string, unknown> = {};
+    if (updates.status !== undefined) safeUpdates.status = updates.status || "new";
+    if (updates.notes !== undefined) safeUpdates.notes = updates.notes ?? "";
+    if (updates.last_contacted_at !== undefined) safeUpdates.last_contacted_at = updates.last_contacted_at;
+    if (updates.call_scheduled_at !== undefined) safeUpdates.call_scheduled_at = updates.call_scheduled_at;
+    if (updates.assigned_to !== undefined) safeUpdates.assigned_to = updates.assigned_to || null;
+    if (updates.contact_name !== undefined) safeUpdates.contact_name = updates.contact_name || "";
+    if (updates.contact_email !== undefined) safeUpdates.contact_email = updates.contact_email || "";
+    if (updates.contact_phone !== undefined) safeUpdates.contact_phone = updates.contact_phone || "";
+    if (safeUpdates.status === "contacted") safeUpdates.last_contacted_at = new Date().toISOString();
+    if (safeUpdates.status === "call_scheduled" && !safeUpdates.call_scheduled_at) safeUpdates.call_scheduled_at = new Date().toISOString();
+    safeUpdates.updated_at = new Date().toISOString();
 
     const { data, error } = await supabaseAdmin
-      .from("sales_payment_done_tracking")
-      .update(updates)
+      .from("sales_payment_done")
+      .update(safeUpdates)
       .eq("opportunity_id", opportunity_id)
       .select()
       .maybeSingle();
@@ -159,8 +190,10 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Record not found" }, { status: 404 });
     }
     return NextResponse.json({ record: data });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to update payment done tracking";
+  } catch (error: unknown) {
+    const e = error as { message?: string; details?: string; hint?: string; code?: string };
+    console.error("SALES ROUTE ERROR in payment-done-tracking:", e.message, "| details:", e.details, "| hint:", e.hint, "| code:", e.code);
+    const message = e.message || "Failed to update payment done tracking";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

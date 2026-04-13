@@ -368,12 +368,12 @@ export default function AnalyticsOverview() {
     const salesPromise = Promise.all([
       apiFetch("/api/sales/maverick-sales-tracking", { signal }).then((r) => r.json()).catch(() => ({ records: [] })),
       apiFetch("/api/sales/jobin-sales-tracking", { signal }).then((r) => r.json()).catch(() => ({ records: [] })),
-      apiFetch("/api/ghl/opportunities", { signal }).then((r) => r.json()).catch(() => ({ opportunities: [] })),
+      apiFetch("/api/sales/call-booked-tracking", { signal }).then((r) => r.json()).catch(() => ({ records: [] })),
     ])
       .then(([mavRes, jobRes, ghlRes]) => {
         setMaverickRecords(filterSales(mavRes.records || []));
         setJobinRecords(filterSales(jobRes.records || []));
-        const allOpps: GHLOpportunity[] = ghlRes.opportunities || [];
+        const allOpps: GHLOpportunity[] = ghlRes.records || ghlRes.opportunities || [];
         setOpportunities(
           allOpps.filter((o) => {
             if (!o.createdAt) return true;

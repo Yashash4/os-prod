@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     }
 
     const { data: rawMembers, error } = await supabaseAdmin
-      .from("chat_members")
+      .from("chat_channel_members")
       .select("id, channel_id, user_id, last_read_at")
       .eq("channel_id", channelId);
 
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { data, error } = await supabaseAdmin
-      .from("chat_members")
+      .from("chat_channel_members")
       .upsert(
         user_ids.map((uid) => ({ channel_id, user_id: uid })),
         { onConflict: "channel_id,user_id" }
@@ -101,7 +101,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     const { error } = await supabaseAdmin
-      .from("chat_members")
+      .from("chat_channel_members")
       .delete()
       .eq("channel_id", channelId)
       .eq("user_id", userId);

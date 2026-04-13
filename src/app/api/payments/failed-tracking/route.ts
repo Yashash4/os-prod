@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   if ("error" in result) return result.error;
   try {
     let query = supabaseAdmin
-      .from("failed_payment_tracking")
+      .from("payments_failed_tracking")
       .select("*")
       .order("created_at", { ascending: false });
 
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { data, error } = await supabaseAdmin
-      .from("failed_payment_tracking")
+      .from("payments_failed_tracking")
       .upsert(
         {
           razorpay_payment_id,
@@ -94,7 +94,7 @@ export async function PUT(req: NextRequest) {
     }
 
     const { data, error } = await supabaseAdmin
-      .from("failed_payment_tracking")
+      .from("payments_failed_tracking")
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq("id", id)
       .select()

@@ -18,6 +18,8 @@ export async function GET(req: NextRequest) {
 
     if (department_id) query = query.eq("department_id", department_id);
     if (status) query = query.eq("status", status);
+    const isSalesRep = req.nextUrl.searchParams.get("is_sales_rep");
+    if (isSalesRep === "true") query = query.eq("is_sales_rep", true);
 
     query = scopeQuery(query, result.scope, "id", true);
 
@@ -133,7 +135,7 @@ export async function POST(req: NextRequest) {
             tier: 1,
             action: "user_invited",
             module: "hr",
-            breadcrumb: "APEX OS > HR > Employees",
+            breadcrumb_path: "APEX OS > HR > Employees",
             entity_type: "user",
             entity_id: linkedUserId,
             after_value: { email, full_name, role_id: roleId, source: "hr_employee_creation" },
@@ -179,7 +181,7 @@ export async function POST(req: NextRequest) {
     tier: 1,
     action: "employee_created",
     module: "hr",
-    breadcrumb: "APEX OS > HR > Employees",
+    breadcrumb_path: "APEX OS > HR > Employees",
     entity_type: "hr_employee",
     entity_id: data.id,
     after_value: { full_name, email, department_id, designation_id, user_id: linkedUserId },
@@ -234,7 +236,7 @@ export async function PUT(req: NextRequest) {
       tier: 1,
       action: updates.user_id ? "employee_user_linked" : "employee_user_unlinked",
       module: "hr",
-      breadcrumb: "APEX OS > HR > Employees",
+      breadcrumb_path: "APEX OS > HR > Employees",
       entity_type: "hr_employee",
       entity_id: id,
       before_value: { user_id: beforeUserId },
@@ -261,7 +263,7 @@ export async function DELETE(req: NextRequest) {
     tier: 1,
     action: "employee_deleted",
     module: "hr",
-    breadcrumb: "APEX OS > HR > Employees",
+    breadcrumb_path: "APEX OS > HR > Employees",
     entity_type: "hr_employee",
     entity_id: id,
   });

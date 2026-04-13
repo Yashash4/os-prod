@@ -82,7 +82,7 @@ export async function PUT(req: NextRequest) {
     tier: 2,
     action: "kra_updated",
     module: "hr",
-    breadcrumb: "APEX OS > HR > KPIs & KRAs",
+    breadcrumb_path: "APEX OS > HR > KPIs & KRAs",
     entity_type: "hr_kra",
     entity_id: id,
     after_value: updates,

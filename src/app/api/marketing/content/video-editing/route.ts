@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   if ("error" in result) return result.error;
   try {
     let query = supabaseAdmin
-      .from("content_video_editing")
+      .from("content_video_projects")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(500);
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     const { data, error } = await supabaseAdmin
-      .from("content_video_editing")
+      .from("content_video_projects")
       .insert({ ...body, created_by: result.auth.userId })
       .select()
       .maybeSingle();
@@ -68,7 +68,7 @@ export async function PUT(req: NextRequest) {
     if (!allowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
 
     const { data, error } = await supabaseAdmin
-      .from("content_video_editing")
+      .from("content_video_projects")
       .update(updates)
       .eq("id", id)
       .select()
@@ -98,7 +98,7 @@ export async function DELETE(req: NextRequest) {
     if (!allowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
 
     const { error } = await supabaseAdmin
-      .from("content_video_editing")
+      .from("content_video_projects")
       .delete()
       .eq("id", id);
 

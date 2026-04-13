@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
       .limit(500);
 
     if (type) {
-      query = query.eq("type", type);
+      query = query.eq("ad_type", type);
     }
 
     query = scopeQuery(query, result.scope, "created_by");

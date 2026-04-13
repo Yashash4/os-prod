@@ -13,8 +13,8 @@ export async function GET(req: NextRequest) {
   const status = url.searchParams.get("status");
 
   let query = supabaseAdmin
-    .from("expenses")
-    .select("*, category:expense_categories(id, name, icon)")
+    .from("finance_expenses")
+    .select("*, category:finance_expense_categories(id, name, icon)")
     .order("date", { ascending: false });
 
   if (categoryId) query = query.eq("category_id", categoryId);
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { data, error } = await supabaseAdmin
-    .from("expenses")
+    .from("finance_expenses")
     .insert({
       category_id: category_id || null,
       title,
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
       status: status || "pending",
       created_by: result.auth.userId,
     })
-    .select("*, category:expense_categories(id, name, icon)")
+    .select("*, category:finance_expense_categories(id, name, icon)")
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
     tier: 2,
     action: "expense_created",
     module: "finance",
-    breadcrumb: "APEX OS > Finance > Expenses",
+    breadcrumb_path: "APEX OS > Finance > Expenses",
     entity_type: "expense",
     entity_id: data.id,
     after_value: { title, amount },
@@ -111,10 +111,10 @@ export async function PUT(req: NextRequest) {
   if (!allowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
 
   const { data, error } = await supabaseAdmin
-    .from("expenses")
+    .from("finance_expenses")
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq("id", id)
-    .select("*, category:expense_categories(id, name, icon)")
+    .select("*, category:finance_expense_categories(id, name, icon)")
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -135,7 +135,7 @@ export async function DELETE(req: NextRequest) {
   const allowed = await verifyScopeAccess(result.scope, "expenses", id, "created_by");
   if (!allowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
 
-  const { error } = await supabaseAdmin.from("expenses").delete().eq("id", id);
+  const { error } = await supabaseAdmin.from("finance_expenses").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   await supabaseAdmin.from("audit_logs").insert({
@@ -143,7 +143,7 @@ export async function DELETE(req: NextRequest) {
     tier: 2,
     action: "expense_deleted",
     module: "finance",
-    breadcrumb: "APEX OS > Finance > Expenses",
+    breadcrumb_path: "APEX OS > Finance > Expenses",
     entity_type: "expense",
     entity_id: id,
   });

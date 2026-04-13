@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
     if ("error" in result) return result.error;
 
     const { data: leaveTypes, error } = await supabaseAdmin
-      .from("leave_types")
+      .from("hr_leave_types")
       .select("id, name, days_per_year, is_active")
       .order("name");
 
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { data, error } = await supabaseAdmin
-      .from("leave_types")
+      .from("hr_leave_types")
       .insert({
         name,
         days_per_year: days_per_year ?? 0,

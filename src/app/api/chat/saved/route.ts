@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const { data: saved, error } = await supabaseAdmin
-      .from("chat_saved")
+      .from("chat_saved_messages")
       .select("id, message_id, created_at")
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
 
     // Upsert - ignore if already saved
     const { data: saved, error: saveErr } = await supabaseAdmin
-      .from("chat_saved")
+      .from("chat_saved_messages")
       .upsert(
         { user_id: userId, message_id },
         { onConflict: "user_id,message_id" }
@@ -141,7 +141,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     const { error: deleteErr } = await supabaseAdmin
-      .from("chat_saved")
+      .from("chat_saved_messages")
       .delete()
       .eq("user_id", userId)
       .eq("message_id", messageId);

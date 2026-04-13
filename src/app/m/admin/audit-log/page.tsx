@@ -103,7 +103,7 @@ export default function AuditLogPage() {
                       T{log.tier}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 text-foreground">{log.user_name || log.user_id.slice(0, 8)}</td>
+                  <td className="px-4 py-2.5 text-foreground">{log.user_name || log.user_id?.slice(0, 8) || "—"}</td>
                   <td className="px-4 py-2.5 text-foreground">{log.action}</td>
                   <td className="px-4 py-2.5 text-muted">{log.module}</td>
                   <td className="px-4 py-2.5 text-muted text-xs">{log.breadcrumb || "—"}</td>

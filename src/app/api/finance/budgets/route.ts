@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   const month = req.nextUrl.searchParams.get("month"); // YYYY-MM
 
   let query = supabaseAdmin
-    .from("budgets")
+    .from("finance_budgets")
     .select("*")
     .order("created_at", { ascending: false });
 
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { data, error } = await supabaseAdmin
-    .from("budgets")
+    .from("finance_budgets")
     .insert({
       name,
       department: department || null,
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
     tier: 2,
     action: "budget_created",
     module: "finance",
-    breadcrumb: "APEX OS > Finance > Budgets",
+    breadcrumb_path: "APEX OS > Finance > Budgets",
     entity_type: "finance_budget",
     entity_id: data.id,
     after_value: { name, month, planned_amount },
@@ -88,7 +88,7 @@ export async function PUT(req: NextRequest) {
   if (!allowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
 
   const { data, error } = await supabaseAdmin
-    .from("budgets")
+    .from("finance_budgets")
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq("id", id)
     .select()
@@ -109,7 +109,7 @@ export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "ID is required" }, { status: 400 });
 
-  const { error } = await supabaseAdmin.from("budgets").delete().eq("id", id);
+  const { error } = await supabaseAdmin.from("finance_budgets").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   await supabaseAdmin.from("audit_logs").insert({
@@ -117,7 +117,7 @@ export async function DELETE(req: NextRequest) {
     tier: 2,
     action: "budget_deleted",
     module: "finance",
-    breadcrumb: "APEX OS > Finance > Budgets",
+    breadcrumb_path: "APEX OS > Finance > Budgets",
     entity_type: "finance_budget",
     entity_id: id,
   });

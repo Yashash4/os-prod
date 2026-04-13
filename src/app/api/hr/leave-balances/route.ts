@@ -19,8 +19,8 @@ export async function GET(req: NextRequest) {
     const year = req.nextUrl.searchParams.get("year") || String(new Date().getFullYear());
 
     let query = supabaseAdmin
-      .from("leave_balances")
-      .select("id, employee_id, leave_type_id, year, total, used, leave_type:leave_types(id, name)")
+      .from("hr_leave_balances")
+      .select("id, employee_id, leave_type_id, year, total, used, leave_type:hr_leave_types(id, name)")
       .eq("employee_id", employee_id)
       .eq("year", parseInt(year, 10));
 

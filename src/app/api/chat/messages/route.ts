@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
 
     // Verify membership
     const { data: membership } = await supabaseAdmin
-      .from("chat_members")
+      .from("chat_channel_members")
       .select("id")
       .eq("channel_id", channelId)
       .eq("user_id", userId)
@@ -137,7 +137,7 @@ export async function GET(req: NextRequest) {
     let savedSet = new Set<string>();
     if (messageIds.length > 0) {
       const { data: savedMessages } = await supabaseAdmin
-        .from("chat_saved")
+        .from("chat_saved_messages")
         .select("message_id")
         .eq("user_id", userId)
         .in("message_id", messageIds);
@@ -215,7 +215,7 @@ export async function GET(req: NextRequest) {
 
     // Update last_read_at for the current user
     await supabaseAdmin
-      .from("chat_members")
+      .from("chat_channel_members")
       .update({ last_read_at: new Date().toISOString() })
       .eq("channel_id", channelId)
       .eq("user_id", userId);
@@ -254,7 +254,7 @@ export async function POST(req: NextRequest) {
 
     // Verify membership
     const { data: membership } = await supabaseAdmin
-      .from("chat_members")
+      .from("chat_channel_members")
       .select("id")
       .eq("channel_id", channel_id)
       .eq("user_id", userId)
@@ -363,7 +363,7 @@ export async function POST(req: NextRequest) {
 
     // Update sender's last_read_at
     await supabaseAdmin
-      .from("chat_members")
+      .from("chat_channel_members")
       .update({ last_read_at: new Date().toISOString() })
       .eq("channel_id", channel_id)
       .eq("user_id", userId);
@@ -377,7 +377,7 @@ export async function POST(req: NextRequest) {
 
     if (channelData?.type === "dm") {
       const { data: members } = await supabaseAdmin
-        .from("chat_members")
+        .from("chat_channel_members")
         .select("user_id")
         .eq("channel_id", channel_id)
         .neq("user_id", userId);

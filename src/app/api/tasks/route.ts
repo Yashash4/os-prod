@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
     if (id) {
       const { data, error } = await supabaseAdmin
         .from("tasks")
-        .select("*, project:projects!tasks_project_id_fkey(id, name)")
+        .select("*, project:task_projects!tasks_project_id_fkey(id, name)")
         .eq("id", id)
         .single();
       if (error) throw error;
@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
 
     let query = supabaseAdmin
       .from("tasks")
-      .select("*, project:projects!tasks_project_id_fkey(id, name)");
+      .select("*, project:task_projects!tasks_project_id_fkey(id, name)");
 
     // Scope data: if user only has tasks-my (not board/team), force filter to assigned self
     if (!canSeeBoard && !canSeeTeam) {
@@ -136,15 +136,15 @@ export async function POST(req: NextRequest) {
       .insert({
         project_id: project_id || null,
         title,
-        description: description || null,
+        description: description || "",
         status: status || "todo",
         priority: priority || "medium",
         assigned_to: assigned_to || null,
         due_date: due_date || null,
-        label: label || null,
+        tags: label ? [label] : [],
         created_by: auth.auth.userId,
       })
-      .select("*, project:projects!tasks_project_id_fkey(id, name)")
+      .select("*, project:task_projects!tasks_project_id_fkey(id, name)")
       .single();
 
     if (error) throw error;
@@ -203,7 +203,7 @@ export async function PUT(req: NextRequest) {
       .from("tasks")
       .update(allowed)
       .eq("id", id)
-      .select("*, project:projects!tasks_project_id_fkey(id, name)")
+      .select("*, project:task_projects!tasks_project_id_fkey(id, name)")
       .single();
 
     if (error) throw error;

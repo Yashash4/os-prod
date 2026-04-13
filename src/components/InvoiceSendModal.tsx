@@ -11,7 +11,7 @@ interface InvoiceSendModalProps {
   customerEmail: string;
   amount: number;
   opportunityId: string;
-  salesSource: "maverick" | "jobin";
+  salesSource: string;
   onSuccess: (data: { invoice_number: string }) => void;
 }
 

@@ -71,9 +71,7 @@ const OPTIN_STATUS_CONFIG: StatusCfg = {
   new: { label: "New", color: "text-blue-400", bg: "bg-blue-500/10 border-blue-500/20" },
   contacted: { label: "Contacted", color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/20" },
   interested: { label: "Interested", color: "text-purple-400", bg: "bg-purple-500/10 border-purple-500/20" },
-  call_booked: { label: "Call Booked", color: "text-cyan-400", bg: "bg-cyan-500/10 border-cyan-500/20" },
   payment_pending: { label: "Payment Pending", color: "text-orange-400", bg: "bg-orange-500/10 border-orange-500/20" },
-  payment_done: { label: "Payment Done", color: "text-green-400", bg: "bg-green-500/10 border-green-500/20" },
   not_interested: { label: "Not Interested", color: "text-red-400", bg: "bg-red-500/10 border-red-500/20" },
   no_response: { label: "No Response", color: "text-gray-400", bg: "bg-gray-500/10 border-gray-500/20" },
 };
@@ -316,6 +314,67 @@ export default function SalesSettingPage() {
   const updatePd = makeUpdateHandler("/api/sales/payment-done-tracking", setPdRecords);
   const updateCb = makeUpdateHandler("/api/sales/call-booked-tracking", setCbRecords);
 
+  /* ── Move leads between tabs (API + GHL update) ── */
+  const moveLeads = async (leads: TrackingRecord[], target: "call_booked" | "payment_done") => {
+    const apiPath = target === "call_booked" ? "/api/sales/call-booked-tracking" : "/api/sales/payment-done-tracking";
+    const records = leads.map((lead) => ({
+      opportunity_id: lead.opportunity_id || lead.id,
+      contact_name: lead.contact_name || "",
+      contact_email: lead.contact_email || "",
+      contact_phone: lead.contact_phone || "",
+      pipeline_name: lead.pipeline_name || "",
+      stage_name: target === "call_booked" ? "Call Booked" : "Payment Done",
+      source: lead.source || "",
+      assigned_to: lead.assigned_to || null,
+    }));
+    try {
+      // 1. Create records in target tab
+      const res = await apiFetch(apiPath, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(records),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      // 2. Move in GHL — update pipeline stage for each opportunity
+      for (const lead of leads) {
+        const oppId = lead.opportunity_id || lead.id;
+        if (oppId && currentPipeline) {
+          try {
+            await apiFetch("/api/ghl/opportunities", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                opportunityId: oppId,
+                pipelineId: currentPipeline.id,
+                pipelineStageId: target === "call_booked" ? callBookedStage : paymentDoneStage,
+              }),
+            });
+          } catch { /* GHL update is best-effort */ }
+        }
+      }
+      // Delete moved leads from opt-in
+      const movedIds = records.map((r) => r.opportunity_id).filter(Boolean);
+      if (movedIds.length > 0) {
+        for (const oppId of movedIds) {
+          await apiFetch("/api/sales/optin-tracking", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ opportunity_id: oppId }),
+          });
+        }
+      }
+      // Refresh both tabs
+      loadOptinRecords();
+      if (target === "call_booked") loadCbRecords();
+      else loadPdRecords();
+    } catch (err) {
+      console.error("Move failed:", err);
+      setError(`Failed to move leads: ${err instanceof Error ? err.message : "Unknown error"}`);
+    }
+  };
+
   /* ── Filtering ── */
 
   const filterRecords = (records: TrackingRecord[], statusFilter: string, search: string) =>
@@ -389,7 +448,8 @@ export default function SalesSettingPage() {
             searchQuery={optinSearch} setSearchQuery={setOptinSearch} statusFilter={optinStatusFilter} setStatusFilter={setOptinStatusFilter}
             showFilterDropdown={optinFilterOpen} setShowFilterDropdown={setOptinFilterOpen}
             editingCell={optinEditCell} setEditingCell={setOptinEditCell} editValue={optinEditValue} setEditValue={setOptinEditValue}
-            updateRecord={updateOptin} emptyMessage='No opt-in records yet. Select your pipeline and click "Sync Opt Ins" to import.' />
+            updateRecord={updateOptin} emptyMessage='No opt-in records yet. Select your pipeline and click "Sync Opt Ins" to import.'
+            onMoveLeads={moveLeads} />
         )}
         {activeTab === "payment_done" && (
           <TrackingSheet loading={pdLoading} records={filteredPd} totalCount={pdRecords.length} statusConfig={PD_STATUS_CONFIG} allStatuses={ALL_PD_STATUSES} statusCounts={pdCounts}
@@ -420,6 +480,7 @@ function TrackingSheet({
   editingCell, setEditingCell, editValue, setEditValue,
   updateRecord, emptyMessage,
   showCallScheduled, showRating, showComments,
+  onMoveLeads,
 }: {
   loading: boolean; records: TrackingRecord[]; totalCount: number;
   statusConfig: StatusCfg; allStatuses: string[]; statusCounts: Record<string, number>;
@@ -431,7 +492,26 @@ function TrackingSheet({
   updateRecord: (oppId: string, updates: Record<string, unknown>) => void;
   emptyMessage: string;
   showCallScheduled?: boolean; showRating?: boolean; showComments?: boolean;
+  onMoveLeads?: (records: TrackingRecord[], target: "call_booked" | "payment_done") => Promise<void>;
 }) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [moving, setMoving] = useState(false);
+  const allSelected = records.length > 0 && selectedIds.size === records.length;
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  }
+  function toggleAll() {
+    if (allSelected) { setSelectedIds(new Set()); } else { setSelectedIds(new Set(records.map((r) => r.id || r.opportunity_id))); }
+  }
+  async function handleMove(target: "call_booked" | "payment_done") {
+    if (!onMoveLeads || selectedIds.size === 0) return;
+    setMoving(true);
+    const selected = records.filter((r) => selectedIds.has(r.id || r.opportunity_id));
+    await onMoveLeads(selected, target);
+    setSelectedIds(new Set());
+    setMoving(false);
+  }
   const COLUMNS = [
     { key: "sno", label: "#", width: "w-12" },
     { key: "contact_name", label: "Contact Name", width: "w-44" },
@@ -490,6 +570,22 @@ function TrackingSheet({
         <span className="text-xs text-muted ml-auto">Showing {records.length} of {totalCount}</span>
       </div>
 
+      {/* Bulk Action Bar */}
+      {selectedIds.size > 0 && onMoveLeads && (
+        <div className="px-6 py-2.5 flex items-center gap-3 bg-accent/5 border-b border-accent/20 flex-shrink-0">
+          <span className="text-sm font-medium text-accent">{selectedIds.size} lead{selectedIds.size > 1 ? "s" : ""} selected</span>
+          <button onClick={() => handleMove("payment_done")} disabled={moving}
+            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-600 hover:bg-green-700 text-white transition-colors disabled:opacity-50">
+            {moving ? "Moving..." : "Move to Payment Done"}
+          </button>
+          <button onClick={() => handleMove("call_booked")} disabled={moving}
+            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white transition-colors disabled:opacity-50">
+            {moving ? "Moving..." : "Move to Call Booked"}
+          </button>
+          <button onClick={() => setSelectedIds(new Set())} className="text-xs text-muted hover:text-foreground ml-auto">Clear selection</button>
+        </div>
+      )}
+
       {/* Status Pills */}
       <div className="px-6 py-2 flex gap-2 flex-wrap flex-shrink-0 border-b border-border">
         {allStatuses.map((s) => (
@@ -506,6 +602,11 @@ function TrackingSheet({
         <table className="w-full border-collapse min-w-[1100px]">
           <thead className="sticky top-0 z-10">
             <tr className="bg-surface border-b border-border">
+              {onMoveLeads && (
+                <th className="w-10 px-3 py-2.5 border-r border-border">
+                  <input type="checkbox" checked={allSelected} onChange={toggleAll} className="accent-accent w-3.5 h-3.5 cursor-pointer" />
+                </th>
+              )}
               {COLUMNS.map((col) => (
                 <th key={col.key} className={`${col.width} text-left text-[11px] font-semibold text-muted uppercase tracking-wider px-3 py-2.5 border-r border-border last:border-r-0`}>{col.label}</th>
               ))}
@@ -513,9 +614,16 @@ function TrackingSheet({
           </thead>
           <tbody>
             {records.length === 0 ? (
-              <tr><td colSpan={COLUMNS.length} className="text-center py-16 text-muted text-sm">{totalCount === 0 ? emptyMessage : "No records match your filters."}</td></tr>
-            ) : records.map((record, idx) => (
-              <tr key={record.opportunity_id} className="border-b border-border hover:bg-surface-hover/50 transition-colors group">
+              <tr><td colSpan={COLUMNS.length + (onMoveLeads ? 1 : 0)} className="text-center py-16 text-muted text-sm">{totalCount === 0 ? emptyMessage : "No records match your filters."}</td></tr>
+            ) : records.map((record, idx) => {
+              const rowId = record.id || record.opportunity_id;
+              return (
+              <tr key={rowId || idx} className={`border-b border-border hover:bg-surface-hover/50 transition-colors group ${selectedIds.has(rowId) ? "bg-accent/5" : ""}`}>
+                {onMoveLeads && (
+                  <td className="px-3 py-2 border-r border-border">
+                    <input type="checkbox" checked={selectedIds.has(rowId)} onChange={() => toggleSelect(rowId)} className="accent-accent w-3.5 h-3.5 cursor-pointer" />
+                  </td>
+                )}
                 <td className="px-3 py-2 text-xs text-muted border-r border-border">{idx + 1}</td>
                 <td className="px-3 py-2 text-xs text-foreground font-medium border-r border-border">{record.contact_name || "-"}</td>
                 <td className="px-3 py-2 text-xs text-foreground border-r border-border">
@@ -576,7 +684,7 @@ function TrackingSheet({
                   </div>
                 </td>
               </tr>
-            ))}
+            ); })}
           </tbody>
         </table>
       </div>

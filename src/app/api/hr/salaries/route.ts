@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     tier: 1,
     action: "salary_updated",
     module: "hr",
-    breadcrumb: "APEX OS > HR > Salary",
+    breadcrumb_path: "APEX OS > HR > Salary",
     entity_type: "hr_salary",
     entity_id: data.id,
     after_value: { employee_id, base_salary, effective_from },

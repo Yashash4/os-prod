@@ -11,12 +11,12 @@ export async function GET(req: NextRequest) {
     const to = req.nextUrl.searchParams.get("to");
 
     let query = supabaseAdmin
-      .from("content_sop_daily")
+      .from("content_sop_entries")
       .select("*")
-      .order("sop_date", { ascending: true });
+      .order("due_date", { ascending: true });
 
-    if (from) query = query.gte("sop_date", from);
-    if (to) query = query.lte("sop_date", to);
+    if (from) query = query.gte("due_date", from);
+    if (to) query = query.lte("due_date", to);
 
     query = scopeQuery(query, result.scope, "created_by");
 
@@ -60,13 +60,13 @@ export async function POST(req: NextRequest) {
       const to = `${month}-${String(maxDay).padStart(2, "0")}`;
 
       const { data: existing } = await supabaseAdmin
-        .from("content_sop_daily")
-        .select("sop_date")
-        .gte("sop_date", from)
-        .lte("sop_date", to);
+        .from("content_sop_entries")
+        .select("due_date")
+        .gte("due_date", from)
+        .lte("due_date", to);
 
       const existingDates = new Set(
-        (existing || []).map((r: { sop_date: string }) => r.sop_date)
+        (existing || []).map((r: { due_date: string }) => r.due_date)
       );
 
       const missingDates: string[] = [];
@@ -80,12 +80,14 @@ export async function POST(req: NextRequest) {
       }
 
       const rows = missingDates.map((dateStr) => ({
-        sop_date: dateStr,
+        title: `SOP ${dateStr}`,
+        platform: "instagram" as const,
+        due_date: dateStr,
         created_by: result.auth.userId,
       }));
 
       const { data: inserted, error } = await supabaseAdmin
-        .from("content_sop_daily")
+        .from("content_sop_entries")
         .insert(rows)
         .select();
 
@@ -104,12 +106,12 @@ export async function POST(req: NextRequest) {
   // Regular create
   try {
     const body = await req.json();
-    const { sop_date } = body;
-    if (!sop_date) return NextResponse.json({ error: "sop_date is required" }, { status: 400 });
+    const { due_date } = body;
+    if (!due_date) return NextResponse.json({ error: "due_date is required" }, { status: 400 });
 
     const { data, error } = await supabaseAdmin
-      .from("content_sop_daily")
-      .insert({ sop_date, created_by: result.auth.userId })
+      .from("content_sop_entries")
+      .insert({ title: `SOP ${due_date}`, platform: "instagram", due_date, created_by: result.auth.userId })
       .select()
       .single();
 
@@ -138,7 +140,7 @@ export async function PUT(req: NextRequest) {
     if (!allowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
 
     const { data, error } = await supabaseAdmin
-      .from("content_sop_daily")
+      .from("content_sop_entries")
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq("id", id)
       .select()
@@ -168,7 +170,7 @@ export async function DELETE(req: NextRequest) {
     if (!allowed) return NextResponse.json({ error: "Not authorized to modify this record" }, { status: 403 });
 
     const { error } = await supabaseAdmin
-      .from("content_sop_daily")
+      .from("content_sop_entries")
       .delete()
       .eq("id", id);
 
