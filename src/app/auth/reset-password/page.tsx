@@ -27,108 +27,66 @@ function ResetPasswordForm() {
   const [success, setSuccess] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [samePasswordError, setSamePasswordError] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    let settled = false;
-    let timeoutId: ReturnType<typeof setTimeout>;
-
-    function markReady() {
-      if (!settled) {
-        settled = true;
-        setSessionReady(true);
-        setChecking(false);
-      }
-    }
-
-    function markFailed() {
-      if (!settled) {
-        settled = true;
-        setChecking(false);
-      }
-    }
+    let cancelled = false;
 
     async function handleRecovery() {
-      // 1. Clear any stale session that could cause "Refresh Token Not Found"
-      await supabase.auth.signOut({ scope: "local" });
-
-      // 2. Listen for auth state changes (Supabase auto-processes hash tokens)
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-        if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") {
-          markReady();
-        }
-      });
-
-      // 3. Check for query-param tokens (newer Supabase format)
       const tokenHash = searchParams.get("token_hash");
       const type = searchParams.get("type");
       const code = searchParams.get("code");
+      const hashParams = parseHash();
 
+      // PKCE flow: ?token_hash=...&type=recovery  (most common with @supabase/ssr)
       if (tokenHash && type === "recovery") {
-        // Newer Supabase email links: ?token_hash=...&type=recovery
         const { error } = await supabase.auth.verifyOtp({
           token_hash: tokenHash,
           type: "recovery",
         });
-        if (!error) { markReady(); return () => subscription.unsubscribe(); }
+        if (!cancelled) {
+          setSessionReady(!error);
+          setChecking(false);
+        }
+        return;
       }
 
+      // PKCE flow: ?code=...
       if (code) {
-        // PKCE flow: ?code=...
         const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (!error) { markReady(); return () => subscription.unsubscribe(); }
+        if (!cancelled) {
+          setSessionReady(!error);
+          setChecking(false);
+        }
+        return;
       }
 
-      // 4. Check for hash fragment tokens (implicit flow)
-      const hashParams = parseHash();
+      // Implicit flow: #access_token=...&refresh_token=...
       if (hashParams.access_token && hashParams.refresh_token) {
-        // Manually set session from hash tokens
         const { error } = await supabase.auth.setSession({
           access_token: hashParams.access_token,
           refresh_token: hashParams.refresh_token,
         });
-        if (!error) {
-          markReady();
-          // Clean hash from URL
-          window.history.replaceState(null, "", window.location.pathname);
-          return () => subscription.unsubscribe();
+        if (!cancelled) {
+          setSessionReady(!error);
+          setChecking(false);
+          if (!error) window.history.replaceState(null, "", window.location.pathname);
         }
+        return;
       }
 
-      // 5. If hash tokens exist but setSession failed, or if auto-detection
-      //    hasn't fired yet, wait briefly for the onAuthStateChange event
-      const hasAnyToken =
-        hashParams.access_token ||
-        tokenHash ||
-        code ||
-        window.location.hash.includes("access_token");
-
-      if (hasAnyToken && !settled) {
-        timeoutId = setTimeout(() => {
-          // Final fallback: check if session was established by auto-detection
-          supabase.auth.getSession().then(({ data: { session } }) => {
-            if (session) markReady();
-            else markFailed();
-          });
-        }, 3000);
-      } else if (!settled) {
-        // No tokens at all — check existing session
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) markReady();
-        else markFailed();
+      // No tokens in URL — check if a valid session already exists
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!cancelled) {
+        setSessionReady(!!session);
+        setChecking(false);
       }
-
-      return () => {
-        subscription.unsubscribe();
-        if (timeoutId) clearTimeout(timeoutId);
-      };
     }
 
-    let cleanup: (() => void) | undefined;
-    handleRecovery().then((fn) => { cleanup = fn; });
-
-    return () => { cleanup?.(); };
+    handleRecovery();
+    return () => { cancelled = true; };
   }, [searchParams]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -151,7 +109,19 @@ function ResetPasswordForm() {
         password,
       });
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        if (
+          updateError.message?.toLowerCase().includes("different from the old") ||
+          updateError.code === "same_password"
+        ) {
+          setError(
+            "This password was already set in a previous attempt. Try signing in with it, or enter a different password below."
+          );
+          setSamePasswordError(true);
+          return;
+        }
+        throw updateError;
+      }
 
       setSuccess(true);
       setTimeout(() => router.push("/"), 2000);
@@ -209,8 +179,19 @@ function ResetPasswordForm() {
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               {error && (
-                <div className="text-red-500 text-sm text-center bg-red-500/10 py-2 rounded-lg">
-                  {error}
+                <div className="space-y-2">
+                  <div className="text-red-500 text-sm text-center bg-red-500/10 py-2 rounded-lg">
+                    {error}
+                  </div>
+                  {samePasswordError && (
+                    <button
+                      type="button"
+                      onClick={() => router.push("/login")}
+                      className="w-full py-2 border border-border text-foreground text-sm rounded-lg hover:bg-surface-hover transition-colors"
+                    >
+                      Go to Sign in
+                    </button>
+                  )}
                 </div>
               )}
 

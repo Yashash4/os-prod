@@ -14,6 +14,7 @@ import {
   FileText,
   Calendar,
   ExternalLink,
+  GitBranch,
 } from "lucide-react";
 import Link from "next/link";
 import { DataTableSkeleton } from "@/components/Skeleton";
@@ -21,6 +22,11 @@ import { apiFetch } from "@/lib/api-fetch";
 import PermissionGate from "@/components/PermissionGate";
 
 /* ── Types ─────────────────────────────────────────── */
+
+interface GHLPipeline {
+  id: string;
+  name: string;
+}
 
 interface GHLUser {
   id: string;
@@ -104,9 +110,16 @@ function MeetManagementPageInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [records, setRecords] = useState<MergedRecord[]>([]);
+  const [dataSource, setDataSource] = useState<"db" | "ghl">("db");
   const [users, setUsers] = useState<GHLUser[]>([]);
   const [repGhlUserId, setRepGhlUserId] = useState<string | null>(null);
   const [usersLoaded, setUsersLoaded] = useState(false);
+
+  // Pipeline / funnel selector
+  const [pipelines, setPipelines] = useState<GHLPipeline[]>([]);
+  const [selectedPipelineId, setSelectedPipelineId] = useState<string>("all");
+  const [pipelineDropdownOpen, setPipelineDropdownOpen] = useState(false);
+  const [recordsLoading, setRecordsLoading] = useState(false);
 
   // Calendar events mapped by contactId
   const [eventsByContact, setEventsByContact] = useState<Record<string, CalendarEvent>>({});
@@ -121,19 +134,21 @@ function MeetManagementPageInner() {
   const [editingCell, setEditingCell] = useState<{ oppId: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState("");
 
-  // Load users, records, and calendar events together
+  // Load users, pipelines, records, and calendar events on mount
   useEffect(() => {
     if (!repId) return;
     async function init() {
       try {
-        const [usersRes, recordsRes, calRes] = await Promise.all([
+        const [usersRes, recordsRes, calRes, pipelinesRes] = await Promise.all([
           apiFetch("/api/ghl/users"),
           apiFetch(`/api/sales/rep-meetings?repId=${repId}`),
           apiFetch("/api/ghl/calendars"),
+          apiFetch("/api/sales/pipelines"),
         ]);
         const usersData = await usersRes.json();
         const recordsData = await recordsRes.json();
         const calData = await calRes.json();
+        const pipelinesData = await pipelinesRes.json();
 
         const usrs = usersData.users || [];
         setUsers(usrs);
@@ -143,15 +158,19 @@ function MeetManagementPageInner() {
         if (repUser) setRepGhlUserId(repUser.id);
         setUsersLoaded(true);
 
-        if (!recordsData.error) setRecords(recordsData.records || []);
+        if (!recordsData.error) {
+          setRecords(recordsData.records || []);
+          setDataSource(recordsData.source || "db");
+        }
+        if (!pipelinesData.error) setPipelines(pipelinesData.pipelines || []);
 
-        // Fetch calendar events for Maverick's calendars (last 90 days + next 90 days)
+        // Fetch calendar events for this rep's calendars (last 90 days + next 90 days)
         if (repUser && calData.calendars) {
           const cals = calData.calendars as CalendarItem[];
-          const mavCals = cals.filter((c) =>
+          const repCals = cals.filter((c) =>
             c.teamMembers?.some((tm) => tm.userId === repUser.id)
           );
-          if (mavCals.length > 0) {
+          if (repCals.length > 0) {
             const now = new Date();
             const start = new Date(now);
             start.setDate(start.getDate() - 90);
@@ -160,7 +179,7 @@ function MeetManagementPageInner() {
 
             const allEvents: CalendarEvent[] = [];
             const results = await Promise.all(
-              mavCals.map((cal) =>
+              repCals.map((cal) =>
                 apiFetch(
                   `/api/ghl/calendar-events?calendarId=${cal.id}&startTime=${start.toISOString()}&endTime=${end.toISOString()}`
                 ).then((r) => r.json())
@@ -170,7 +189,6 @@ function MeetManagementPageInner() {
               if (data.events) allEvents.push(...data.events);
             });
 
-            // Map events by contactId (keep latest per contact)
             const byContact: Record<string, CalendarEvent> = {};
             allEvents
               .filter((ev) => ev.assignedUserId === repUser.id && ev.contactId)
@@ -189,6 +207,32 @@ function MeetManagementPageInner() {
     }
     init();
   }, [repId, repLabel]);
+
+  // Refetch records when pipeline selection changes (skip initial "all" load)
+  useEffect(() => {
+    if (!repId || loading) return;
+    async function fetchRecords() {
+      setRecordsLoading(true);
+      try {
+        const url =
+          selectedPipelineId === "all"
+            ? `/api/sales/rep-meetings?repId=${repId}`
+            : `/api/sales/rep-meetings?repId=${repId}&pipelineId=${selectedPipelineId}`;
+        const res = await apiFetch(url);
+        const data = await res.json();
+        if (!data.error) {
+          setRecords(data.records || []);
+          setDataSource(data.source || "db");
+        }
+      } catch {
+        // keep existing records
+      } finally {
+        setRecordsLoading(false);
+      }
+    }
+    fetchRecords();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPipelineId]);
 
   // User name lookup
   const userNameMap = useMemo(() => {
@@ -346,13 +390,57 @@ function MeetManagementPageInner() {
             <div className="w-1 h-6 bg-accent rounded-full" />
             <div>
               <h1 className="text-xl font-bold text-foreground tracking-tight">Meet Management</h1>
-              <p className="text-muted text-xs mt-0.5">
-              {repLabel}&apos;s leads from Call Booked — {repRecords.length} leads
-              {repGhlUserId && <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/20">Owner: {userNameMap[repGhlUserId] || repLabel}</span>}
-              {!repGhlUserId && users.length > 0 && <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">{repLabel} user not found in GHL — showing all</span>}
-            </p>
+              <p className="text-muted text-xs mt-0.5 flex items-center flex-wrap gap-1.5">
+                <span>{repLabel}&apos;s leads from {selectedPipelineId === "all" ? "All Funnels" : (pipelines.find(p => p.id === selectedPipelineId)?.name || "Call Booked")} — {repRecords.length} leads</span>
+                {dataSource === "ghl" && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">● Live from GHL</span>
+                )}
+                {repGhlUserId && <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/20">Owner: {userNameMap[repGhlUserId] || repLabel}</span>}
+                {!repGhlUserId && users.length > 0 && <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">{repLabel} not found in GHL — showing all</span>}
+              </p>
             </div>
           </div>
+
+          {/* Funnel / Pipeline selector */}
+          {pipelines.length > 0 && (
+            <div className="relative">
+              <button
+                onClick={() => setPipelineDropdownOpen(!pipelineDropdownOpen)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-surface border border-border rounded-lg text-sm text-foreground hover:border-accent/30 transition-colors"
+              >
+                <GitBranch className="w-3.5 h-3.5 text-accent" />
+                <span className="text-xs">
+                  {selectedPipelineId === "all" ? "All Funnels" : (pipelines.find(p => p.id === selectedPipelineId)?.name || "Select Funnel")}
+                </span>
+                {recordsLoading && <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />}
+                <ChevronDown className="w-3 h-3 text-muted" />
+              </button>
+              {pipelineDropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-20" onClick={() => setPipelineDropdownOpen(false)} />
+                  <div className="absolute top-full right-0 mt-1 w-56 bg-surface border border-border rounded-lg shadow-xl z-30 py-1">
+                    <button
+                      onClick={() => { setSelectedPipelineId("all"); setPipelineDropdownOpen(false); }}
+                      className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${selectedPipelineId === "all" ? "text-accent bg-accent/5 font-medium" : "text-foreground hover:bg-surface-hover"}`}
+                    >
+                      All Funnels
+                    </button>
+                    <div className="my-1 border-t border-border/50" />
+                    {pipelines.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => { setSelectedPipelineId(p.id); setPipelineDropdownOpen(false); }}
+                        className={`w-full text-left px-3 py-1.5 text-xs transition-colors flex items-center gap-2 ${selectedPipelineId === p.id ? "text-accent bg-accent/5 font-medium" : "text-foreground hover:bg-surface-hover"}`}
+                      >
+                        <GitBranch className="w-3 h-3 text-muted flex-shrink-0" />
+                        {p.name}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

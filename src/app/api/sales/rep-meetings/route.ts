@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireSubModuleAccess } from "@/lib/api-auth";
 import { scopeQuery, verifyScopeAccess } from "@/lib/data-scope";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { searchOpportunities } from "@/lib/ghl";
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type GHLOpp = Record<string, any>;
 
 // GET: Fetch sales_opportunities (call booked data) merged with sales_meetings for a specific rep
 export async function GET(req: NextRequest) {
@@ -13,8 +17,64 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "repId query parameter is required" }, { status: 400 });
   }
 
+  const pipelineId = req.nextUrl.searchParams.get("pipelineId");
+
   try {
-    // Fetch call_booked (sales_opportunities) scoped by assigned_to
+    // ── Live GHL path: fetch directly from GHL when a specific pipeline is selected ──
+    if (pipelineId) {
+      const [rawOpps, meetResult] = await Promise.all([
+        searchOpportunities(pipelineId),
+        supabaseAdmin.from("sales_meetings").select("*").eq("sales_rep_id", repId),
+      ]);
+
+      if (meetResult.error) throw meetResult.error;
+
+      // Also grab any existing DB records so we can preserve setter notes/ratings
+      const oppIds = (rawOpps as GHLOpp[]).map((o) => o.id).filter(Boolean);
+      const { data: dbOpps } = oppIds.length
+        ? await supabaseAdmin.from("sales_opportunities").select("*").in("id", oppIds)
+        : { data: [] };
+
+      const dbMap = new Map((dbOpps || []).map((r) => [r.id, r]));
+      const meetMap: Record<string, Record<string, unknown>> = {};
+      (meetResult.data || []).forEach((m) => { meetMap[m.opportunity_id] = m; });
+
+      const merged = (rawOpps as GHLOpp[]).map((opp) => {
+        const db = dbMap.get(opp.id);
+        const meet = meetMap[opp.id];
+        return {
+          id: opp.id,
+          opportunity_id: opp.id,
+          contact_name: opp.contact?.name || opp.name || "",
+          contact_email: opp.contact?.email || "",
+          contact_phone: opp.contact?.phone || "",
+          pipeline_name: opp.pipeline?.name || "",
+          pipeline_id: opp.pipelineId || null,
+          stage_name: opp.stage?.name || opp.pipelineStage?.name || "",
+          source: opp.source || "",
+          // Setter fields — use DB values if synced, else defaults
+          status: db?.status || "pending_review",
+          rating: db?.rating ?? null,
+          comments: db?.comments ?? null,
+          notes: db?.notes ?? null,
+          assigned_to: opp.assignedTo || null,
+          contact_id: opp.contact?.id || null,
+          ghl_status: opp.status || "open",
+          // Rep-editable fields from sales_meetings
+          meet_status: meet?.meet_status || "pending",
+          meet_notes: meet?.meet_notes || null,
+          meet_date: meet?.meet_date || null,
+          follow_up_date: meet?.follow_up_date || null,
+          outcome: meet?.outcome || null,
+          created_at: opp.createdAt || new Date().toISOString(),
+          updated_at: opp.updatedAt || new Date().toISOString(),
+        };
+      });
+
+      return NextResponse.json({ records: merged, _permissions: result.permissions, source: "ghl" });
+    }
+
+    // ── DB path: "All Funnels" — query synced sales_opportunities ──
     let cbQuery = supabaseAdmin
       .from("sales_opportunities")
       .select("*")
@@ -33,16 +93,12 @@ export async function GET(req: NextRequest) {
 
     if (meetError) throw meetError;
 
-    // Build a map of meet data by opportunity_id
     const meetMap: Record<string, (typeof meetData)[0]> = {};
-    (meetData || []).forEach((m) => {
-      meetMap[m.opportunity_id] = m;
-    });
+    (meetData || []).forEach((m) => { meetMap[m.opportunity_id] = m; });
 
-    // Merge call_booked records with meeting tracking data
     const merged = (callBooked || []).map((cb) => ({
       ...cb,
-      opportunity_id: cb.id, // alias for frontend compatibility
+      opportunity_id: cb.id,
       meet_status: meetMap[cb.id]?.meet_status || "pending",
       meet_notes: meetMap[cb.id]?.meet_notes || null,
       meet_date: meetMap[cb.id]?.meet_date || null,
@@ -50,7 +106,7 @@ export async function GET(req: NextRequest) {
       outcome: meetMap[cb.id]?.outcome || null,
     }));
 
-    return NextResponse.json({ records: merged, _permissions: result.permissions });
+    return NextResponse.json({ records: merged, _permissions: result.permissions, source: "db" });
   } catch (error: unknown) {
     const e = error as { message?: string; details?: string; hint?: string; code?: string };
     console.error("REP-MEETINGS GET ERROR:", e.message, "| details:", e.details, "| hint:", e.hint);
