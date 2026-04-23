@@ -63,13 +63,13 @@ export async function POST(req: NextRequest) {
       redirectTo: `${appUrl}/auth/reset-password`,
     });
 
-    // Create user profile row
-    await supabaseAdmin.from("users").insert({
+    // Trigger already inserted into public.users — upsert to set role_id + full_name
+    await supabaseAdmin.from("users").upsert({
       id: userId,
       email,
       full_name: full_name || null,
       role_id: role_id || null,
-    });
+    }, { onConflict: "id" });
 
     // Audit log
     await supabaseAdmin.from("audit_logs").insert({

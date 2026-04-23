@@ -122,13 +122,13 @@ export async function POST(req: NextRequest) {
             if (!dError && desig?.role_id) roleId = desig.role_id;
           }
 
-          // Create user profile row
-          await supabaseAdmin.from("users").insert({
+          // Trigger already inserted into public.users — upsert to set role_id + full_name
+          await supabaseAdmin.from("users").upsert({
             id: linkedUserId,
             email,
             full_name,
             role_id: roleId,
-          });
+          }, { onConflict: "id" });
 
           await supabaseAdmin.from("audit_logs").insert({
             user_id: result.auth.userId,
@@ -166,7 +166,7 @@ export async function POST(req: NextRequest) {
       department_id: department_id || null,
       designation_id: designation_id || null,
       employment_type: employment_type || "full_time",
-      join_date: join_date || null,
+      ...(join_date ? { join_date } : {}),
       reporting_to: reporting_to || null,
       user_id: linkedUserId,
       status: "active",
